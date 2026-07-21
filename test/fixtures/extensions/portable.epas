@@ -1,0 +1,19 @@
+{@module
+Author=DataExpress tests
+Version=1.0
+Description=Portable string helpers
+@}
+
+{@function
+OrigName=NormalizePhone
+Name=NORMALIZE_PHONE
+Args=s
+Result=s
+Group=Text
+Description=Normalizes a phone number
+@}
+
+function NormalizePhone(Value: String): String;
+begin
+  Result := Value;
+end;

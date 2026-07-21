@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { auditSource } from './extension-audit.mjs';
 
@@ -38,4 +39,13 @@ test('marks desktop UI for manual web adaptation', () => {
   const report = auditSource(`begin ShowMessage('Done'); end.`);
   assert.equal(report.compatibility, 'review');
   assert.equal(report.findings[0].rule, 'desktop-ui');
+});
+
+test('classifies repository extension fixtures', () => {
+  const fixture = name => readFileSync(new URL(`../test/fixtures/extensions/${name}`, import.meta.url), 'utf8');
+  const portable = auditSource(fixture('portable.epas'));
+  assert.equal(portable.compatibility, 'portable');
+  assert.equal(portable.moduleType, 'desktop-or-unknown');
+  assert.equal(auditSource(fixture('office.epas')).compatibility, 'requires-provider');
+  assert.equal(auditSource(fixture('native.epas')).compatibility, 'requires-provider');
 });

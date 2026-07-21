@@ -1,0 +1,20 @@
+{@module
+Author=DataExpress tests
+Version=1.0
+Description=Native Windows integration
+@}
+
+{@action
+Id=native-run-001
+Target=button
+OrigName=RunNativeTool
+Name=Run native tool
+Group=System
+UI=
+Description=Runs a native tool
+@}
+
+procedure RunNativeTool(FileName: String);
+begin
+  ShellExecute('open', FileName, '', '', 1);
+end;

@@ -1619,6 +1619,7 @@ begin
   Cl.AddDelphiFunction('function IIF(Cond, V1, V2: Variant): Variant');
   Cl.AddDelphiFunction('function CreateGUIDString: String');
   Cl.AddDelphiFunction('function GetAppDir: String');
+  Cl.AddDelphiFunction('function ExtensionProviderCall(const ProviderName, Operation, Payload: String): String');
 
   Cl.AddDelphiFunction('function SetExprVar(const aName: String; aValue: Variant): Variant');
   Cl.AddDelphiFunction('function GetExprVar(const aName: String): Variant');

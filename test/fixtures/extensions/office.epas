@@ -1,0 +1,22 @@
+{@module
+Author=DataExpress tests
+Version=1.0
+Description=Windows Office automation
+@}
+
+{@action
+Id=office-convert-001
+Target=button
+OrigName=ConvertWithWord
+Name=Convert Word document
+Group=Documents
+UI=
+Description=Converts a document through Word
+@}
+
+procedure ConvertWithWord(FileName: String);
+var
+  Word: OleVariant;
+begin
+  Word := CreateOleObject('Word.Application');
+end;

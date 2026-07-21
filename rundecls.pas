@@ -35,7 +35,8 @@ implementation
 
 uses
   ScriptFuncs, Math, exprfuncs, DateUtils, dxctrls, apputils, IniFiles,
-  BGRABitmap, dxSQLQuery, HMAC, Variants, pivotgrid, dxtypes;
+  BGRABitmap, dxSQLQuery, HMAC, Variants, pivotgrid, dxtypes,
+  extensionproviders;
 
 type
   TFileSetDateFunc = function (const FileName : RawByteString;Age : Int64) : Longint;
@@ -2514,6 +2515,7 @@ begin
   Exec.RegisterDelphiFunction(@IIF, 'IIF', cdRegister);
   Exec.RegisterDelphiFunction(@GenerateId, 'CreateGUIDString', cdRegister);
   Exec.RegisterDelphiFunction(@AppPath, 'GetAppDir', cdRegister);
+  Exec.RegisterDelphiFunction(@ExtensionProviderCall, 'ExtensionProviderCall', cdRegister);
 
   Exec.RegisterDelphiFunction(@CommandExecute, 'CommandExecute', cdRegister);
   Exec.RegisterDelphiFunction(@FileExecute, 'FileExecute', cdRegister);

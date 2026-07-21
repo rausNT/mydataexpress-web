@@ -17,6 +17,10 @@ tools
 tools/*
 !tools/extension-audit.mjs
 !tools/extension-audit.test.mjs
+!tools/extension-migrate.mjs
+!tools/extension-migrate.test.mjs
+!tools/provider-sdk.mjs
+!tools/provider-sdk.test.mjs
 /_dist
 
 

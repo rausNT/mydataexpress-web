@@ -7,7 +7,7 @@ const RULES = [
   { id: 'ole', severity: 'blocking', replacement: 'HTTP/API provider or server-side document service', pattern: /\b(CreateOleObject|GetActiveOleObject|OleVariant|ComObj)\b/gi },
   { id: 'dll', severity: 'blocking', replacement: 'cross-platform service provider', pattern: /\b(LoadLibrary|GetProcAddress|FreeLibrary|RegisterDll|external)\b/gi },
   { id: 'shell', severity: 'blocking', replacement: 'server task provider', pattern: /\b(ShellExecute|WinExec|CreateProcess|cmd\.exe|powershell(?:\.exe)?)\b/gi },
-  { id: 'windows-api', severity: 'blocking', replacement: 'portable runtime API', pattern: /\b(Windows|WinApi|HKEY_|TRegistry|SendMessage|PostMessage)\b/gi },
+  { id: 'windows-api', severity: 'blocking', replacement: 'portable runtime API', pattern: /\b(WinApi(?:\.\w+)?|HKEY_\w+|TRegistry|SendMessage|PostMessage|GetWindowHandle|HWND)\b/gi },
   { id: 'desktop-ui', severity: 'manual', replacement: 'web form/message API', pattern: /\b(ShowMessage|MessageDlg|InputQuery|OpenDialog|SaveDialog|Screen|Application\.MainForm)\b/gi },
   { id: 'local-files', severity: 'manual', replacement: 'sandboxed file-storage provider', pattern: /\b([A-Z]:\\|\\\\|ExtractFilePath\(ParamStr|GetAppConfigDir|GetTempDir)\b/gi },
   { id: 'office-files', severity: 'manual', replacement: 'server-side DOCX/XLSX/ODS renderer', pattern: /\b(Word\.Application|Excel\.Application|LibreOffice|soffice)\b/gi },
@@ -26,7 +26,14 @@ function field(block, name) {
 function specifications(source, regex, kind) {
   const result = [];
   for (const match of source.matchAll(regex)) {
-    result.push({ kind, name: field(match[1], 'Name'), id: field(match[1], 'Id') });
+    result.push({
+      kind,
+      name: field(match[1], 'Name'),
+      id: field(match[1], 'Id'),
+      origName: field(match[1], 'OrigName'),
+      args: field(match[1], 'Args'),
+      result: field(match[1], 'Result'),
+    });
   }
   return result;
 }
@@ -52,7 +59,7 @@ export function auditSource(source, filename = '<memory>') {
     ...specifications(source, ACTION_RE, 'action'),
   ];
   const isWebModule = specs.length > 0 && specs.every(spec =>
-    spec.kind === 'function' ? Boolean(spec.name) : Boolean(spec.id)
+    !spec.origName && (spec.kind === 'function' ? Boolean(spec.name) : Boolean(spec.id))
   );
   const blocking = findings.filter(item => item.severity === 'blocking').length;
 

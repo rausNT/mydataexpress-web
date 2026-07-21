@@ -27,6 +27,25 @@ uses
 
 type
 
+  TProviderItem = class
+  public
+    Name, Url, Token: String;
+    TimeoutMs: Integer;
+    AllowInsecure: Boolean;
+  end;
+
+  { TProviderList }
+
+  TProviderList = class(TList)
+  private
+    function GetProviderItems(Index: Integer): TProviderItem;
+  public
+    function AddItem: TProviderItem;
+    function FindItem(const AName: String): TProviderItem;
+    procedure Clear; override;
+    property ProviderItems[Index: Integer]: TProviderItem read GetProviderItems; default;
+  end;
+
   TDBItem = class
   public
     Name, DatabasePath, TemplatesPath, DBPwd, ServiceId: String;
@@ -58,6 +77,7 @@ type
     //FPassword: String;
     FPort: Integer;
     FDBList: TDBList;
+    FProviderList: TProviderList;
     FPrivateKey: String;
     FUseSSL: Boolean;
     //function GetLanguageId: Integer;
@@ -78,6 +98,7 @@ type
     property Certificate: String read FCertificate;
     //property LanguageId: Integer read GetLanguageId write SetLanguageId;
     property DBList: TDBList read FDBList;
+    property ProviderList: TProviderList read FProviderList;
   end;
 
 var
@@ -97,6 +118,38 @@ begin
     Result := S + '/'
   else
     Result := S;
+end;
+
+{ TDBList }
+
+{ TProviderList }
+
+function TProviderList.GetProviderItems(Index: Integer): TProviderItem;
+begin
+  Result := TProviderItem(Items[Index]);
+end;
+
+function TProviderList.AddItem: TProviderItem;
+begin
+  Result := TProviderItem.Create;
+  Add(Result);
+end;
+
+function TProviderList.FindItem(const AName: String): TProviderItem;
+var
+  i: Integer;
+begin
+  Result := nil;
+  for i := 0 to Count - 1 do
+    if CompareText(AName, ProviderItems[i].Name) = 0 then Exit(ProviderItems[i]);
+end;
+
+procedure TProviderList.Clear;
+var
+  i: Integer;
+begin
+  for i := 0 to Count - 1 do ProviderItems[i].Free;
+  inherited Clear;
 end;
 
 { TDBList }
@@ -152,10 +205,12 @@ end; }
 constructor TAppSettings.Create;
 begin
   FDBList := TDBList.Create;
+  FProviderList := TProviderList.Create;
 end;
 
 destructor TAppSettings.Destroy;
 begin
+  FProviderList.Free;
   FDBList.Free;
   inherited Destroy;
 end;
@@ -177,10 +232,12 @@ procedure TAppSettings.Load;
 var
   Sections: TStringListUtf8;
   Item: TDBItem;
+  Provider: TProviderItem;
   Sect: String;
   i: Integer;
 begin
   FDBList.Clear;
+  FProviderList.Clear;
   Sections := TStringListUtf8.Create;
   with TIniFile.Create(Utf8ToSys(AppPath + 'dxwebsrv.cfg')) do
   try
@@ -198,7 +255,20 @@ begin
     for i := 0 to Sections.Count - 1 do
     begin
       Sect := Sections[i];
-      if CompareText(Sect, 'Server') <> 0 then
+      if CompareText(Sect, 'Server') = 0 then Continue;
+
+      if Pos('provider:', LowerCase(Sect)) = 1 then
+      begin
+        Provider := FProviderList.AddItem;
+        Provider.Name := Trim(Copy(Sect, Length('provider:') + 1, MaxInt));
+        Provider.Url := ReadString(Sect, 'Url', '');
+        Provider.Token := ReadString(Sect, 'Token', '');
+        Provider.TimeoutMs := ReadInteger(Sect, 'TimeoutMs', 30000);
+        Provider.AllowInsecure := ReadBool(Sect, 'AllowInsecure', False);
+        if Provider.TimeoutMs < 1000 then Provider.TimeoutMs := 1000;
+        if Provider.TimeoutMs > 300000 then Provider.TimeoutMs := 300000;
+      end
+      else
       begin
         Item := FDBList.AddItem;
         Item.Name := Sect;

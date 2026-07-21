@@ -1,0 +1,13 @@
+{
+  "name": "dataexpress-web-modernization",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tools/*.test.mjs",
+    "audit:fixtures": "node tools/extension-audit.mjs test/fixtures/extensions"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
