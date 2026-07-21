@@ -13,6 +13,10 @@ lib
 backup
 cache
 tools
+!tools/
+tools/*
+!tools/extension-audit.mjs
+!tools/extension-audit.test.mjs
 /_dist
 
 
