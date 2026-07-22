@@ -23,6 +23,10 @@ tools/*
 !tools/extension-provider-scaffold.test.mjs
 !tools/provider-sdk.mjs
 !tools/provider-sdk.test.mjs
+!tools/provider-config.mjs
+!tools/provider-config.test.mjs
+!tools/provider-preflight.mjs
+!tools/provider-preflight.test.mjs
 !tools/provider-wiring.test.mjs
 !tools/provider-smoke.pas
 !tools/provider-smoke-server.mjs

@@ -8,6 +8,7 @@
     "audit:fixtures": "node tools/extension-audit.mjs test/fixtures/extensions",
     "migrate:extension": "node tools/extension-migrate.mjs",
     "scaffold:provider": "node tools/extension-provider-scaffold.mjs",
+    "preflight:provider": "node tools/provider-preflight.mjs",
     "dev": "node tools/dev-server.mjs"
   },
   "engines": {

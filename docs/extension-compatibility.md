@@ -84,8 +84,12 @@ Manifest
 как блокирующая проверка перед импортом:
 
 ```powershell
-node tools/extension-audit.mjs C:\path\to\extensions --strict
+node tools/extension-audit.mjs C:\path\to\extensions --config C:\path\to\dxwebsrv.cfg --strict
 ```
+
+С параметром `--config` строгий аудит также требует существующую секцию
+`[Provider:Имя]` с допустимым `Url` для каждого литерального provider-вызова.
+Токены и адреса не копируются в JSON-отчёт.
 
 Строгий режим возвращает ненулевой код, если отсутствует парная web-реализация,
 есть дублирующийся/лишний mapping либо метаданные не соответствуют типу файла

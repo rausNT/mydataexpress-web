@@ -114,3 +114,17 @@ node OfficeTools.provider.mjs
 $env:DX_PROVIDER_TOKEN = 'replace-with-a-long-random-token'
 node examples/providers/portable-provider.mjs
 ```
+
+## Проверка перед развёртыванием
+
+После запуска provider проверьте всю цепочку manifest → `dxwebsrv.cfg` → HTTP:
+
+```powershell
+npm run preflight:provider -- C:\path\to\OfficeTools.manifest.json --config C:\path\to\dxwebsrv.cfg
+```
+
+Команда проверяет формат manifest и конфигурации, политику HTTPS, Bearer-токен,
+`GET /health`, `GET /capabilities` и наличие всех обязательных операций. Она
+возвращает ненулевой код при ошибке и никогда не выводит токен. Незавершённые
+ручные адаптации блокируют проверку; для осознанного временного исключения есть
+параметр `--allow-manual`.

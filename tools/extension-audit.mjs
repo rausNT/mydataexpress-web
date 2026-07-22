@@ -2,6 +2,7 @@
 
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
+import { configuredProviderNames, parseProviderConfig } from './provider-config.mjs';
 
 const RULES = [
   { id: 'ole', severity: 'blocking', replacement: 'HTTP/API provider or server-side document service', pattern: /\b(CreateOleObject|GetActiveOleObject|OleVariant|ComObj)\b/gi },
@@ -231,7 +232,7 @@ function runtimeKey(spec) {
   return `action:${spec.id}`;
 }
 
-export function buildRuntimeCompatibility(reports) {
+export function buildRuntimeCompatibility(reports, { configuredProviders = null } = {}) {
   const desktopSpecs = [];
   const webByKey = new Map();
   const orphanWebMappings = [];
@@ -279,6 +280,7 @@ export function buildRuntimeCompatibility(reports) {
 
   let providerBacked = 0;
   let providerUnresolved = 0;
+  let providerUnconfigured = 0;
   const entries = desktopSpecs.map(spec => {
     const mappings = webByKey.get(runtimeKey(spec)) || [];
     let status = 'missing';
@@ -289,8 +291,14 @@ export function buildRuntimeCompatibility(reports) {
       webModule = mappings[0].module;
       if (mappings[0].providerBacked) {
         providerBacked++;
-        status = mappings[0].dynamicProviderCalls > 0 ? 'provider-unresolved' : 'provider';
+        const missingProviders = configuredProviders
+          ? mappings[0].providers.filter(provider => !configuredProviders.has(provider.toLowerCase()))
+          : [];
+        if (mappings[0].dynamicProviderCalls > 0) status = 'provider-unresolved';
+        else if (missingProviders.length > 0) status = 'provider-unconfigured';
+        else status = 'provider';
         if (status === 'provider-unresolved') providerUnresolved++;
+        if (status === 'provider-unconfigured') providerUnconfigured++;
       } else {
         status = 'web-script';
       }
@@ -306,6 +314,9 @@ export function buildRuntimeCompatibility(reports) {
       status,
       providers: mappings.length === 1 ? mappings[0].providers : [],
       dynamicProviderCalls: mappings.length === 1 ? mappings[0].dynamicProviderCalls : 0,
+      missingProviders: mappings.length === 1 && configuredProviders
+        ? mappings[0].providers.filter(provider => !configuredProviders.has(provider.toLowerCase()))
+        : [],
     };
   });
 
@@ -324,6 +335,7 @@ export function buildRuntimeCompatibility(reports) {
       actionsCompatible,
       providerBacked,
       providerUnresolved,
+      providerUnconfigured,
       duplicateWebMappings: duplicateWebMappings.length,
       orphanWebMappings: orphanWebMappings.length,
       invalidMappings: invalidMappings.length,
@@ -368,7 +380,7 @@ function summary(reports) {
 function main() {
   const args = process.argv.slice(2);
   if (!args.length) {
-    console.error('Usage: node tools/extension-audit.mjs <file-or-directory> [--output report.json] [--strict]');
+    console.error('Usage: node tools/extension-audit.mjs <file-or-directory> [--output report.json] [--config dxwebsrv.cfg] [--strict]');
     process.exitCode = 2;
     return;
   }
@@ -379,10 +391,23 @@ function main() {
     return;
   }
   const output = outputIndex >= 0 ? args[outputIndex + 1] : '';
+  const configIndex = args.indexOf('--config');
+  if (configIndex >= 0 && !args[configIndex + 1]) {
+    console.error('--config requires a file path');
+    process.exitCode = 2;
+    return;
+  }
+  const configFile = configIndex >= 0 ? resolve(args[configIndex + 1]) : '';
+  const providerConfiguration = configFile
+    ? parseProviderConfig(readFileSync(configFile, 'utf8'))
+    : null;
+  const configuredProviders = providerConfiguration
+    ? configuredProviderNames(providerConfiguration)
+    : null;
   const input = resolve(args[0]);
   const reports = collectExtensionFiles(input).map(file => auditSource(readFileSync(file, 'utf8'), file));
   const reportSummary = summary(reports);
-  const runtimeCompatibility = buildRuntimeCompatibility(reports);
+  const runtimeCompatibility = buildRuntimeCompatibility(reports, { configuredProviders });
   const mappingsFound = reports.reduce(
     (count, report) => count + report.specifications.length,
     0,
@@ -392,11 +417,20 @@ function main() {
     mappingsFound: mappingsFound > 0,
     runtimeComplete: runtimeCompatibility.summary.complete,
   };
+  if (providerConfiguration) {
+    strictValidation.configValid = providerConfiguration.errors.length === 0;
+  }
   strictValidation.passed = Object.values(strictValidation).every(Boolean);
   const result = {
     generatedAt: new Date().toISOString(),
     summary: reportSummary,
     strictValidation,
+    providerConfiguration: providerConfiguration ? {
+      file: configFile,
+      configuredProviders: [...configuredProviders],
+      errors: providerConfiguration.errors,
+      warnings: providerConfiguration.warnings,
+    } : null,
     runtimeCompatibility,
     modules: reports,
   };

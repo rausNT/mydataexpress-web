@@ -32,7 +32,14 @@ npm run migrate:extension -- C:\path\to\OfficeTools.epas
 весь каталог desktop/web-модулей перед импортом можно строгим аудитом:
 
 ```powershell
-node tools/extension-audit.mjs C:\path\to\extensions --strict
+node tools/extension-audit.mjs C:\path\to\extensions --config C:\path\to\dxwebsrv.cfg --strict
+```
+
+Перед включением перенесённого расширения проверьте manifest, конфигурацию и
+живой provider одной командой:
+
+```powershell
+npm run preflight:provider -- C:\path\to\OfficeTools.manifest.json --config C:\path\to\dxwebsrv.cfg
 ```
 
 ### Локальный preview

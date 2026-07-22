@@ -273,3 +273,44 @@ test('strict CLI does not treat an empty directory as a successful migration', (
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('strict CLI checks literal providers against dxwebsrv.cfg', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'dataexpress-config-audit-'));
+  try {
+    const cli = fileURLToPath(new URL('./extension-audit.mjs', import.meta.url));
+    const config = join(directory, 'dxwebsrv.cfg');
+    writeFileSync(join(directory, 'rates.epas'), `
+      {@function
+      OrigName=Rate
+      Name=RATE
+      @}
+    `);
+    writeFileSync(join(directory, 'rates.wepas'), `
+      {@function
+      Name=RATE
+      @}
+      function Rate: Double;
+      begin
+        Result := ExtensionProviderCallFloat('Finance', 'rate', '{}');
+      end;
+    `);
+    writeFileSync(config, '[Provider:Other]\nUrl=http://127.0.0.1:9999/\n');
+
+    const missing = spawnSync(process.execPath, [
+      cli, directory, '--config', config, '--strict',
+    ], { encoding: 'utf8' });
+    assert.equal(missing.status, 1, missing.stderr);
+    const missingReport = JSON.parse(missing.stdout);
+    assert.equal(missingReport.runtimeCompatibility.functions[0].status, 'provider-unconfigured');
+    assert.deepEqual(missingReport.runtimeCompatibility.functions[0].missingProviders, ['Finance']);
+
+    writeFileSync(config, '[Provider:Finance]\nUrl=http://127.0.0.1:9081/\n');
+    const ready = spawnSync(process.execPath, [
+      cli, directory, '--config', config, '--strict',
+    ], { encoding: 'utf8' });
+    assert.equal(ready.status, 0, ready.stderr);
+    assert.equal(JSON.parse(ready.stdout).runtimeCompatibility.functions[0].status, 'provider');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
