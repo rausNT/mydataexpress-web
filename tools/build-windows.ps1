@@ -79,7 +79,7 @@ foreach ($package in $packages) {
 
 Invoke-Lazbuild -Executable $lazbuild -Arguments ($commonArguments + '--build-mode=Win32' + $project)
 
-$binary = Join-Path (Split-Path -Parent $project) 'dxwebsrv.exe'
+$binary = Join-Path (Split-Path -Parent $project) '_test\dxwebsrv.exe'
 if (-not (Test-Path -LiteralPath $binary)) {
     throw "Build completed without the expected file: $binary"
 }

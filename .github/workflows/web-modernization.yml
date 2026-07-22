@@ -67,4 +67,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: dxwebsrv-win32
-          path: dxwebsrv.exe
+          path: _test/dxwebsrv.exe

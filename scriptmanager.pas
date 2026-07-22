@@ -2146,7 +2146,7 @@ end;
 function TScriptManager.ExtensionCompatibilityAsJson: String;
 var
   Root, Summary, Item: TJSONObject;
-  Functions, Actions: TJSONArray;
+  FunctionsJson, ActionsJson: TJSONArray;
   F: TExprFunc;
   A: TExprAction;
   i, FuncCompatible, ActionCompatible, ProviderBacked: Integer;
@@ -2173,13 +2173,13 @@ var
 begin
   Root := TJSONObject.Create;
   try
-    Functions := TJSONArray.Create;
-    Actions := TJSONArray.Create;
+    FunctionsJson := TJSONArray.Create;
+    ActionsJson := TJSONArray.Create;
     Summary := TJSONObject.Create;
     Root.Add('schemaVersion', 1);
     Root.Add('summary', Summary);
-    Root.Add('functions', Functions);
-    Root.Add('actions', Actions);
+    Root.Add('functions', FunctionsJson);
+    Root.Add('actions', ActionsJson);
 
     FuncCompatible := 0;
     ActionCompatible := 0;
@@ -2198,7 +2198,7 @@ begin
       Item.Add('desktopModule', ModuleName(F.DesktopSDi));
       Item.Add('webModule', ModuleName(F.WebSDi));
       Item.Add('status', Status);
-      Functions.Add(Item);
+      FunctionsJson.Add(Item);
     end;
 
     for i := 0 to FActions.Count - 1 do
@@ -2215,7 +2215,7 @@ begin
       Item.Add('desktopModule', ModuleName(A.DesktopSDi));
       Item.Add('webModule', ModuleName(A.WebSDi));
       Item.Add('status', Status);
-      Actions.Add(Item);
+      ActionsJson.Add(Item);
     end;
 
     Summary.Add('functionsTotal', FFuncs.Count);
