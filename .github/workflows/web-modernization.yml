@@ -77,6 +77,7 @@ jobs:
           $fpcArguments = @(
             "-Fu$(Join-Path $PWD 'lib/i386-win32')",
             "-Fu$(Join-Path $lazarusRoot 'components/lazutils/lib/i386-win32')",
+            "-Fu$(Join-Path $lazarusRoot 'components/freetype/lib/i386-win32')",
             "-Fu$(Join-Path $lazarusRoot 'packager/units/i386-win32')",
             "-Fu$(Join-Path $componentsRoot 'PascalScript/Source/lib/i386-win32')",
             "-Fu$(Join-Path $componentsRoot 'bgra/bgrabitmap/lib4nogui/i386-win32/3.2.2')",
