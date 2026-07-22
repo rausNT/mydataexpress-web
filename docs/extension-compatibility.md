@@ -42,11 +42,24 @@ node tools/extension-audit.mjs C:\path\to\extensions --output compatibility.json
 node tools/extension-migrate.mjs OfficeTools.epas --output OfficeToolsWeb.epas
 ```
 
-Вместе с `OfficeToolsWeb.epas` создаётся `OfficeToolsWeb.manifest.json`. Manifest
+Одна команда создаёт согласованный комплект:
+
+- `OfficeToolsWeb.epas` — web-модуль Pascal Script;
+- `OfficeToolsWeb.manifest.json` — машинный контракт операций;
+- `OfficeToolsWeb.provider.mjs` — Node-provider с handler-заглушками;
+- `OfficeToolsWeb.provider.cfg.example` — секция для `dxwebsrv.cfg`.
+
+Создание provider-файлов можно отключить `--no-provider`, а manifest и provider —
+`--no-manifest`. Повторно создать provider по существующему manifest можно так:
+
+```powershell
+npm run scaffold:provider -- OfficeToolsWeb.manifest.json
+```
+
+Manifest
 фиксирует имя провайдера, исходный/web-модули, стабильные `Name`/`Id`, операции и
 статусы всех сопоставлений. Если объявление процедуры или функции не найдено,
-элемент получает статус `manual`, а `summary.complete` остаётся `false`. Создание
-sidecar-файла можно отключить явным `--no-manifest`.
+элемент получает статус `manual`, а `summary.complete` остаётся `false`.
 
 Генератор автоматически сохраняет JSON-типы аргументов и подбирает runtime-
 адаптер результата для строк, Boolean, целых и вещественных чисел, Currency,

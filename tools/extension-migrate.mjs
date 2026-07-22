@@ -1,11 +1,22 @@
 #!/usr/bin/env node
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, extname, resolve } from 'node:path';
+import { basename, dirname, extname, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { auditSource } from './extension-audit.mjs';
+import {
+  generateProviderConfig,
+  generateProviderScaffold,
+} from './extension-provider-scaffold.mjs';
 
 function pascalString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function relativeImportPath(fromFile, toFile) {
+  let value = relative(dirname(fromFile), toFile).replaceAll('\\', '/');
+  if (!value.startsWith('.')) value = `./${value}`;
+  return value;
 }
 
 function declaration(source, spec) {
@@ -186,7 +197,7 @@ export function generateWebModule(source, filename = 'Extension.epas') {
 function main() {
   const args = process.argv.slice(2);
   if (!args[0]) {
-    console.error('Usage: node tools/extension-migrate.mjs <extension.epas> [--output extensionWeb.epas] [--manifest extensionWeb.manifest.json] [--no-manifest]');
+    console.error('Usage: node tools/extension-migrate.mjs <extension.epas> [--output extensionWeb.epas] [--manifest extensionWeb.manifest.json] [--provider-output extensionWeb.provider.mjs] [--provider-config extensionWeb.provider.cfg.example] [--no-provider] [--no-manifest]');
     process.exitCode = 2;
     return;
   }
@@ -213,6 +224,31 @@ function main() {
       ? args[manifestIndex + 1]
       : `${manifestBase}.manifest.json`
   );
+  const providerIndex = args.indexOf('--provider-output');
+  if (providerIndex >= 0 && !args[providerIndex + 1]) {
+    console.error('--provider-output requires a file path');
+    process.exitCode = 2;
+    return;
+  }
+  const providerConfigIndex = args.indexOf('--provider-config');
+  if (providerConfigIndex >= 0 && !args[providerConfigIndex + 1]) {
+    console.error('--provider-config requires a file path');
+    process.exitCode = 2;
+    return;
+  }
+  if (!manifestOutput && (providerIndex >= 0 || providerConfigIndex >= 0)) {
+    console.error('Provider scaffold requires a manifest; remove --no-manifest');
+    process.exitCode = 2;
+    return;
+  }
+  const providerOutput = manifestOutput && !args.includes('--no-provider')
+    ? resolve(providerIndex >= 0 ? args[providerIndex + 1] : `${manifestBase}.provider.mjs`)
+    : '';
+  const providerConfigOutput = providerOutput && !args.includes('--no-provider-config')
+    ? resolve(providerConfigIndex >= 0
+      ? args[providerConfigIndex + 1]
+      : `${manifestBase}.provider.cfg.example`)
+    : '';
   const generated = generateWebModule(source, input);
   generated.manifest.webModule = basename(output);
   mkdirSync(dirname(output), { recursive: true });
@@ -223,6 +259,20 @@ function main() {
   }
   process.stdout.write(`${output}\n`);
   if (manifestOutput) process.stdout.write(`${manifestOutput}\n`);
+  if (providerOutput) {
+    const sdkFile = fileURLToPath(new URL('./provider-sdk.mjs', import.meta.url));
+    mkdirSync(dirname(providerOutput), { recursive: true });
+    writeFileSync(providerOutput, generateProviderScaffold(generated.manifest, {
+      manifestImport: relativeImportPath(providerOutput, manifestOutput),
+      sdkImport: relativeImportPath(providerOutput, sdkFile),
+    }));
+    process.stdout.write(`${providerOutput}\n`);
+  }
+  if (providerConfigOutput) {
+    mkdirSync(dirname(providerConfigOutput), { recursive: true });
+    writeFileSync(providerConfigOutput, generateProviderConfig(generated.manifest));
+    process.stdout.write(`${providerConfigOutput}\n`);
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname.replace(/^\/(.:)/, '$1'))) main();

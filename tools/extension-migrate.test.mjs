@@ -71,6 +71,8 @@ test('CLI writes a manifest sidecar next to the generated module', () => {
     const input = join(directory, 'OfficeTools.epas');
     const output = join(directory, 'OfficeToolsWeb.epas');
     const manifest = join(directory, 'OfficeToolsWeb.manifest.json');
+    const provider = join(directory, 'OfficeToolsWeb.provider.mjs');
+    const providerConfig = join(directory, 'OfficeToolsWeb.provider.cfg.example');
     writeFileSync(input, desktopModule);
 
     const result = spawnSync(process.execPath, [
@@ -84,6 +86,10 @@ test('CLI writes a manifest sidecar next to the generated module', () => {
     const payload = JSON.parse(readFileSync(manifest, 'utf8'));
     assert.equal(payload.webModule, 'OfficeToolsWeb.epas');
     assert.equal(payload.summary.complete, true);
+    assert.match(readFileSync(provider, 'utf8'), /NORMALIZE_PHONE/);
+    assert.match(readFileSync(providerConfig, 'utf8'), /Provider:OfficeTools/);
+    const syntax = spawnSync(process.execPath, ['--check', provider], { encoding: 'utf8' });
+    assert.equal(syntax.status, 0, syntax.stderr);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

@@ -19,6 +19,8 @@ tools/*
 !tools/extension-audit.test.mjs
 !tools/extension-migrate.mjs
 !tools/extension-migrate.test.mjs
+!tools/extension-provider-scaffold.mjs
+!tools/extension-provider-scaffold.test.mjs
 !tools/provider-sdk.mjs
 !tools/provider-sdk.test.mjs
 !tools/provider-wiring.test.mjs

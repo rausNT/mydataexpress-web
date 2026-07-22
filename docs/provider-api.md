@@ -70,6 +70,37 @@ localhost блокируется, если явно не задано `AllowInse
 зависимостей. Он проверяет Bearer-токен, размер тела, имя операции и всегда
 возвращает стабильную JSON-обёртку.
 
+При передаче `manifest` в `createProviderServer` runtime до открытия порта
+проверяет schema version, дубликаты операций и наличие всех обязательных
+handlers. Поэтому неполная миграция завершается понятной ошибкой при запуске, а
+не при первом действии пользователя. Операции со статусом `manual` публикуются
+как ограничения, но handler для них не требуется.
+
+С тем же Bearer-токеном доступны:
+
+- `GET /health` — готовность, имя провайдера и полнота миграции;
+- `GET /capabilities` — обязательные операции, ручные ограничения и лишние handlers.
+
+Без корректного `Authorization: Bearer <Token>` оба адреса возвращают `401`.
+
+## Генерация provider из manifest
+
+Основной инструмент миграции создаёт provider scaffold автоматически. Для
+отдельного запуска:
+
+```powershell
+npm run scaffold:provider -- OfficeToolsWeb.manifest.json
+```
+
+В сгенерированном `.provider.mjs` перечислены только операции со статусом
+`provider`, сигнатуры параметров оставлены комментариями, а каждый handler
+содержит явный `TODO`. После реализации задайте токен и запустите файл:
+
+```powershell
+$env:DX_PROVIDER_TOKEN = 'replace-with-a-long-random-token'
+node OfficeToolsWeb.provider.mjs
+```
+
 Пример запуска:
 
 ```powershell
