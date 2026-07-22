@@ -12,15 +12,26 @@ unit ExtensionProviders;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, SysUtils, Variants;
 
 function ExtensionProviderCall(const ProviderName, Operation,
   Payload: String): String;
+function ExtensionProviderCallBoolean(const ProviderName, Operation,
+  Payload: String): Boolean;
+function ExtensionProviderCallInt64(const ProviderName, Operation,
+  Payload: String): Int64;
+function ExtensionProviderCallFloat(const ProviderName, Operation,
+  Payload: String): Double;
+function ExtensionProviderCallDateTime(const ProviderName, Operation,
+  Payload: String): TDateTime;
+function ExtensionProviderCallVariant(const ProviderName, Operation,
+  Payload: String): Variant;
+function ExtensionProviderEncodeValue(const Value: Variant): String;
 
 implementation
 
 uses
-  AppSettings, fphttpclient, opensslsockets, fpjson, jsonparser;
+  AppSettings, fphttpclient, opensslsockets, fpjson, jsonparser, DateUtils;
 
 const
   MaxProviderResponseSize = 16 * 1024 * 1024;
@@ -127,6 +138,115 @@ begin
     Client.Free;
     ResponseBody.Free;
     RequestBody.Free;
+  end;
+end;
+
+function ExtensionProviderCallBoolean(const ProviderName, Operation,
+  Payload: String): Boolean;
+var
+  Value: String;
+begin
+  Value := Trim(ExtensionProviderCall(ProviderName, Operation, Payload));
+  if SameText(Value, 'true') or (Value = '1') then
+    Exit(True);
+  if SameText(Value, 'false') or (Value = '0') then
+    Exit(False);
+  raise Exception.CreateFmt(
+    'Extension provider "%s" operation "%s" did not return a boolean.',
+    [ProviderName, Operation]);
+end;
+
+function ExtensionProviderCallInt64(const ProviderName, Operation,
+  Payload: String): Int64;
+var
+  Value: String;
+begin
+  Value := Trim(ExtensionProviderCall(ProviderName, Operation, Payload));
+  if not TryStrToInt64(Value, Result) then
+    raise Exception.CreateFmt(
+      'Extension provider "%s" operation "%s" did not return an integer.',
+      [ProviderName, Operation]);
+end;
+
+function ExtensionProviderCallFloat(const ProviderName, Operation,
+  Payload: String): Double;
+var
+  Value: String;
+  FormatSettings: TFormatSettings;
+begin
+  Value := Trim(ExtensionProviderCall(ProviderName, Operation, Payload));
+  FormatSettings := DefaultFormatSettings;
+  FormatSettings.DecimalSeparator := '.';
+  FormatSettings.ThousandSeparator := #0;
+  if not TryStrToFloat(Value, Result, FormatSettings) then
+    raise Exception.CreateFmt(
+      'Extension provider "%s" operation "%s" did not return a number.',
+      [ProviderName, Operation]);
+end;
+
+function ExtensionProviderCallDateTime(const ProviderName, Operation,
+  Payload: String): TDateTime;
+var
+  Value: String;
+  FormatSettings: TFormatSettings;
+begin
+  Value := Trim(ExtensionProviderCall(ProviderName, Operation, Payload));
+  FormatSettings := DefaultFormatSettings;
+  FormatSettings.DecimalSeparator := '.';
+  FormatSettings.ThousandSeparator := #0;
+  if TryStrToFloat(Value, Result, FormatSettings) then Exit;
+  try
+    Result := ISO8601ToDate(Value, False);
+  except
+    on E: Exception do
+      raise Exception.CreateFmt(
+        'Extension provider "%s" operation "%s" did not return an ISO 8601 date or DataExpress date number.',
+        [ProviderName, Operation]);
+  end;
+end;
+
+function ExtensionProviderCallVariant(const ProviderName, Operation,
+  Payload: String): Variant;
+var
+  Value: String;
+  Json: TJSONData;
+begin
+  Value := ExtensionProviderCall(ProviderName, Operation, Payload);
+  if Value = '' then Exit(Null);
+  try
+    Json := GetJSON(Value);
+  except
+    Exit(Value);
+  end;
+  try
+    case Json.JSONType of
+      jtNull: Result := Null;
+      jtArray, jtObject: Result := Json.AsJSON;
+      else Result := Json.Value;
+    end;
+  finally
+    Json.Free;
+  end;
+end;
+
+function ExtensionProviderEncodeValue(const Value: Variant): String;
+var
+  Json: TJSONData;
+begin
+  case VarType(Value) of
+    varEmpty, varNull: Json := CreateJSON;
+    varByte, varSmallint, varInteger, varWord: Json := CreateJSON(Integer(Value));
+    varBoolean: Json := CreateJSON(Boolean(Value));
+    varSingle, varDouble, varCurrency: Json := CreateJSON(Double(Value));
+    varDate: Json := CreateJSON(DateToISO8601(TDateTime(Value), False));
+    varInt64: Json := CreateJSON(Int64(Value));
+    varLongWord, varQWord: Json := CreateJSON(QWord(Value));
+    else Json := CreateJSON(VarToStr(Value));
+  end;
+  try
+    Result := Json.AsJSON;
+  finally
+    Json.Free;
   end;
 end;
 

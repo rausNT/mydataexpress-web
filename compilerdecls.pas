@@ -1620,6 +1620,12 @@ begin
   Cl.AddDelphiFunction('function CreateGUIDString: String');
   Cl.AddDelphiFunction('function GetAppDir: String');
   Cl.AddDelphiFunction('function ExtensionProviderCall(const ProviderName, Operation, Payload: String): String');
+  Cl.AddDelphiFunction('function ExtensionProviderCallBoolean(const ProviderName, Operation, Payload: String): Boolean');
+  Cl.AddDelphiFunction('function ExtensionProviderCallInt64(const ProviderName, Operation, Payload: String): Int64');
+  Cl.AddDelphiFunction('function ExtensionProviderCallFloat(const ProviderName, Operation, Payload: String): Double');
+  Cl.AddDelphiFunction('function ExtensionProviderCallDateTime(const ProviderName, Operation, Payload: String): TDateTime');
+  Cl.AddDelphiFunction('function ExtensionProviderCallVariant(const ProviderName, Operation, Payload: String): Variant');
+  Cl.AddDelphiFunction('function ExtensionProviderEncodeValue(const Value: Variant): String');
 
   Cl.AddDelphiFunction('function SetExprVar(const aName: String; aValue: Variant): Variant');
   Cl.AddDelphiFunction('function GetExprVar(const aName: String): Variant');

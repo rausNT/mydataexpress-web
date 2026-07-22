@@ -21,6 +21,9 @@ tools/*
 !tools/extension-migrate.test.mjs
 !tools/provider-sdk.mjs
 !tools/provider-sdk.test.mjs
+!tools/provider-wiring.test.mjs
+!tools/provider-smoke.pas
+!tools/provider-smoke-server.mjs
 !tools/http-client.test.mjs
 !tools/dev-server.mjs
 !tools/dev-server.test.mjs

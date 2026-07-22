@@ -12,25 +12,39 @@ function declaration(source, spec) {
   if (!spec.origName) return '';
   const kind = spec.kind === 'function' ? 'function' : 'procedure';
   const escaped = spec.origName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`\\b${kind}\\s+${escaped}\\b[\\s\\S]*?;`, 'i');
-  return source.match(regex)?.[0]?.trim() || '';
+  const match = new RegExp(`\\b${kind}\\s+${escaped}\\b`, 'i').exec(source);
+  if (!match) return '';
+  let depth = 0;
+  for (let index = match.index; index < source.length; index++) {
+    if (source[index] === '(') depth++;
+    else if (source[index] === ')') depth = Math.max(0, depth - 1);
+    else if (source[index] === ';' && depth === 0) return source.slice(match.index, index + 1).trim();
+  }
+  return '';
 }
 
-function parameterNames(decl) {
+function parameters(decl) {
   const block = decl.match(/\(([\s\S]*?)\)/)?.[1] || '';
   return block.split(';').flatMap(group => {
-    const beforeType = group.split(':')[0]?.replace(/^\s*(const|var|out)\s+/i, '') || '';
-    return beforeType.split(',').map(name => name.trim()).filter(name => /^[A-Za-z_]\w*$/.test(name));
+    const colon = group.lastIndexOf(':');
+    if (colon < 0) return [];
+    let namesPart = group.slice(0, colon).trim();
+    const qualifier = namesPart.match(/^(const|var|out)\s+/i)?.[1]?.toLowerCase() || '';
+    namesPart = namesPart.replace(/^(const|var|out)\s+/i, '');
+    const type = group.slice(colon + 1).split('=')[0].trim();
+    return namesPart.split(',')
+      .map(name => name.trim())
+      .filter(name => /^[A-Za-z_]\w*$/.test(name))
+      .map(name => ({ name, type, qualifier }));
   });
 }
 
-function payloadLines(decl) {
-  const names = parameterNames(decl);
-  if (!names.length) return ["  ProviderPayload := '{}';"];
+function payloadLines(params) {
+  if (!params.length) return ["  ProviderPayload := '{}';"];
   const result = ["  ProviderPayload := '{';"];
-  names.forEach((name, index) => {
+  params.forEach((parameter, index) => {
     const prefix = index ? ',' : '';
-    result.push(`  ProviderPayload := ProviderPayload + '${prefix}"${name}":' + StringToJSONString(VarToStr(${name}), True);`);
+    result.push(`  ProviderPayload := ProviderPayload + '${prefix}"${parameter.name}":' + ExtensionProviderEncodeValue(${parameter.name});`);
   });
   result.push("  ProviderPayload := ProviderPayload + '}';");
   return result;
@@ -40,12 +54,39 @@ function resultType(decl) {
   return decl.match(/:\s*([\w.]+)\s*;$/i)?.[1]?.toLowerCase() || '';
 }
 
-function defaultResult(decl) {
-  const type = resultType(decl);
-  if (['string', 'ansistring', 'unicodestring'].includes(type)) return "''";
-  if (['boolean', 'bool'].includes(type)) return 'False';
-  if (['variant'].includes(type)) return 'Null';
-  return '0';
+const stringTypes = new Set(['string', 'ansistring', 'unicodestring', 'widestring']);
+const booleanTypes = new Set(['boolean', 'bool']);
+const integerTypes = new Set([
+  'byte', 'shortint', 'smallint', 'word', 'integer', 'longint', 'cardinal',
+  'longword', 'int64', 'qword', 'nativeint', 'nativeuint',
+]);
+const floatTypes = new Set(['single', 'double', 'extended', 'real', 'currency', 'comp']);
+const dateTypes = new Set(['tdatetime', 'tdate', 'ttime']);
+
+function normalizedType(type) {
+  return type.replace(/\s+/g, '').toLowerCase();
+}
+
+function supportedParameter(parameter) {
+  if (parameter.qualifier === 'var' || parameter.qualifier === 'out') {
+    return `by-reference-parameter:${parameter.name}`;
+  }
+  const type = normalizedType(parameter.type);
+  if (stringTypes.has(type) || booleanTypes.has(type) || integerTypes.has(type) ||
+      floatTypes.has(type) || dateTypes.has(type) || type === 'variant' ||
+      ['char', 'ansichar', 'widechar'].includes(type)) return '';
+  return `unsupported-parameter-type:${parameter.type || 'unknown'}`;
+}
+
+function resultAdapter(type) {
+  const normalized = normalizedType(type);
+  if (stringTypes.has(normalized)) return 'ExtensionProviderCall';
+  if (booleanTypes.has(normalized)) return 'ExtensionProviderCallBoolean';
+  if (integerTypes.has(normalized)) return 'ExtensionProviderCallInt64';
+  if (floatTypes.has(normalized)) return 'ExtensionProviderCallFloat';
+  if (dateTypes.has(normalized)) return 'ExtensionProviderCallDateTime';
+  if (normalized === 'variant') return 'ExtensionProviderCallVariant';
+  return '';
 }
 
 export function generateWebModule(source, filename = 'Extension.epas') {
@@ -87,15 +128,26 @@ export function generateWebModule(source, filename = 'Extension.epas') {
     }
 
     const operation = spec.kind === 'function' ? spec.name : spec.id;
-    lines.push(decl, 'var', '  ProviderPayload, ProviderResponse: String;', 'begin');
-    lines.push(...payloadLines(decl));
-    lines.push(`  ProviderResponse := ExtensionProviderCall(${pascalString(moduleName)}, ${pascalString(operation)}, ProviderPayload);`);
-    if (spec.kind === 'function') {
-      if (/:\s*(String|AnsiString|UnicodeString)\s*;$/i.test(decl)) lines.push('  Result := ProviderResponse;');
-      else lines.push('  { TODO: convert ProviderResponse to the function result type. }', `  Result := ${defaultResult(decl)};`);
+    const params = parameters(decl);
+    const issues = params.map(supportedParameter).filter(Boolean);
+    const type = spec.kind === 'function' ? resultType(decl) : '';
+    const adapter = spec.kind === 'function' ? resultAdapter(type) : 'ExtensionProviderCall';
+    if (spec.kind === 'function' && !adapter) issues.push(`unsupported-result-type:${type || 'unknown'}`);
+    const automatic = issues.length === 0;
+
+    lines.push(decl);
+    if (automatic) {
+      lines.push('var', spec.kind === 'action'
+        ? '  ProviderPayload, ProviderResponse: String;'
+        : '  ProviderPayload: String;', 'begin');
+      lines.push(...payloadLines(params));
+      const call = `${adapter}(${pascalString(moduleName)}, ${pascalString(operation)}, ProviderPayload)`;
+      if (spec.kind === 'function') lines.push(`  Result := ${call};`);
+      else lines.push(`  ProviderResponse := ${call};`);
+    } else {
+      lines.push('begin', `  { TODO: manual provider adapter required: ${issues.join(', ')}. }`);
     }
     lines.push('end;', '');
-    const automatic = spec.kind === 'action' || ['string', 'ansistring', 'unicodestring'].includes(resultType(decl));
     mappings.push({
       kind: spec.kind,
       name: spec.name,
@@ -103,9 +155,13 @@ export function generateWebModule(source, filename = 'Extension.epas') {
       origName: spec.origName,
       args: spec.args,
       result: spec.result,
+      resultType: type,
+      parameters: params,
       operation,
       status: automatic ? 'provider' : 'manual',
-      reason: automatic ? '' : `unsupported-result-type:${resultType(decl) || 'unknown'}`,
+      reason: automatic ? '' : issues[0],
+      issues,
+      wireFormat: 'json-v1',
     });
   }
 

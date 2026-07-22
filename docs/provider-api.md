@@ -38,6 +38,21 @@ AllowInsecure=False
 {"ok": true, "result": "result.pdf"}
 ```
 
+`payload` сохраняет JSON-типы скалярных параметров: строки остаются строками,
+Boolean — `true`/`false`, числа передаются JSON-числами, `null` — как `null`.
+Провайдер также должен возвращать результат с соответствующим JSON-типом.
+Сгенерированный web-модуль использует следующие встроенные адаптеры:
+
+- `ExtensionProviderCall` — строки;
+- `ExtensionProviderCallBoolean` — Boolean;
+- `ExtensionProviderCallInt64` — целые числа;
+- `ExtensionProviderCallFloat` — вещественные числа и Currency;
+- `ExtensionProviderCallDateTime` — ISO 8601 или числовая дата DataExpress;
+- `ExtensionProviderCallVariant` — примитивный Variant, а объекты/массивы как JSON-строка.
+
+Такой контракт не зависит от регионального десятичного разделителя Windows:
+вещественные числа на проводе всегда используют JSON-разделитель `.`.
+
 Ошибка:
 
 ```json

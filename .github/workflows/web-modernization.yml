@@ -64,6 +64,52 @@ jobs:
             -LazarusRoot $lazarusRoot `
             -ComponentsRoot (Join-Path $PWD 'dependencies/dataexpress-depend') `
             -PrimaryConfigPath $lazarusConfig
+      - name: Smoke-test Pascal provider bridge
+        shell: pwsh
+        run: |
+          $lazarusRoot = Join-Path $env:RUNNER_TEMP 'lazarus'
+          $componentsRoot = Join-Path $PWD 'dependencies/dataexpress-depend'
+          $smokeRoot = Join-Path $env:RUNNER_TEMP 'provider-smoke'
+          $smokeUnits = Join-Path $smokeRoot 'units'
+          New-Item -ItemType Directory -Path $smokeRoot, $smokeUnits | Out-Null
+
+          $fpc = Join-Path $lazarusRoot 'fpc/3.2.2/bin/i386-win32/fpc.exe'
+          $fpcArguments = @(
+            "-Fu$(Join-Path $PWD 'lib/i386-win32')",
+            "-Fu$(Join-Path $lazarusRoot 'components/lazutils/lib/i386-win32')",
+            "-Fu$(Join-Path $lazarusRoot 'packager/units/i386-win32')",
+            "-Fu$(Join-Path $componentsRoot 'PascalScript/Source/lib/i386-win32')",
+            "-Fu$(Join-Path $componentsRoot 'bgra/bgrabitmap/lib4nogui/i386-win32/3.2.2')",
+            "-FE$smokeRoot",
+            "-FU$smokeUnits",
+            (Join-Path $PWD 'tools/provider-smoke.pas')
+          )
+          & $fpc @fpcArguments
+          if ($LASTEXITCODE -ne 0) { throw "Provider smoke compilation failed: $LASTEXITCODE" }
+
+          $token = 'provider-smoke-secret'
+          $port = 19081
+          $provider = Start-Process -FilePath (Get-Command node).Source `
+            -ArgumentList @((Join-Path $PWD 'tools/provider-smoke-server.mjs'), $port, $token) `
+            -WorkingDirectory $PWD -WindowStyle Hidden -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(15)
+            do {
+              $listener = Get-NetTCPConnection -LocalAddress 127.0.0.1 `
+                -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+              if ($listener) { break }
+              if ($provider.HasExited) { throw 'Provider smoke server exited early' }
+              Start-Sleep -Milliseconds 250
+            } while ((Get-Date) -lt $deadline)
+            if (-not $listener) { throw 'Provider smoke server did not start' }
+
+            & (Join-Path $smokeRoot 'provider-smoke.exe') `
+              "http://127.0.0.1:$port/" $token
+            if ($LASTEXITCODE -ne 0) { throw "Provider smoke test failed: $LASTEXITCODE" }
+          }
+          finally {
+            if (-not $provider.HasExited) { Stop-Process -Id $provider.Id }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: dxwebsrv-win32

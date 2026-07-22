@@ -47,9 +47,9 @@ test('generates stable web specifications and provider calls', () => {
   assert.match(generated.module, /function NormalizePhone\(Value: String\): String;/);
   assert.match(generated.module, /procedure ExportDocument\(FileName: String\);/);
   assert.match(generated.module, /"Value":/);
-  assert.match(generated.module, /ExtensionProviderCall\('OfficeTools', 'NORMALIZE_PHONE', ProviderPayload\)/);
+  assert.match(generated.module, /ExtensionProviderEncodeValue\(Value\)/);
+  assert.match(generated.module, /Result := ExtensionProviderCall\('OfficeTools', 'NORMALIZE_PHONE', ProviderPayload\)/);
   assert.match(generated.module, /ExtensionProviderCall\('OfficeTools', 'action-123', ProviderPayload\)/);
-  assert.match(generated.module, /Result := ProviderResponse/);
   assert.equal(generated.manifest.provider, 'OfficeTools');
   assert.equal(generated.manifest.summary.complete, true);
   assert.deepEqual(generated.manifest.mappings.map(item => item.operation), ['NORMALIZE_PHONE', 'action-123']);
@@ -89,7 +89,7 @@ test('CLI writes a manifest sidecar next to the generated module', () => {
   }
 });
 
-test('manifest does not claim automatic compatibility for typed results', () => {
+test('generates typed provider adapters and preserves scalar payload types', () => {
   const source = `
     {@function
     OrigName=CalculateTotal
@@ -99,14 +99,61 @@ test('manifest does not claim automatic compatibility for typed results', () => 
     Group=Finance
     Description=Calculate
     @}
-    function CalculateTotal(Value: Double): Double;
+    function CalculateTotal(Value: Double; Tax: Double): Double;
     begin
-      Result := Value;
+      Result := Value + Tax;
+    end;
+
+    {@function
+    OrigName=IsApproved
+    Name=IS_APPROVED
+    Args=n
+    Result=b
+    @}
+    function IsApproved(Id: Integer): Boolean;
+    begin
+      Result := Id > 0;
     end;
   `;
   const generated = generateWebModule(source, 'Finance.epas');
+  assert.equal(generated.manifest.summary.complete, true);
+  assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['provider', 'provider']);
+  assert.match(generated.module, /function CalculateTotal\(Value: Double; Tax: Double\): Double;/);
+  assert.match(generated.module, /ExtensionProviderEncodeValue\(Value\)/);
+  assert.match(generated.module, /ExtensionProviderEncodeValue\(Tax\)/);
+  assert.match(generated.module, /Result := ExtensionProviderCallFloat\('Finance', 'CALCULATE_TOTAL'/);
+  assert.match(generated.module, /Result := ExtensionProviderCallBoolean\('Finance', 'IS_APPROVED'/);
+  assert.equal(generated.manifest.mappings[0].resultType, 'double');
+  assert.deepEqual(generated.manifest.mappings[0].parameters.map(item => item.type), ['Double', 'Double']);
+});
+
+test('keeps by-reference and custom types explicitly manual', () => {
+  const source = `
+    {@function
+    OrigName=MutateValue
+    Name=MUTATE_VALUE
+    Args=n
+    Result=b
+    @}
+    function MutateValue(var Value: Integer): Boolean;
+    begin
+      Result := True;
+    end;
+
+    {@function
+    OrigName=MakeCustom
+    Name=MAKE_CUSTOM
+    Args=
+    Result=s
+    @}
+    function MakeCustom: TCustomResult;
+    begin
+    end;
+  `;
+  const generated = generateWebModule(source, 'Unsafe.epas');
   assert.equal(generated.manifest.summary.complete, false);
-  assert.equal(generated.manifest.mappings[0].status, 'manual');
-  assert.equal(generated.manifest.mappings[0].reason, 'unsupported-result-type:double');
-  assert.match(generated.module, /TODO: convert ProviderResponse/);
+  assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['manual', 'manual']);
+  assert.equal(generated.manifest.mappings[0].reason, 'by-reference-parameter:Value');
+  assert.equal(generated.manifest.mappings[1].reason, 'unsupported-result-type:tcustomresult');
+  assert.match(generated.module, /TODO: manual provider adapter required/);
 });

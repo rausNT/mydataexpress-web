@@ -2516,6 +2516,12 @@ begin
   Exec.RegisterDelphiFunction(@GenerateId, 'CreateGUIDString', cdRegister);
   Exec.RegisterDelphiFunction(@AppPath, 'GetAppDir', cdRegister);
   Exec.RegisterDelphiFunction(@ExtensionProviderCall, 'ExtensionProviderCall', cdRegister);
+  Exec.RegisterDelphiFunction(@ExtensionProviderCallBoolean, 'ExtensionProviderCallBoolean', cdRegister);
+  Exec.RegisterDelphiFunction(@ExtensionProviderCallInt64, 'ExtensionProviderCallInt64', cdRegister);
+  Exec.RegisterDelphiFunction(@ExtensionProviderCallFloat, 'ExtensionProviderCallFloat', cdRegister);
+  Exec.RegisterDelphiFunction(@ExtensionProviderCallDateTime, 'ExtensionProviderCallDateTime', cdRegister);
+  Exec.RegisterDelphiFunction(@ExtensionProviderCallVariant, 'ExtensionProviderCallVariant', cdRegister);
+  Exec.RegisterDelphiFunction(@ExtensionProviderEncodeValue, 'ExtensionProviderEncodeValue', cdRegister);
 
   Exec.RegisterDelphiFunction(@CommandExecute, 'CommandExecute', cdRegister);
   Exec.RegisterDelphiFunction(@FileExecute, 'FileExecute', cdRegister);
