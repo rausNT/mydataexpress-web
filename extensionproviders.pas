@@ -243,7 +243,8 @@ var
 begin
   case VarType(Value) of
     varEmpty, varNull: Json := CreateJSON;
-    varByte, varSmallint, varInteger, varWord: Json := CreateJSON(Integer(Value));
+    varByte, varShortInt, varSmallint, varInteger, varWord:
+      Json := CreateJSON(Integer(Value));
     varBoolean: Json := CreateJSON(Boolean(Value));
     varSingle, varDouble, varCurrency: Json := CreateJSON(Double(Value));
     varDate: Json := CreateJSON(DateToISO8601(TDateTime(Value), False));
