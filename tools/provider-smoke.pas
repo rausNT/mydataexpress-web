@@ -3,7 +3,8 @@ program ProviderSmoke;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Variants, DateUtils, AppSettings, ExtensionProviders;
+  SysUtils, Variants, DateUtils, fpjson, jsonparser, AppSettings,
+  ExtensionProviders;
 
 procedure Require(Condition: Boolean; const MessageText: String);
 begin
@@ -13,6 +14,7 @@ end;
 var
   Provider: TProviderItem;
   Payload, VariantResult: String;
+  VariantJson: TJSONData;
   DateResult: TDateTime;
   YearValue, MonthValue, DayValue: Word;
 begin
@@ -49,7 +51,13 @@ begin
 
     VariantResult := VarToStr(ExtensionProviderCallVariant(
       'Smoke', 'variant_value', '{}'));
-    Require(Pos('"accepted":true', VariantResult) > 0, 'Variant result failed');
+    VariantJson := GetJSON(VariantResult);
+    try
+      Require((VariantJson.JSONType = jtObject) and
+        TJSONObject(VariantJson).Get('accepted', False), 'Variant result failed');
+    finally
+      VariantJson.Free;
+    end;
 
     WriteLn('provider-smoke-ok');
   finally
