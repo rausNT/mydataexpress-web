@@ -17,7 +17,14 @@ const RULES = [
 const MODULE_RE = /\{@module\s+([\s\S]*?)@\}/i;
 const FUNCTION_RE = /\{@function\s+([\s\S]*?)@\}/gi;
 const ACTION_RE = /\{@?action\s+([\s\S]*?)@\}/gi;
-const PROVIDER_CALL_RE = /\bExtensionProviderCall(?:Boolean|Int64|Float|DateTime|Variant)?\s*\(/i;
+const PROVIDER_ADAPTERS = [
+  'ExtensionProviderCallDateTime',
+  'ExtensionProviderCallBoolean',
+  'ExtensionProviderCallVariant',
+  'ExtensionProviderCallInt64',
+  'ExtensionProviderCallFloat',
+  'ExtensionProviderCall',
+];
 const EXTENSION_SOURCE_TYPES = new Map([
   ['.epas', 'desktop'],
   ['.wepas', 'web'],
@@ -41,6 +48,94 @@ function specifications(source, regex, kind) {
     });
   }
   return result;
+}
+
+function isIdentifierCharacter(value) {
+  return Boolean(value && /[A-Za-z0-9_]/.test(value));
+}
+
+function skipPascalString(source, start) {
+  let index = start + 1;
+  while (index < source.length) {
+    if (source[index] !== "'") {
+      index++;
+      continue;
+    }
+    if (source[index + 1] === "'") {
+      index += 2;
+      continue;
+    }
+    return index + 1;
+  }
+  return index;
+}
+
+export function extractProviderCalls(source) {
+  const calls = [];
+  let index = 0;
+  while (index < source.length) {
+    if (source[index] === "'") {
+      index = skipPascalString(source, index);
+      continue;
+    }
+    if (source[index] === '{') {
+      const end = source.indexOf('}', index + 1);
+      index = end < 0 ? source.length : end + 1;
+      continue;
+    }
+    if (source.startsWith('(*', index)) {
+      const end = source.indexOf('*)', index + 2);
+      index = end < 0 ? source.length : end + 2;
+      continue;
+    }
+    if (source.startsWith('//', index)) {
+      const end = source.indexOf('\n', index + 2);
+      index = end < 0 ? source.length : end + 1;
+      continue;
+    }
+
+    const adapter = PROVIDER_ADAPTERS.find(candidate =>
+      source.slice(index, index + candidate.length).toLowerCase() === candidate.toLowerCase() &&
+      !isIdentifierCharacter(source[index - 1]) &&
+      !isIdentifierCharacter(source[index + candidate.length])
+    );
+    if (!adapter) {
+      index++;
+      continue;
+    }
+
+    let cursor = index + adapter.length;
+    while (/\s/.test(source[cursor] || '')) cursor++;
+    if (source[cursor] !== '(') {
+      index = cursor;
+      continue;
+    }
+    cursor++;
+    while (/\s/.test(source[cursor] || '')) cursor++;
+
+    let provider = '';
+    let literal = false;
+    if (source[cursor] === "'") {
+      literal = true;
+      cursor++;
+      while (cursor < source.length) {
+        if (source[cursor] !== "'") {
+          provider += source[cursor++];
+          continue;
+        }
+        if (source[cursor + 1] === "'") {
+          provider += "'";
+          cursor += 2;
+          continue;
+        }
+        cursor++;
+        break;
+      }
+    }
+    calls.push({ adapter, provider, literal });
+    index = Math.max(cursor, index + adapter.length);
+  }
+  return calls;
 }
 
 function sourceKind(filename, specs) {
@@ -105,6 +200,10 @@ export function auditSource(source, filename = '<memory>') {
     ...spec,
     formatValid: !invalidSpecifications.has(index),
   }));
+  const providerCalls = extractProviderCalls(source);
+  const providers = [...new Set(providerCalls
+    .filter(call => call.literal)
+    .map(call => call.provider))];
   const blocking = findings.filter(item => item.severity === 'blocking').length;
 
   return {
@@ -116,7 +215,10 @@ export function auditSource(source, filename = '<memory>') {
     },
     sourceKind: kind,
     moduleType: kind === 'web' ? 'web-or-compatible' : 'desktop-or-unknown',
-    providerBacked: PROVIDER_CALL_RE.test(source),
+    providerBacked: providerCalls.length > 0,
+    providers,
+    providerCalls: providerCalls.length,
+    dynamicProviderCalls: providerCalls.filter(call => !call.literal).length,
     specifications: checkedSpecs,
     formatIssues,
     compatibility: blocking ? 'requires-provider' : findings.length ? 'review' : 'portable',
@@ -138,7 +240,13 @@ export function buildRuntimeCompatibility(reports) {
 
   for (const report of reports) {
     for (const spec of report.specifications) {
-      const entry = { ...spec, module: report.file, providerBacked: report.providerBacked };
+      const entry = {
+        ...spec,
+        module: report.file,
+        providerBacked: report.providerBacked,
+        providers: report.providers,
+        dynamicProviderCalls: report.dynamicProviderCalls,
+      };
       if (spec.formatValid === false) {
         invalidMappings.push({
           kind: spec.kind,
@@ -170,6 +278,7 @@ export function buildRuntimeCompatibility(reports) {
   }
 
   let providerBacked = 0;
+  let providerUnresolved = 0;
   const entries = desktopSpecs.map(spec => {
     const mappings = webByKey.get(runtimeKey(spec)) || [];
     let status = 'missing';
@@ -178,8 +287,13 @@ export function buildRuntimeCompatibility(reports) {
       status = 'duplicate-web';
     } else if (mappings.length === 1) {
       webModule = mappings[0].module;
-      status = mappings[0].providerBacked ? 'provider' : 'web-script';
-      if (status === 'provider') providerBacked++;
+      if (mappings[0].providerBacked) {
+        providerBacked++;
+        status = mappings[0].dynamicProviderCalls > 0 ? 'provider-unresolved' : 'provider';
+        if (status === 'provider-unresolved') providerUnresolved++;
+      } else {
+        status = 'web-script';
+      }
     }
 
     return {
@@ -190,6 +304,8 @@ export function buildRuntimeCompatibility(reports) {
       desktopModule: spec.module,
       webModule,
       status,
+      providers: mappings.length === 1 ? mappings[0].providers : [],
+      dynamicProviderCalls: mappings.length === 1 ? mappings[0].dynamicProviderCalls : 0,
     };
   });
 
@@ -207,6 +323,7 @@ export function buildRuntimeCompatibility(reports) {
       actionsTotal: actions.length,
       actionsCompatible,
       providerBacked,
+      providerUnresolved,
       duplicateWebMappings: duplicateWebMappings.length,
       orphanWebMappings: orphanWebMappings.length,
       invalidMappings: invalidMappings.length,

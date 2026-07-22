@@ -5,7 +5,11 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { auditSource, buildRuntimeCompatibility } from './extension-audit.mjs';
+import {
+  auditSource,
+  buildRuntimeCompatibility,
+  extractProviderCalls,
+} from './extension-audit.mjs';
 
 test('portable web action keeps its stable id', () => {
   const report = auditSource(`
@@ -167,6 +171,51 @@ test('recognizes every typed provider adapter used by the Pascal runtime', () =>
     `, 'typed.wepas');
     assert.equal(report.providerBacked, true, adapter);
   }
+});
+
+test('extracts literal providers without treating comments or strings as calls', () => {
+  const source = `
+    { ExtensionProviderCall('Commented', 'ignored', 'payload') }
+    // ExtensionProviderCallBoolean('LineComment', 'ignored', 'payload')
+    procedure Probe;
+    var Text, ProviderName: String;
+    begin
+      Text := 'ExtensionProviderCall(''InString'', ''ignored'', ''{}'')';
+      ExtensionProviderCallFloat('Finance', 'rate', '{}');
+      ExtensionProviderCall(ProviderName, 'dynamic', '{}');
+    end;
+  `;
+  const calls = extractProviderCalls(source);
+  assert.deepEqual(calls.map(call => call.provider), ['Finance', '']);
+  assert.deepEqual(calls.map(call => call.literal), [true, false]);
+
+  const report = auditSource(source, 'probe.wepas');
+  assert.deepEqual(report.providers, ['Finance']);
+  assert.equal(report.providerCalls, 2);
+  assert.equal(report.dynamicProviderCalls, 1);
+});
+
+test('strict compatibility rejects dynamically selected providers', () => {
+  const desktop = auditSource(`
+    {@function
+    OrigName=Rate
+    Name=RATE
+    @}
+  `, 'rates.epas');
+  const web = auditSource(`
+    {@function
+    Name=RATE
+    @}
+    function Rate(ProviderName: String): Double;
+    begin
+      Result := ExtensionProviderCallFloat(ProviderName, 'rate', '{}');
+    end;
+  `, 'rates.wepas');
+  const compatibility = buildRuntimeCompatibility([desktop, web]);
+  assert.equal(compatibility.functions[0].status, 'provider-unresolved');
+  assert.equal(compatibility.functions[0].dynamicProviderCalls, 1);
+  assert.equal(compatibility.summary.providerUnresolved, 1);
+  assert.equal(compatibility.summary.complete, false);
 });
 
 test('strict CLI audits .epas/.wepas pairs and fails malformed web modules', () => {

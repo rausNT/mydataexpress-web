@@ -436,7 +436,8 @@ function EPSExceptionToString(E: EPSException): String;
 implementation
 
 uses
-  apputils, LazUtf8, FileUtil, StrUtils, dxtypes, compilerdecls, rundecls, uPSR_dll;
+  apputils, LazUtf8, FileUtil, StrUtils, dxtypes, compilerdecls, rundecls,
+  uPSR_dll, AppSettings;
 
 type
 
@@ -2143,13 +2144,161 @@ begin
   Result := FScripts.Count;
 end;
 
+procedure ExtractExtensionProviderNames(const Source: String; Names: TStrings;
+  out CallCount, LiteralCallCount: Integer);
+const
+  ProviderCall = 'EXTENSIONPROVIDERCALL';
+var
+  i, j, L: Integer;
+  ProviderName, Suffix: String;
+  Closed: Boolean;
+
+  function IsIdentifierChar(C: Char): Boolean;
+  begin
+    Result := C in ['A'..'Z', 'a'..'z', '0'..'9', '_'];
+  end;
+
+  function MatchesProviderCall(Index: Integer): Boolean;
+  begin
+    if (Index > 1) and IsIdentifierChar(Source[Index - 1]) then Exit(False);
+    Result := CompareText(Copy(Source, Index, Length(ProviderCall)),
+      ProviderCall) = 0;
+  end;
+
+  function SupportedSuffix(const Value: String): Boolean;
+  begin
+    Result := (Value = '') or (Value = 'BOOLEAN') or (Value = 'INT64') or
+      (Value = 'FLOAT') or (Value = 'DATETIME') or (Value = 'VARIANT');
+  end;
+
+  procedure SkipString(var Index: Integer);
+  begin
+    Inc(Index);
+    while Index <= L do
+    begin
+      if Source[Index] = '''' then
+      begin
+        if (Index < L) and (Source[Index + 1] = '''') then
+          Inc(Index, 2)
+        else
+        begin
+          Inc(Index);
+          Exit;
+        end;
+      end
+      else
+        Inc(Index);
+    end;
+  end;
+
+begin
+  Names.Clear;
+  CallCount := 0;
+  LiteralCallCount := 0;
+  L := Length(Source);
+  i := 1;
+  while i <= L do
+  begin
+    if Source[i] = '''' then
+    begin
+      SkipString(i);
+      Continue;
+    end;
+    if Source[i] = '{' then
+    begin
+      Inc(i);
+      while (i <= L) and (Source[i] <> '}') do Inc(i);
+      Inc(i);
+      Continue;
+    end;
+    if (Source[i] = '(') and (i < L) and (Source[i + 1] = '*') then
+    begin
+      Inc(i, 2);
+      while (i < L) and not ((Source[i] = '*') and (Source[i + 1] = ')')) do Inc(i);
+      Inc(i, 2);
+      Continue;
+    end;
+    if (Source[i] = '/') and (i < L) and (Source[i + 1] = '/') then
+    begin
+      Inc(i, 2);
+      while (i <= L) and not (Source[i] in [#10, #13]) do Inc(i);
+      Continue;
+    end;
+    if not MatchesProviderCall(i) then
+    begin
+      Inc(i);
+      Continue;
+    end;
+
+    j := i + Length(ProviderCall);
+    Suffix := '';
+    while (j <= L) and IsIdentifierChar(Source[j]) do
+    begin
+      Suffix := Suffix + UpCase(Source[j]);
+      Inc(j);
+    end;
+    if not SupportedSuffix(Suffix) then
+    begin
+      i := j;
+      Continue;
+    end;
+    while (j <= L) and (Source[j] in [' ', #9, #10, #13]) do Inc(j);
+    if (j > L) or (Source[j] <> '(') then
+    begin
+      i := j;
+      Continue;
+    end;
+    Inc(CallCount);
+    Inc(j);
+    while (j <= L) and (Source[j] in [' ', #9, #10, #13]) do Inc(j);
+    if (j > L) or (Source[j] <> '''') then
+    begin
+      i := j;
+      Continue;
+    end;
+
+    ProviderName := '';
+    Closed := False;
+    Inc(j);
+    while j <= L do
+    begin
+      if Source[j] = '''' then
+      begin
+        if (j < L) and (Source[j + 1] = '''') then
+        begin
+          ProviderName := ProviderName + '''';
+          Inc(j, 2);
+        end
+        else
+        begin
+          Closed := True;
+          Inc(j);
+          Break;
+        end;
+      end
+      else
+      begin
+        ProviderName := ProviderName + Source[j];
+        Inc(j);
+      end;
+    end;
+    if Closed then
+    begin
+      Inc(LiteralCallCount);
+      if Names.IndexOf(ProviderName) < 0 then Names.Add(ProviderName);
+    end;
+    i := j;
+  end;
+end;
+
 function TScriptManager.ExtensionCompatibilityAsJson: String;
 var
   Root, Summary, Item: TJSONObject;
-  FunctionsJson, ActionsJson: TJSONArray;
+  FunctionsJson, ActionsJson, ProvidersJson: TJSONArray;
   F: TExprFunc;
   A: TExprAction;
-  i, FuncCompatible, ActionCompatible, ProviderBacked: Integer;
+  i, FuncCompatible, ActionCompatible, ProviderBacked, ProviderReady,
+    ProviderUnconfigured, ProviderUnresolved: Integer;
   Status: String;
 
   function ModuleName(Index: Integer): String;
@@ -2160,14 +2309,70 @@ var
       Result := '';
   end;
 
-  function ImplementationStatus(WebExists: Boolean; WebIndex: Integer): String;
+  function ProviderConfigured(const ProviderName: String): Boolean;
+  var
+    Provider: TProviderItem;
+  begin
+    Result := False;
+    if AppSet = nil then Exit;
+    Provider := AppSet.ProviderList.FindItem(ProviderName);
+    Result := (Provider <> nil) and (Trim(Provider.Url) <> '');
+  end;
+
+  function ImplementationStatus(WebExists: Boolean; WebIndex: Integer;
+    Providers: TJSONArray): String;
+  var
+    Names: TStringList;
+    Calls, LiteralCalls, n: Integer;
+    AllConfigured: Boolean;
   begin
     if not WebExists then Exit('missing');
-    if (WebIndex >= 0) and (WebIndex < ScriptCount) and
-      (Pos('EXTENSIONPROVIDERCALL', UpperCase(Scripts[WebIndex].Source)) > 0) then
-      Result := 'provider'
-    else
-      Result := 'web-script';
+    if (WebIndex < 0) or (WebIndex >= ScriptCount) then Exit('missing');
+
+    Names := TStringList.Create;
+    try
+      Names.CaseSensitive := False;
+      Names.Sorted := True;
+      Names.Duplicates := dupIgnore;
+      ExtractExtensionProviderNames(Scripts[WebIndex].Source, Names,
+        Calls, LiteralCalls);
+      for n := 0 to Names.Count - 1 do Providers.Add(Names[n]);
+      if Calls = 0 then Exit('web-script');
+      if LiteralCalls <> Calls then Exit('provider-unresolved');
+
+      AllConfigured := True;
+      for n := 0 to Names.Count - 1 do
+        if not ProviderConfigured(Names[n]) then
+        begin
+          AllConfigured := False;
+          Break;
+        end;
+      if AllConfigured and (Names.Count > 0) then
+        Result := 'provider'
+      else
+        Result := 'provider-unconfigured';
+    finally
+      Names.Free;
+    end;
+  end;
+
+  function IsProviderStatus(const Value: String): Boolean;
+  begin
+    Result := Pos('provider', Value) = 1;
+  end;
+
+  function IsCompatibleStatus(const Value: String): Boolean;
+  begin
+    Result := (Value = 'provider') or (Value = 'web-script');
+  end;
+
+  procedure CountProviderStatus(const Value: String);
+  begin
+    if not IsProviderStatus(Value) then Exit;
+    Inc(ProviderBacked);
+    if Value = 'provider' then Inc(ProviderReady)
+    else if Value = 'provider-unconfigured' then Inc(ProviderUnconfigured)
+    else if Value = 'provider-unresolved' then Inc(ProviderUnresolved);
   end;
 
 begin
@@ -2184,37 +2389,46 @@ begin
     FuncCompatible := 0;
     ActionCompatible := 0;
     ProviderBacked := 0;
+    ProviderReady := 0;
+    ProviderUnconfigured := 0;
+    ProviderUnresolved := 0;
 
     for i := 0 to FFuncs.Count - 1 do
     begin
       F := FFuncs[i];
-      Status := ImplementationStatus(F.WebExists, F.WebSDi);
-      if F.WebExists then Inc(FuncCompatible);
-      if Status = 'provider' then Inc(ProviderBacked);
-
       Item := TJSONObject.Create;
+      ProvidersJson := TJSONArray.Create;
+      Status := ImplementationStatus(F.WebExists, F.WebSDi, ProvidersJson);
+      if IsCompatibleStatus(Status) then Inc(FuncCompatible);
+      CountProviderStatus(Status);
       Item.Add('name', F.Name);
       Item.Add('origName', F.OrigName);
       Item.Add('desktopModule', ModuleName(F.DesktopSDi));
       Item.Add('webModule', ModuleName(F.WebSDi));
       Item.Add('status', Status);
+      Item.Add('providers', ProvidersJson);
+      if IsProviderStatus(Status) then
+        Item.Add('providerConfigured', Status = 'provider');
       FunctionsJson.Add(Item);
     end;
 
     for i := 0 to FActions.Count - 1 do
     begin
       A := FActions[i];
-      Status := ImplementationStatus(A.WebExists, A.WebSDi);
-      if A.WebExists then Inc(ActionCompatible);
-      if Status = 'provider' then Inc(ProviderBacked);
-
       Item := TJSONObject.Create;
+      ProvidersJson := TJSONArray.Create;
+      Status := ImplementationStatus(A.WebExists, A.WebSDi, ProvidersJson);
+      if IsCompatibleStatus(Status) then Inc(ActionCompatible);
+      CountProviderStatus(Status);
       Item.Add('id', A.Id);
       Item.Add('name', A.Name);
       Item.Add('origName', A.OrigName);
       Item.Add('desktopModule', ModuleName(A.DesktopSDi));
       Item.Add('webModule', ModuleName(A.WebSDi));
       Item.Add('status', Status);
+      Item.Add('providers', ProvidersJson);
+      if IsProviderStatus(Status) then
+        Item.Add('providerConfigured', Status = 'provider');
       ActionsJson.Add(Item);
     end;
 
@@ -2223,6 +2437,9 @@ begin
     Summary.Add('actionsTotal', FActions.Count);
     Summary.Add('actionsCompatible', ActionCompatible);
     Summary.Add('providerBacked', ProviderBacked);
+    Summary.Add('providerReady', ProviderReady);
+    Summary.Add('providerUnconfigured', ProviderUnconfigured);
+    Summary.Add('providerUnresolved', ProviderUnresolved);
     Summary.Add('complete', (FuncCompatible = FFuncs.Count) and
       (ActionCompatible = FActions.Count));
     Result := Root.AsJSON;

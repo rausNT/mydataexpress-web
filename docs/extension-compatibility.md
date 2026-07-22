@@ -30,11 +30,18 @@ node tools/extension-audit.mjs C:\path\to\extensions --output compatibility.json
 `?extensioncompat`. Статусы:
 
 - `web-script` — найдена обычная Pascal Script web-реализация;
-- `provider` — web-модуль использует `ExtensionProviderCall`;
+- `provider` — все provider-вызовы web-модуля используют настроенные секции
+  `[Provider:…]`;
+- `provider-unconfigured` — web-модуль найден, но хотя бы одна его provider-секция
+  отсутствует в `dxwebsrv.cfg` или не содержит `Url`;
+- `provider-unresolved` — имя provider вычисляется динамически и не может быть
+  проверено до выполнения;
 - `missing` — web-реализация отсутствует.
 
 Вызов отсутствующей web-функции или действия теперь завершается явной
 локализованной ошибкой вместо молчаливого `Null` или пропуска действия.
+`summary.complete` остаётся `false`, пока provider не настроен; комментарии и
+строковые литералы с текстом `ExtensionProviderCall` не создают ложный статус.
 
 ## Генерация web-модуля и manifest
 

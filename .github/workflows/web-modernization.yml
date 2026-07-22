@@ -110,7 +110,7 @@ jobs:
           & $fpc @wepasArguments
           if ($LASTEXITCODE -ne 0) { throw "Wepas smoke compilation failed: $LASTEXITCODE" }
           & (Join-Path $smokeRoot 'wepas-compile-smoke.exe') `
-            (Join-Path $migrationRoot 'portable.wepas')
+            $desktopModule (Join-Path $migrationRoot 'portable.wepas')
           if ($LASTEXITCODE -ne 0) { throw "Generated wepas compilation failed: $LASTEXITCODE" }
 
           $token = 'provider-smoke-secret'

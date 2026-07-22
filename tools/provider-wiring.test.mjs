@@ -33,7 +33,11 @@ test('runtime exposes extension mapping status and rejects silent fallbacks', ()
   assert.match(scripts, /function TScriptManager\.ExtensionCompatibilityAsJson/);
   assert.match(scripts, /'missing'/);
   assert.match(scripts, /'provider'/);
+  assert.match(scripts, /'provider-unconfigured'/);
+  assert.match(scripts, /'provider-unresolved'/);
   assert.match(scripts, /'web-script'/);
+  assert.match(scripts, /AppSet\.ProviderList\.FindItem/);
+  assert.match(scripts, /providerConfigured/);
 
   assert.match(source('mainserver.pas'), /LPm = 'extensioncompat'/);
   assert.match(source('expressions.pas'), /rsExtWebFunctionMissing/);

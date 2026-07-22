@@ -17,3 +17,17 @@ function NormalizePhone(Value: String): String;
 begin
   Result := Value;
 end;
+
+{@function
+OrigName=IsPhonePresent
+Name=IS_PHONE_PRESENT
+Args=s
+Result=b
+Group=Text
+Description=Checks whether a phone number is present
+@}
+
+function IsPhonePresent(Value: String): Boolean;
+begin
+  Result := Value <> '';
+end;
