@@ -30,7 +30,8 @@ powershell -ExecutionPolicy Bypass -File tools\build-windows.ps1 `
 отдельно, но сборка серверного бинарника не считается подтверждённой.
 
 GitHub Actions дополнительно запускает сквозные проверки на Windows: генерирует
-`.wepas` из тестового `.epas` и компилирует его штатным `TScriptCompiler`, после
-чего проверяет реальный вызов Pascal → HTTP → Node provider. Зелёный job означает,
-что проверены и бинарник сервера, и совместимость результата мигратора с
-PascalScript, а не только синтаксис JavaScript.
+`.wepas` из тестового `.epas` и компилирует его настоящим `TPSPascalCompiler` со
+штатным набором объявлений `SIRegister_All`, после чего проверяет реальный вызов
+Pascal → HTTP → Node provider. Зелёный job означает, что проверены и бинарник
+сервера, и совместимость результата мигратора с PascalScript, а не только
+синтаксис JavaScript.

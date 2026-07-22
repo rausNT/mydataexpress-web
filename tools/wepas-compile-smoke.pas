@@ -3,11 +3,10 @@ program WepasCompileSmoke;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, SysUtils, uPSCompiler, ScriptManager;
+  Classes, SysUtils, uPSCompiler, CompilerDecls;
 
 var
-  Compiler: TScriptCompiler;
-  Script: TScriptData;
+  Compiler: TPSPascalCompiler;
   Source: TStringList;
   Output: String;
   i: Integer;
@@ -16,16 +15,16 @@ begin
     raise Exception.Create('Usage: wepas-compile-smoke <module.wepas>');
 
   Source := TStringList.Create;
-  Script := TScriptData.Create;
-  Compiler := TScriptCompiler.Create(nil);
+  Compiler := TPSPascalCompiler.Create;
   try
     Source.LoadFromFile(ParamStr(1));
-    Script.Name := ExtractFileName(ParamStr(1));
-    Script.Kind := skWebMain;
-    Script.Source := Source.Text;
-    Compiler.SD := Script;
+    Compiler.BooleanShortCircuit := True;
+    Compiler.AllowNoBegin := True;
+    Compiler.AllowNoEnd := True;
+    Compiler.AllowDuplicateRegister := False;
+    SIRegister_All(Compiler);
 
-    if not Compiler.Compile(Script.Source) then
+    if not Compiler.Compile(Source.Text) then
     begin
       for i := 0 to Compiler.MsgCount - 1 do
         WriteLn(Compiler.Msg[i].MessageToString);
@@ -36,10 +35,9 @@ begin
     if Output = '' then
       raise Exception.Create('Pascal Script compiler produced an empty program');
 
-    WriteLn('wepas-compile-ok ' + Script.Name);
+    WriteLn('wepas-compile-ok ' + ExtractFileName(ParamStr(1)));
   finally
     Compiler.Free;
-    Script.Free;
     Source.Free;
   end;
 end.
