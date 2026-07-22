@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test tools/*.test.mjs",
     "audit:fixtures": "node tools/extension-audit.mjs test/fixtures/extensions",
+    "migrate:extensions": "node tools/extension-batch-migrate.mjs",
     "migrate:extension": "node tools/extension-migrate.mjs",
     "scaffold:provider": "node tools/extension-provider-scaffold.mjs",
     "preflight:provider": "node tools/provider-preflight.mjs",

@@ -47,6 +47,16 @@ export function validateProviderManifest(manifest, handlers) {
     throw new ProviderManifestError(`Missing provider handlers: ${missingHandlers.join(', ')}`, { missingHandlers });
   }
 
+  const unimplementedHandlers = operations.filter(operation =>
+    handlers[operation]?.dataExpressImplemented === false
+  );
+  if (unimplementedHandlers.length) {
+    throw new ProviderManifestError(
+      `Unimplemented provider handlers: ${unimplementedHandlers.join(', ')}`,
+      { unimplementedHandlers },
+    );
+  }
+
   const extraHandlers = Object.keys(handlers).filter(operation => !operations.includes(operation));
   return {
     schemaVersion: 1,

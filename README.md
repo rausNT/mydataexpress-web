@@ -23,6 +23,14 @@ Copyright (c) 2016-2026 Павел Дуборкин
 npm run migrate:extension -- C:\path\to\OfficeTools.epas
 ```
 
+Для каталога расширений используйте пакетный режим. Он сохраняет уже имеющиеся
+web-модули, генерирует только отсутствующие и создаёт переносимый комплект с
+локальным provider SDK:
+
+```powershell
+npm run migrate:extensions -- C:\path\to\extensions --output-dir C:\path\to\extensions-web
+```
+
 Стабильные `Name` функций и `Id` действий сохраняются. Поддерживаемые скалярные
 типы получают готовые HTTP-адаптеры, а Windows API, OLE, `var`/`out` и сложные
 типы остаются явно помеченными для ручной реализации — без скрытого пропуска

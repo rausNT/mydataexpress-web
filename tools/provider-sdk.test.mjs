@@ -91,6 +91,16 @@ test('does not accept inherited object properties as provider handlers', () => {
   }, {}), /Missing provider handlers: toString/);
 });
 
+test('generated TODO handlers cannot advertise ready capabilities', () => {
+  const pending = async () => {};
+  pending.dataExpressImplemented = false;
+  assert.throws(() => validateProviderManifest({
+    schemaVersion: 1,
+    provider: 'OfficeTools',
+    mappings: [{ operation: 'normalize', status: 'provider' }],
+  }, { normalize: pending }), /Unimplemented provider handlers: normalize/);
+});
+
 test('protects provider health and capabilities with the bearer token', async () => {
   const manifest = {
     schemaVersion: 1,

@@ -1,9 +1,23 @@
 #!/usr/bin/env node
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateProviderManifest } from './provider-sdk.mjs';
+
+export const PROVIDER_SDK_FILENAME = 'dataexpress-provider-sdk.mjs';
+
+export function installProviderSdk(outputDirectory, filename = PROVIDER_SDK_FILENAME) {
+  const sourceFile = fileURLToPath(new URL('./provider-sdk.mjs', import.meta.url));
+  const output = resolve(outputDirectory, filename);
+  const source = readFileSync(sourceFile, 'utf8');
+  if (existsSync(output) && readFileSync(output, 'utf8') !== source) {
+    throw new Error(`Provider SDK already exists with different contents: ${output}`);
+  }
+  mkdirSync(dirname(output), { recursive: true });
+  writeFileSync(output, source);
+  return output;
+}
 
 function importPath(fromFile, toFile) {
   let value = relative(dirname(fromFile), toFile).replaceAll('\\', '/');
@@ -51,6 +65,7 @@ export function generateProviderScaffold(manifest, {
       '  void context;',
       `  throw new Error(${JSON.stringify(`TODO: implement provider operation ${operation}`)});`,
       '};',
+      `handlers[${JSON.stringify(operation)}].dataExpressImplemented = false; // Set true after implementing this handler.`,
       '',
     );
   }
@@ -107,7 +122,7 @@ function main() {
     const configOutput = args.includes('--no-config')
       ? ''
       : resolve(optionValue(args, '--config-output') || `${base}.provider.cfg.example`);
-    const sdkFile = fileURLToPath(new URL('./provider-sdk.mjs', import.meta.url));
+    const sdkFile = installProviderSdk(dirname(output));
 
     mkdirSync(dirname(output), { recursive: true });
     writeFileSync(output, generateProviderScaffold(manifest, {
@@ -115,6 +130,7 @@ function main() {
       sdkImport: importPath(output, sdkFile),
     }));
     process.stdout.write(`${output}\n`);
+    process.stdout.write(`${sdkFile}\n`);
 
     if (configOutput) {
       mkdirSync(dirname(configOutput), { recursive: true });

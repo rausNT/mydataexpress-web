@@ -83,6 +83,7 @@ test('CLI writes the official .wepas module and matching sidecars by default', (
     const manifest = join(directory, 'OfficeTools.manifest.json');
     const provider = join(directory, 'OfficeTools.provider.mjs');
     const providerConfig = join(directory, 'OfficeTools.provider.cfg.example');
+    const providerSdk = join(directory, 'dataexpress-provider-sdk.mjs');
     mkdirSync(workingDirectory);
     writeFileSync(input, desktopModule);
 
@@ -97,6 +98,8 @@ test('CLI writes the official .wepas module and matching sidecars by default', (
     assert.equal(payload.webModule, 'OfficeTools.wepas');
     assert.equal(payload.summary.complete, true);
     assert.match(readFileSync(provider, 'utf8'), /NORMALIZE_PHONE/);
+    assert.match(readFileSync(provider, 'utf8'), /\.\/dataexpress-provider-sdk\.mjs/);
+    assert.match(readFileSync(providerSdk, 'utf8'), /createProviderServer/);
     assert.match(readFileSync(providerConfig, 'utf8'), /Provider:OfficeTools/);
     const syntax = spawnSync(process.execPath, ['--check', provider], { encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);

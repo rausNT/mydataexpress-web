@@ -99,6 +99,16 @@ provider контролируется его защищённым `GET /health`.
 npm run scaffold:provider -- OfficeTools.manifest.json
 ```
 
+Рядом с provider создаётся `dataexpress-provider-sdk.mjs`, а импорт в scaffold
+указывает на эту локальную копию. Для переноса на другой сервер копируйте
+`.provider.mjs`, `.manifest.json` и `dataexpress-provider-sdk.mjs` вместе.
+
+Каждый сгенерированный handler имеет отметку
+`dataExpressImplemented = false`. После реализации операции измените её на
+`true`. Пока хотя бы одна отметка остаётся `false`, provider завершает запуск с
+ошибкой и не может ошибочно объявить незавершённый scaffold готовым через
+`/capabilities`.
+
 В сгенерированном `.provider.mjs` перечислены только операции со статусом
 `provider`, сигнатуры параметров оставлены комментариями, а каждый handler
 содержит явный `TODO`. После реализации задайте токен и запустите файл:

@@ -31,6 +31,7 @@ test('generates a manifest-bound provider and config template', () => {
   });
   assert.match(source, /createProviderServer\(\{ manifest, handlers, token \}\)/);
   assert.match(source, /handlers\["NORMALIZE_PHONE"\] = async \(payload, context\)/);
+  assert.match(source, /handlers\["NORMALIZE_PHONE"\]\.dataExpressImplemented = false/);
   assert.doesNotMatch(source, /handlers\["legacy-ui"\]/);
   assert.match(source, /Value: String/);
 
@@ -55,6 +56,7 @@ test('CLI writes syntax-valid scaffold files', () => {
     const manifestFile = join(directory, 'OfficeToolsWeb.manifest.json');
     const providerFile = join(directory, 'OfficeToolsWeb.provider.mjs');
     const configFile = join(directory, 'OfficeToolsWeb.provider.cfg.example');
+    const sdkFile = join(directory, 'dataexpress-provider-sdk.mjs');
     writeFileSync(manifestFile, JSON.stringify(manifest));
 
     const result = spawnSync(process.execPath, [
@@ -63,10 +65,18 @@ test('CLI writes syntax-valid scaffold files', () => {
     ], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     assert.match(readFileSync(providerFile, 'utf8'), /NORMALIZE_PHONE/);
+    assert.match(readFileSync(providerFile, 'utf8'), /\.\/dataexpress-provider-sdk\.mjs/);
+    assert.match(readFileSync(sdkFile, 'utf8'), /createProviderServer/);
     assert.match(readFileSync(configFile, 'utf8'), /Provider:OfficeTools/);
 
     const syntax = spawnSync(process.execPath, ['--check', providerFile], { encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);
+    const pending = spawnSync(process.execPath, [providerFile], {
+      encoding: 'utf8',
+      env: { ...process.env, DX_PROVIDER_TOKEN: 'test-token' },
+    });
+    assert.notEqual(pending.status, 0);
+    assert.match(pending.stderr, /Unimplemented provider handlers: NORMALIZE_PHONE/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

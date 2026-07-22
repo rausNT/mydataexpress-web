@@ -7,6 +7,7 @@ import { auditSource } from './extension-audit.mjs';
 import {
   generateProviderConfig,
   generateProviderScaffold,
+  installProviderSdk,
 } from './extension-provider-scaffold.mjs';
 
 function pascalString(value) {
@@ -267,13 +268,14 @@ function main() {
   process.stdout.write(`${output}\n`);
   if (manifestOutput) process.stdout.write(`${manifestOutput}\n`);
   if (providerOutput) {
-    const sdkFile = fileURLToPath(new URL('./provider-sdk.mjs', import.meta.url));
+    const sdkFile = installProviderSdk(dirname(providerOutput));
     mkdirSync(dirname(providerOutput), { recursive: true });
     writeFileSync(providerOutput, generateProviderScaffold(generated.manifest, {
       manifestImport: relativeImportPath(providerOutput, manifestOutput),
       sdkImport: relativeImportPath(providerOutput, sdkFile),
     }));
     process.stdout.write(`${providerOutput}\n`);
+    process.stdout.write(`${sdkFile}\n`);
   }
   if (providerConfigOutput) {
     mkdirSync(dirname(providerConfigOutput), { recursive: true });
