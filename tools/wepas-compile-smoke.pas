@@ -3,7 +3,15 @@ program WepasCompileSmoke;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, SysUtils, uPSCompiler, CompilerDecls;
+  Classes, SysUtils, uPSCompiler, uPSUtils, CompilerDecls;
+
+function RegisterSystemDeclarations(Sender: TPSPascalCompiler;
+  const Name: tbtString): Boolean;
+begin
+  Result := UpperCase(Name) = 'SYSTEM';
+  if Result then
+    SIRegister_All(Sender);
+end;
 
 var
   Compiler: TPSPascalCompiler;
@@ -22,7 +30,7 @@ begin
     Compiler.AllowNoBegin := True;
     Compiler.AllowNoEnd := True;
     Compiler.AllowDuplicateRegister := False;
-    SIRegister_All(Compiler);
+    Compiler.OnUses := @RegisterSystemDeclarations;
 
     if not Compiler.Compile(Source.Text) then
     begin
