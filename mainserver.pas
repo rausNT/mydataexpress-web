@@ -607,7 +607,7 @@ procedure TMainServer.HandleRequest(var ARequest: TFPHTTPConnectionRequest;
 var
   Ss: TSession;
   HS: THtmlShow;
-  FlNm, LPm, User, Pwd, URI, ConnectName, StartUrl, Path,
+  FlNm, StaticRoot, RelativePath, LPm, User, Pwd, URI, ConnectName, StartUrl, Path,
     BrowserId, FlExt, S: String;
   FS: TFileStream;
   UId: Integer;
@@ -622,6 +622,30 @@ var
   begin
     Result := ARequest.CustomHeaders.Values['X-REAL-IP'];
     if Result = '' then Result := ARequest.RemoteAddress;
+  end;
+
+  function TryResolvePublicFile(const Root, RelativeName: String;
+    out FileName: String): Boolean;
+  var
+    ExpandedRoot, ExpandedFile, LocalName: String;
+  begin
+    ExpandedRoot := IncludeTrailingPathDelimiter(ExpandFileName(Root));
+    LocalName := StringReplace(RelativeName, '/', DirectorySeparator,
+      [rfReplaceAll]);
+    LocalName := StringReplace(LocalName, '\', DirectorySeparator,
+      [rfReplaceAll]);
+    ExpandedFile := ExpandFileName(ExpandedRoot + LocalName);
+    {$IFDEF WINDOWS}
+    Result := CompareText(Copy(ExpandedFile, 1, Length(ExpandedRoot)),
+      ExpandedRoot) = 0;
+    {$ELSE}
+    Result := Copy(ExpandedFile, 1, Length(ExpandedRoot)) = ExpandedRoot;
+    {$ENDIF}
+    Result := Result and FileExists(ExpandedFile);
+    if Result then
+      FileName := ExpandedFile
+    else
+      FileName := '';
   end;
 
   procedure RunMainAction(const ActionData: String);
@@ -673,13 +697,42 @@ begin
   try try
 
   //ShowMessage(ARequest.URI);
+  if URI = '/health' then
+  begin
+    AResponse.ContentType := GetMimeType('.json');
+    AResponse.Content := '{"status":"ok","mode":"server"}';
+    Exit;
+  end;
+
   if (Pos('/img/', URI) = 1) or (Pos('/html/', URI) = 1) or (Pos('/cache/', URI) = 1)
     or (URI = '/favicon.ico') then
   begin
-    FlNm := DecodeUrlElement(Path);
     FlExt := AnsiLowerCase(ExtractFileExt(Path));
-    Delete(FlNm, 1, 1);
-    FlNm := AppPath + StringReplace(FlNm, '/', DirectorySeparator, [rfReplaceAll]);
+    if URI = '/favicon.ico' then
+    begin
+      StaticRoot := AppPath;
+      RelativePath := 'favicon.ico';
+    end
+    else if Pos('/img/', URI) = 1 then
+    begin
+      StaticRoot := AppPath + 'img';
+      RelativePath := Copy(DecodeUrlElement(Path), Length('/img/') + 1, MaxInt);
+    end
+    else if Pos('/html/', URI) = 1 then
+    begin
+      StaticRoot := AppPath + 'html';
+      RelativePath := Copy(DecodeUrlElement(Path), Length('/html/') + 1, MaxInt);
+    end
+    else
+    begin
+      StaticRoot := AppPath + 'cache';
+      RelativePath := Copy(DecodeUrlElement(Path), Length('/cache/') + 1, MaxInt);
+    end;
+    if not TryResolvePublicFile(StaticRoot, RelativePath, FlNm) then
+    begin
+      AResponse.Code := rcPageNotFound;
+      Exit;
+    end;
     // ARequest.IfNoneMatch пустой.
     AResponse.ContentType := GetMimeType(FlExt);
     if ARequest.CustomHeaders.Values['if-none-match'] = IntToStr(FileAge(FlNm)) then
@@ -700,10 +753,9 @@ begin
   end
   else if Pos('/.well-known/acme-challenge/', URI) = 1 then
   begin
-    FlNm := StringReplace(DecodeUrlElement(Path), '/', PathDelim, [rfReplaceAll]);
-    Delete(FlNm, 1, 1);
-    FlNm := AppPath + 'letsencrypt' + PathDelim + FlNm;
-    if FileExists(FlNm) then
+    RelativePath := DecodeUrlElement(Path);
+    Delete(RelativePath, 1, 1);
+    if TryResolvePublicFile(AppPath + 'letsencrypt', RelativePath, FlNm) then
     begin
       FS := TFileStream.Create(FlNm, fmOpenRead + fmShareDenyNone);
       AResponse.FreeContentStream := True;
