@@ -32,6 +32,7 @@ begin
       ',"enabled":' + ExtensionProviderEncodeValue(True) +
       ',"count":' + ExtensionProviderEncodeValue(7) +
       ',"amount":' + ExtensionProviderEncodeValue(2.5) + '}';
+    WriteLn('provider-smoke-payload ' + Payload);
     Require(ExtensionProviderCall('Smoke', 'echo_types', Payload) = 'types-ok',
       'String result or typed payload failed');
     Require(ExtensionProviderCallBoolean('Smoke', 'boolean_value', '{}'),

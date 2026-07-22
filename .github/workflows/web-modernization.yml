@@ -90,9 +90,12 @@ jobs:
 
           $token = 'provider-smoke-secret'
           $port = 19081
+          $providerOut = Join-Path $smokeRoot 'provider.stdout.log'
+          $providerErr = Join-Path $smokeRoot 'provider.stderr.log'
           $provider = Start-Process -FilePath (Get-Command node).Source `
             -ArgumentList @((Join-Path $PWD 'tools/provider-smoke-server.mjs'), $port, $token) `
-            -WorkingDirectory $PWD -WindowStyle Hidden -PassThru
+            -WorkingDirectory $PWD -WindowStyle Hidden -PassThru `
+            -RedirectStandardOutput $providerOut -RedirectStandardError $providerErr
           try {
             $deadline = (Get-Date).AddSeconds(15)
             do {
@@ -106,7 +109,11 @@ jobs:
 
             & (Join-Path $smokeRoot 'provider-smoke.exe') `
               "http://127.0.0.1:$port/" $token
-            if ($LASTEXITCODE -ne 0) { throw "Provider smoke test failed: $LASTEXITCODE" }
+            if ($LASTEXITCODE -ne 0) {
+              if (Test-Path -LiteralPath $providerOut) { Get-Content -LiteralPath $providerOut }
+              if (Test-Path -LiteralPath $providerErr) { Get-Content -LiteralPath $providerErr }
+              throw "Provider smoke test failed: $LASTEXITCODE"
+            }
           }
           finally {
             if (-not $provider.HasExited) { Stop-Process -Id $provider.Id }

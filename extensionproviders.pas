@@ -110,7 +110,9 @@ begin
     if Provider.Token <> '' then
       Client.AddHeader('Authorization', 'Bearer ' + Provider.Token);
     Client.RequestBody := RequestBody;
-    Client.HTTPMethod('POST', Provider.Url, ResponseBody, [200, 201, 202]);
+    // An empty list accepts every HTTP status so the JSON error envelope can be
+    // read instead of being replaced by a generic EHTTPClient exception.
+    Client.HTTPMethod('POST', Provider.Url, ResponseBody, []);
     if ResponseBody.Size > MaxProviderResponseSize then
       raise Exception.CreateFmt('Extension provider "%s" response is too large.',
         [ProviderName]);
@@ -121,8 +123,14 @@ begin
           [ProviderName]);
       ResponseObject := TJSONObject(ResponseJson);
       if not ResponseObject.Get('ok', False) then
-        raise Exception.CreateFmt('Extension provider "%s" failed: %s',
-          [ProviderName, ResponseObject.Get('error', 'Unknown provider error')]);
+        raise Exception.CreateFmt(
+          'Extension provider "%s" operation "%s" failed (HTTP %d): %s',
+          [ProviderName, Operation, Client.ResponseStatusCode,
+          ResponseObject.Get('error', 'Unknown provider error')]);
+      if (Client.ResponseStatusCode < 200) or (Client.ResponseStatusCode > 299) then
+        raise Exception.CreateFmt(
+          'Extension provider "%s" operation "%s" returned HTTP %d.',
+          [ProviderName, Operation, Client.ResponseStatusCode]);
       ResultJson := ResponseObject.Find('result');
       if ResultJson = nil then
         Result := ''
