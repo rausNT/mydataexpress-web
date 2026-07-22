@@ -39,21 +39,25 @@ node tools/extension-audit.mjs C:\path\to\extensions --output compatibility.json
 ## Генерация web-модуля и manifest
 
 ```powershell
-node tools/extension-migrate.mjs OfficeTools.epas --output OfficeToolsWeb.epas
+node tools/extension-migrate.mjs OfficeTools.epas
 ```
 
 Одна команда создаёт согласованный комплект:
 
-- `OfficeToolsWeb.epas` — web-модуль Pascal Script;
-- `OfficeToolsWeb.manifest.json` — машинный контракт операций;
-- `OfficeToolsWeb.provider.mjs` — Node-provider с handler-заглушками;
-- `OfficeToolsWeb.provider.cfg.example` — секция для `dxwebsrv.cfg`.
+- `OfficeTools.wepas` — штатный web-модуль Pascal Script;
+- `OfficeTools.manifest.json` — машинный контракт операций;
+- `OfficeTools.provider.mjs` — Node-provider с handler-заглушками;
+- `OfficeTools.provider.cfg.example` — секция для `dxwebsrv.cfg`.
+
+По умолчанию комплект записывается рядом с исходным `.epas`. Параметр `--output`
+может выбрать другой каталог, но имя web-модуля обязано оканчиваться на `.wepas`,
+чтобы файл можно было импортировать в DataExpress как web-реализацию.
 
 Создание provider-файлов можно отключить `--no-provider`, а manifest и provider —
 `--no-manifest`. Повторно создать provider по существующему manifest можно так:
 
 ```powershell
-npm run scaffold:provider -- OfficeToolsWeb.manifest.json
+npm run scaffold:provider -- OfficeTools.manifest.json
 ```
 
 Manifest
@@ -67,6 +71,19 @@ Manifest
 типы остаются `manual`: HTTP-вызов сам по себе не может безопасно воспроизвести
 изменение аргумента по ссылке или жизненный цикл объекта. Причина и полный список
 ограничений каждого сопоставления записываются в `reason`/`issues` manifest.
+
+Расширения `.epas` считаются desktop-модулями, а `.wepas` — их web-реализациями,
+как ожидает DataExpress. Аудитор обходит оба типа файлов и может использоваться
+как блокирующая проверка перед импортом:
+
+```powershell
+node tools/extension-audit.mjs C:\path\to\extensions --strict
+```
+
+Строгий режим возвращает ненулевой код, если отсутствует парная web-реализация,
+есть дублирующийся/лишний mapping либо метаданные не соответствуют типу файла
+(например, `OrigName` внутри `.wepas`). Пустой каталог и каталог без объявлений
+функций/действий также не считаются успешно проверенной миграцией.
 
 Отчёт выделяет OLE/COM, DLL, ShellExecute, WinAPI, локальные пути, диалоги и
 сетевые обращения. Категории:

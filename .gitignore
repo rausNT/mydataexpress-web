@@ -26,6 +26,7 @@ tools/*
 !tools/provider-wiring.test.mjs
 !tools/provider-smoke.pas
 !tools/provider-smoke-server.mjs
+!tools/wepas-compile-smoke.pas
 !tools/http-client.test.mjs
 !tools/dev-server.mjs
 !tools/dev-server.test.mjs

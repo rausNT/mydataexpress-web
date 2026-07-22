@@ -181,7 +181,7 @@ export function generateWebModule(source, filename = 'Extension.epas') {
     schemaVersion: 1,
     provider: moduleName,
     sourceModule: basename(filename),
-    webModule: `${moduleName}Web.epas`,
+    webModule: `${moduleName}.wepas`,
     summary: {
       total: mappings.length,
       compatible,
@@ -197,7 +197,7 @@ export function generateWebModule(source, filename = 'Extension.epas') {
 function main() {
   const args = process.argv.slice(2);
   if (!args[0]) {
-    console.error('Usage: node tools/extension-migrate.mjs <extension.epas> [--output extensionWeb.epas] [--manifest extensionWeb.manifest.json] [--provider-output extensionWeb.provider.mjs] [--provider-config extensionWeb.provider.cfg.example] [--no-provider] [--no-manifest]');
+    console.error('Usage: node tools/extension-migrate.mjs <extension.epas> [--output extension.wepas] [--manifest extension.manifest.json] [--provider-output extension.provider.mjs] [--provider-config extension.provider.cfg.example] [--no-provider] [--no-manifest]');
     process.exitCode = 2;
     return;
   }
@@ -209,8 +209,15 @@ function main() {
     process.exitCode = 2;
     return;
   }
-  const defaultName = `${basename(input, extname(input))}Web.epas`;
-  const output = resolve(outputIndex >= 0 ? args[outputIndex + 1] : defaultName);
+  const defaultName = `${basename(input, extname(input))}.wepas`;
+  const output = outputIndex >= 0
+    ? resolve(args[outputIndex + 1])
+    : resolve(dirname(input), defaultName);
+  if (extname(output).toLowerCase() !== '.wepas') {
+    console.error('Web extension output must use the official .wepas extension');
+    process.exitCode = 2;
+    return;
+  }
   const manifestIndex = args.indexOf('--manifest');
   if (manifestIndex >= 0 && !args[manifestIndex + 1]) {
     console.error('--manifest requires a file path');

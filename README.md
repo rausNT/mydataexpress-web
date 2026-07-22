@@ -20,13 +20,20 @@ Copyright (c) 2016-2026 Павел Дуборкин
 переносимый Node.js provider и пример его секции конфигурации:
 
 ```powershell
-npm run migrate:extension -- C:\path\to\OfficeTools.epas --output OfficeToolsWeb.epas
+npm run migrate:extension -- C:\path\to\OfficeTools.epas
 ```
 
 Стабильные `Name` функций и `Id` действий сохраняются. Поддерживаемые скалярные
 типы получают готовые HTTP-адаптеры, а Windows API, OLE, `var`/`out` и сложные
 типы остаются явно помеченными для ручной реализации — без скрытого пропуска
 операции в рабочей системе.
+
+Результирующий web-модуль имеет штатное расширение `OfficeTools.wepas`. Проверить
+весь каталог desktop/web-модулей перед импортом можно строгим аудитом:
+
+```powershell
+node tools/extension-audit.mjs C:\path\to\extensions --strict
+```
 
 ### Локальный preview
 

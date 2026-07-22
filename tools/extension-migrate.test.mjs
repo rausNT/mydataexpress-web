@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { generateWebModule } from './extension-migrate.mjs';
+import { auditSource, buildRuntimeCompatibility } from './extension-audit.mjs';
 
 const desktopModule = `
 {@module
@@ -51,9 +52,17 @@ test('generates stable web specifications and provider calls', () => {
   assert.match(generated.module, /Result := ExtensionProviderCall\('OfficeTools', 'NORMALIZE_PHONE', ProviderPayload\)/);
   assert.match(generated.module, /ExtensionProviderCall\('OfficeTools', 'action-123', ProviderPayload\)/);
   assert.equal(generated.manifest.provider, 'OfficeTools');
+  assert.equal(generated.manifest.webModule, 'OfficeTools.wepas');
   assert.equal(generated.manifest.summary.complete, true);
   assert.deepEqual(generated.manifest.mappings.map(item => item.operation), ['NORMALIZE_PHONE', 'action-123']);
   assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['provider', 'provider']);
+
+  const compatibility = buildRuntimeCompatibility([
+    auditSource(desktopModule, 'OfficeTools.epas'),
+    auditSource(generated.module, 'OfficeTools.wepas'),
+  ]);
+  assert.equal(compatibility.summary.complete, true);
+  assert.equal(compatibility.summary.providerBacked, 2);
 });
 
 test('does not invent declarations when source cannot be matched', () => {
@@ -65,31 +74,40 @@ test('does not invent declarations when source cannot be matched', () => {
   assert.equal(generated.manifest.mappings[1].reason, 'declaration-not-found');
 });
 
-test('CLI writes a manifest sidecar next to the generated module', () => {
+test('CLI writes the official .wepas module and matching sidecars by default', () => {
   const directory = mkdtempSync(join(tmpdir(), 'dataexpress-migrate-'));
   try {
     const input = join(directory, 'OfficeTools.epas');
-    const output = join(directory, 'OfficeToolsWeb.epas');
-    const manifest = join(directory, 'OfficeToolsWeb.manifest.json');
-    const provider = join(directory, 'OfficeToolsWeb.provider.mjs');
-    const providerConfig = join(directory, 'OfficeToolsWeb.provider.cfg.example');
+    const workingDirectory = join(directory, 'different-working-directory');
+    const output = join(directory, 'OfficeTools.wepas');
+    const manifest = join(directory, 'OfficeTools.manifest.json');
+    const provider = join(directory, 'OfficeTools.provider.mjs');
+    const providerConfig = join(directory, 'OfficeTools.provider.cfg.example');
+    mkdirSync(workingDirectory);
     writeFileSync(input, desktopModule);
 
     const result = spawnSync(process.execPath, [
       fileURLToPath(new URL('./extension-migrate.mjs', import.meta.url)),
       input,
-      '--output', output,
-    ], { encoding: 'utf8' });
+    ], { encoding: 'utf8', cwd: workingDirectory });
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(readFileSync(output, 'utf8'), /ExtensionProviderCall/);
     const payload = JSON.parse(readFileSync(manifest, 'utf8'));
-    assert.equal(payload.webModule, 'OfficeToolsWeb.epas');
+    assert.equal(payload.webModule, 'OfficeTools.wepas');
     assert.equal(payload.summary.complete, true);
     assert.match(readFileSync(provider, 'utf8'), /NORMALIZE_PHONE/);
     assert.match(readFileSync(providerConfig, 'utf8'), /Provider:OfficeTools/);
     const syntax = spawnSync(process.execPath, ['--check', provider], { encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);
+
+    const invalidOutput = spawnSync(process.execPath, [
+      fileURLToPath(new URL('./extension-migrate.mjs', import.meta.url)),
+      input,
+      '--output', join(directory, 'OfficeToolsWeb.epas'),
+    ], { encoding: 'utf8', cwd: workingDirectory });
+    assert.equal(invalidOutput.status, 2);
+    assert.match(invalidOutput.stderr, /must use the official \.wepas extension/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

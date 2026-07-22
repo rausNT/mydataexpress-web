@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { auditSource, buildRuntimeCompatibility } from './extension-audit.mjs';
 
@@ -80,12 +84,12 @@ test('matches desktop functions by Name and actions by stable Id', () => {
     begin
       Result := ExtensionProviderCall('documents', 'RenderDocument', '{}');
     end;
-  `, 'desktopWeb.epas');
+  `, 'desktop.wepas');
 
   const compatibility = buildRuntimeCompatibility([desktop, web]);
   assert.equal(compatibility.summary.complete, true);
   assert.equal(compatibility.summary.providerBacked, 2);
-  assert.equal(compatibility.functions[0].webModule, 'desktopWeb.epas');
+  assert.equal(compatibility.functions[0].webModule, 'desktop.wepas');
   assert.equal(compatibility.functions[0].status, 'provider');
   assert.equal(compatibility.actions[0].status, 'provider');
 });
@@ -106,12 +110,117 @@ test('reports missing, duplicate and orphan web mappings before runtime', () => 
     Name=Orphan
     @}
   `;
-  const webOne = auditSource(webSource, 'web-one.epas');
-  const webTwo = auditSource(webSource, 'web-two.epas');
+  const webOne = auditSource(webSource, 'web-one.wepas');
+  const webTwo = auditSource(webSource, 'web-two.wepas');
 
   const compatibility = buildRuntimeCompatibility([desktop, webOne, webTwo]);
   assert.equal(compatibility.summary.complete, false);
   assert.equal(compatibility.functions[0].status, 'missing');
   assert.equal(compatibility.summary.duplicateWebMappings, 1);
   assert.equal(compatibility.summary.orphanWebMappings, 2);
+});
+
+test('uses the official .epas and .wepas roles and reports invalid metadata', () => {
+  const desktop = auditSource(`
+    {@function
+    OrigName=DesktopName
+    Name=PUBLIC_NAME
+    @}
+  `, 'module.epas');
+  const web = auditSource(`
+    {@function
+    Name=PUBLIC_NAME
+    @}
+  `, 'module.wepas');
+  const invalidWeb = auditSource(`
+    {@function
+    OrigName=DesktopName
+    Name=PUBLIC_NAME
+    @}
+  `, 'broken.wepas');
+
+  assert.equal(desktop.sourceKind, 'desktop');
+  assert.equal(web.sourceKind, 'web');
+  assert.equal(web.formatIssues.length, 0);
+  assert.equal(invalidWeb.specifications[0].formatValid, false);
+  assert.equal(invalidWeb.formatIssues[0].code, 'web-origname-not-allowed');
+  assert.equal(buildRuntimeCompatibility([desktop, invalidWeb]).summary.invalidMappings, 1);
+});
+
+test('recognizes every typed provider adapter used by the Pascal runtime', () => {
+  for (const adapter of [
+    'ExtensionProviderCall',
+    'ExtensionProviderCallBoolean',
+    'ExtensionProviderCallInt64',
+    'ExtensionProviderCallFloat',
+    'ExtensionProviderCallDateTime',
+    'ExtensionProviderCallVariant',
+  ]) {
+    const report = auditSource(`
+      {@function
+      Name=TYPED_VALUE
+      @}
+      function TypedValue: Variant;
+      begin
+        Result := ${adapter}('Typed', 'value', '{}');
+      end;
+    `, 'typed.wepas');
+    assert.equal(report.providerBacked, true, adapter);
+  }
+});
+
+test('strict CLI audits .epas/.wepas pairs and fails malformed web modules', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'dataexpress-audit-'));
+  const cli = fileURLToPath(new URL('./extension-audit.mjs', import.meta.url));
+  const desktop = `
+    {@function
+    OrigName=DesktopName
+    Name=PUBLIC_NAME
+    @}
+  `;
+  const web = `
+    {@function
+    Name=PUBLIC_NAME
+    @}
+  `;
+  try {
+    writeFileSync(join(directory, 'module.epas'), desktop);
+    writeFileSync(join(directory, 'module.wepas'), web);
+    writeFileSync(join(directory, 'ignored.js'), web);
+
+    const valid = spawnSync(process.execPath, [cli, directory, '--strict'], { encoding: 'utf8' });
+    assert.equal(valid.status, 0, valid.stderr);
+    const report = JSON.parse(valid.stdout);
+    assert.equal(report.summary.files, 2);
+    assert.equal(report.summary.desktopModules, 1);
+    assert.equal(report.summary.webModules, 1);
+    assert.equal(report.runtimeCompatibility.summary.complete, true);
+
+    writeFileSync(join(directory, 'module.wepas'), web.replace(
+      'Name=PUBLIC_NAME',
+      'OrigName=DesktopName\n    Name=PUBLIC_NAME',
+    ));
+    const invalid = spawnSync(process.execPath, [cli, directory, '--strict'], { encoding: 'utf8' });
+    assert.equal(invalid.status, 1, invalid.stderr);
+    assert.equal(JSON.parse(invalid.stdout).runtimeCompatibility.summary.invalidMappings, 1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('strict CLI does not treat an empty directory as a successful migration', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'dataexpress-empty-audit-'));
+  try {
+    const cli = fileURLToPath(new URL('./extension-audit.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [cli, directory, '--strict'], { encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).strictValidation, {
+      filesFound: false,
+      mappingsFound: false,
+      runtimeComplete: true,
+      passed: false,
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

@@ -64,7 +64,7 @@ jobs:
             -LazarusRoot $lazarusRoot `
             -ComponentsRoot (Join-Path $PWD 'dependencies/dataexpress-depend') `
             -PrimaryConfigPath $lazarusConfig
-      - name: Smoke-test Pascal provider bridge
+      - name: Smoke-test generated .wepas and Pascal provider bridge
         shell: pwsh
         run: |
           $lazarusRoot = Join-Path $env:RUNNER_TEMP 'lazarus'
@@ -87,6 +87,31 @@ jobs:
           )
           & $fpc @fpcArguments
           if ($LASTEXITCODE -ne 0) { throw "Provider smoke compilation failed: $LASTEXITCODE" }
+
+          $migrationRoot = Join-Path $env:RUNNER_TEMP 'extension-migration'
+          New-Item -ItemType Directory -Path $migrationRoot | Out-Null
+          $desktopModule = Join-Path $migrationRoot 'portable.epas'
+          Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/portable.epas') `
+            -Destination $desktopModule
+          & (Get-Command node).Source (Join-Path $PWD 'tools/extension-migrate.mjs') $desktopModule
+          if ($LASTEXITCODE -ne 0) { throw "Extension migration failed: $LASTEXITCODE" }
+
+          $wepasArguments = @(
+            "-Fu$(Join-Path $PWD 'lib/i386-win32')",
+            "-Fu$(Join-Path $lazarusRoot 'components/lazutils/lib/i386-win32')",
+            "-Fu$(Join-Path $lazarusRoot 'components/freetype/lib/i386-win32')",
+            "-Fu$(Join-Path $lazarusRoot 'packager/units/i386-win32')",
+            "-Fu$(Join-Path $componentsRoot 'PascalScript/Source/lib/i386-win32')",
+            "-Fu$(Join-Path $componentsRoot 'bgra/bgrabitmap/lib4nogui/i386-win32/3.2.2')",
+            "-FE$smokeRoot",
+            "-FU$smokeUnits",
+            (Join-Path $PWD 'tools/wepas-compile-smoke.pas')
+          )
+          & $fpc @wepasArguments
+          if ($LASTEXITCODE -ne 0) { throw "Wepas smoke compilation failed: $LASTEXITCODE" }
+          & (Join-Path $smokeRoot 'wepas-compile-smoke.exe') `
+            (Join-Path $migrationRoot 'portable.wepas')
+          if ($LASTEXITCODE -ne 0) { throw "Generated wepas compilation failed: $LASTEXITCODE" }
 
           $token = 'provider-smoke-secret'
           $port = 19081

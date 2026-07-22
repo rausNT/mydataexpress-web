@@ -89,7 +89,7 @@ handlers. Поэтому неполная миграция завершаетс�
 отдельного запуска:
 
 ```powershell
-npm run scaffold:provider -- OfficeToolsWeb.manifest.json
+npm run scaffold:provider -- OfficeTools.manifest.json
 ```
 
 В сгенерированном `.provider.mjs` перечислены только операции со статусом
@@ -98,7 +98,7 @@ npm run scaffold:provider -- OfficeToolsWeb.manifest.json
 
 ```powershell
 $env:DX_PROVIDER_TOKEN = 'replace-with-a-long-random-token'
-node OfficeToolsWeb.provider.mjs
+node OfficeTools.provider.mjs
 ```
 
 Пример запуска:
