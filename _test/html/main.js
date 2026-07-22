@@ -51,60 +51,16 @@ r_handler - функция-обработчик ответа от сервера
 */
 function SendRequest(r_method, r_path, r_args, r_handler, sync = false, curtainShow = true)
 {
-    //Создаём запрос
-    let Request = CreateRequest();
-    
-    //Проверяем существование запроса еще раз
-    if (!Request)
-    {
-        return;
-    }
-    
-    //Назначаем пользовательский обработчик
-    Request.onreadystatechange = function()
-    {
-        //Если обмен данными завершен
-        if (Request.readyState == 4)
-        {
-			if (curtainShow) hideCurtain();
-            //Передаем управление обработчику пользователя
-            if (r_handler) r_handler(Request);
-        }
-    }
-	
-	Request.onerror = function()
-	{
-		if (curtainShow) hideCurtain();
-	}
-    
-	if (curtainShow) showCurtain();
-	
-    //Проверяем, если требуется сделать GET-запрос
-    if (r_method.toLowerCase() == "get" && r_args.length > 0)
-    r_path += r_args;
-    
-    //Инициализируем соединение
-    Request.open(r_method, r_path, !sync);
-    
-    if (r_method.toLowerCase() == "post")
-    {
-        //Если это POST-запрос
-        
-        //Устанавливаем заголовок
-        Request.setRequestHeader("Content-Type","application/x-www-form-urlencoded; charset=utf-8");
-        //Посылаем запрос
-        Request.send(r_args);
-    } else if (r_method.toLowerCase() == 'put') 
-	{
-        Request.send(r_args);
-	}
-    else
-    {
-        //Если это GET-запрос
-        
-        //Посылаем нуль-запрос
-        Request.send(null);
-    }
+	return DataExpressHttp.send({
+		createRequest: CreateRequest,
+		method: r_method,
+		path: r_path,
+		args: r_args,
+		onComplete: r_handler,
+		sync: sync,
+		showCurtain: curtainShow ? showCurtain : null,
+		hideCurtain: curtainShow ? hideCurtain : null
+	});
 } 
 
 /////////////////////////////////////////////////////////////////////////////////////////

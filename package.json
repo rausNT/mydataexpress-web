@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test tools/*.test.mjs",
-    "audit:fixtures": "node tools/extension-audit.mjs test/fixtures/extensions"
+    "audit:fixtures": "node tools/extension-audit.mjs test/fixtures/extensions",
+    "dev": "node tools/dev-server.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -21,6 +21,9 @@ tools/*
 !tools/extension-migrate.test.mjs
 !tools/provider-sdk.mjs
 !tools/provider-sdk.test.mjs
+!tools/http-client.test.mjs
+!tools/dev-server.mjs
+!tools/dev-server.test.mjs
 /_dist
 
 
