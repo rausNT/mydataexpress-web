@@ -1,7 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findProvider, parseProviderConfig, validateProviderEndpoint } from './provider-config.mjs';
+import {
+  findProvider,
+  parseProviderConfig,
+  safeProviderUrl,
+  validateProviderEndpoint,
+} from './provider-config.mjs';
 import { validateProviderManifest } from './provider-sdk.mjs';
 
 const MAX_RESPONSE_BYTES = 1024 * 1024;
@@ -93,7 +98,7 @@ export async function preflightProvider({
   const report = {
     ok: false,
     provider: contract.provider,
-    url: validation.url?.href || provider?.url || '',
+    url: safeProviderUrl(validation.url || provider?.url || ''),
     manifestComplete: contract.complete,
     requiredOperations: contract.operations,
     missingOperations: [],

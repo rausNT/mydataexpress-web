@@ -5,6 +5,7 @@ import {
   findProvider,
   parseProviderConfig,
   validateProviderEndpoint,
+  safeProviderUrl,
 } from './provider-config.mjs';
 
 test('parses provider sections without exposing database sections as providers', () => {
@@ -47,4 +48,19 @@ test('reports blank URLs and empty tokens without returning secrets in diagnosti
   const diagnostics = validateProviderEndpoint(config.providers[0]);
   assert.deepEqual(diagnostics.errors, [{ code: 'provider-url-required' }]);
   assert.doesNotMatch(JSON.stringify(diagnostics), /top-secret/);
+});
+
+test('rejects URL credentials and removes sensitive URL parts from reports', () => {
+  const provider = {
+    name: 'Unsafe',
+    url: 'http://user:password@127.0.0.1:9081/provider?api_key=secret#token',
+    token: '',
+    timeoutMs: 30000,
+    allowInsecure: false,
+  };
+  const diagnostics = validateProviderEndpoint(provider);
+  assert.ok(diagnostics.errors.some(item => item.code === 'provider-url-credentials'));
+  const safe = safeProviderUrl(diagnostics.url);
+  assert.equal(safe, 'http://127.0.0.1:9081/provider');
+  assert.doesNotMatch(safe, /user|password|api_key|secret|token/);
 });

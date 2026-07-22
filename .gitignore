@@ -19,6 +19,8 @@ tools/*
 !tools/extension-audit.test.mjs
 !tools/extension-batch-migrate.mjs
 !tools/extension-batch-migrate.test.mjs
+!tools/extension-bundle-verify.mjs
+!tools/extension-bundle-verify.test.mjs
 !tools/extension-migrate.mjs
 !tools/extension-migrate.test.mjs
 !tools/extension-provider-scaffold.mjs

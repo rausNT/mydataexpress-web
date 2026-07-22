@@ -113,12 +113,28 @@ export function validateProviderEndpoint(provider) {
   if (!['http:', 'https:'].includes(url.protocol)) {
     errors.push({ code: 'provider-url-protocol' });
   }
+  if (url.username || url.password) {
+    errors.push({ code: 'provider-url-credentials' });
+  }
   const loopback = ['localhost', '127.0.0.1', '::1'].includes(url.hostname.toLowerCase());
   if (url.protocol === 'http:' && !loopback && !provider.allowInsecure) {
     errors.push({ code: 'provider-https-required' });
   }
   if (!provider.token) warnings.push({ code: 'provider-token-empty' });
   return { url, errors, warnings };
+}
+
+export function safeProviderUrl(value) {
+  try {
+    const url = value instanceof URL ? new URL(value.href) : new URL(value);
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return url.href;
+  } catch {
+    return '';
+  }
 }
 
 export function configuredProviderNames(configuration) {

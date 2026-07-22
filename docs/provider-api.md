@@ -38,6 +38,9 @@ AllowInsecure=False
 {"ok": true, "result": "result.pdf"}
 ```
 
+Логин, пароль и API-ключи нельзя помещать в `Url`: используйте `Token` и HTTPS.
+Диагностические отчёты удаляют userinfo, query и fragment из отображаемого URL.
+
 `payload` сохраняет JSON-типы скалярных параметров: строки остаются строками,
 Boolean — `true`/`false`, числа передаются JSON-числами, `null` — как `null`.
 Провайдер также должен возвращать результат с соответствующим JSON-типом.
@@ -138,3 +141,12 @@ npm run preflight:provider -- C:\path\to\OfficeTools.manifest.json --config C:\p
 возвращает ненулевой код при ошибке и никогда не выводит токен. Незавершённые
 ручные адаптации блокируют проверку; для осознанного временного исключения есть
 параметр `--allow-manual`.
+
+Для пакетного комплекта те же проверки запускаются сразу по всем manifest:
+
+```powershell
+npm run verify:extension-bundle -- C:\extensions-web --config C:\server\dxwebsrv.cfg
+```
+
+Если `.wepas` ссылается на provider без manifest, live-проверка завершается
+ошибкой: без списка обязательных операций нельзя доказать совместимость.

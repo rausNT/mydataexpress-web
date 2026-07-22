@@ -96,6 +96,32 @@ npm run migrate:extensions -- C:\extensions --output-dir C:\extensions-web
 handlers. Сгенерированный scaffold намеренно не считается готовой реализацией;
 после его реализации готовность проверяется командой `preflight:provider`.
 
+## Проверка готового комплекта
+
+Offline-проверка не запускает и не импортирует JavaScript-файлы provider:
+
+```powershell
+npm run verify:extension-bundle -- C:\extensions-web --offline
+```
+
+Она проверяет `migration-index.json`, что все ссылки остаются внутри комплекта,
+наличие `.epas`, `.wepas`, manifest, config, provider SDK и scaffold, отсутствие
+незавершённых handler markers, а затем заново строит совместимость по `Name`/`Id`.
+Отметки внутри комментариев не засчитываются. Offline-режим сообщает, что
+сетевой статус providers не проверен.
+
+Для эксплуатационного допуска providers должны быть запущены, а verifier —
+получить фактический `dxwebsrv.cfg`:
+
+```powershell
+npm run verify:extension-bundle -- C:\extensions-web --config C:\server\dxwebsrv.cfg
+```
+
+В live-режиме для каждого provider, найденного в `.wepas`, требуется manifest и
+выполняется проверка Bearer-токена, `/health`, `/capabilities` и полного набора
+операций. Токены не включаются в JSON-отчёт. Ненулевой код возврата означает,
+что комплект пока нельзя считать полностью готовым.
+
 Manifest
 фиксирует имя провайдера, исходный/web-модули, стабильные `Name`/`Id`, операции и
 статусы всех сопоставлений. Если объявление процедуры или функции не найдено,

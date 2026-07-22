@@ -52,6 +52,26 @@ begin
     (Authority = '[::1]') or (Pos('[::1]:', Authority) = 1);
 end;
 
+function UrlHasCredentials(const Url: String): Boolean;
+var
+  Authority: String;
+  SchemePos, EndPos, P: Integer;
+begin
+  Result := False;
+  SchemePos := Pos('://', Url);
+  if SchemePos = 0 then Exit;
+  Authority := Copy(Url, SchemePos + 3, MaxInt);
+  EndPos := Length(Authority) + 1;
+  P := Pos('/', Authority);
+  if (P > 0) and (P < EndPos) then EndPos := P;
+  P := Pos('?', Authority);
+  if (P > 0) and (P < EndPos) then EndPos := P;
+  P := Pos('#', Authority);
+  if (P > 0) and (P < EndPos) then EndPos := P;
+  Authority := Copy(Authority, 1, EndPos - 1);
+  Result := Pos('@', Authority) > 0;
+end;
+
 function ExtensionProviderCall(const ProviderName, Operation,
   Payload: String): String;
 var
@@ -74,6 +94,9 @@ begin
   LowerUrl := LowerCase(Provider.Url);
   if (Pos('http://', LowerUrl) <> 1) and (Pos('https://', LowerUrl) <> 1) then
     raise Exception.CreateFmt('Extension provider "%s" URL must use HTTP or HTTPS.',
+      [ProviderName]);
+  if UrlHasCredentials(Provider.Url) then
+    raise Exception.CreateFmt('Extension provider "%s" URL must not contain credentials.',
       [ProviderName]);
   if (Pos('http://', LowerUrl) = 1) and not Provider.AllowInsecure and
      not IsLoopbackHttpUrl(LowerUrl) then

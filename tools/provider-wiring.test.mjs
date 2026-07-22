@@ -19,6 +19,7 @@ test('provider bridge is registered for Pascal Script compile and runtime', () =
     assert.match(compiler, new RegExp(`function ${name}\\(`));
     assert.match(runtime, new RegExp(`RegisterDelphiFunction\\(@${name}`));
   }
+  assert.match(source('extensionproviders.pas'), /UrlHasCredentials\(Provider\.Url\)/);
 });
 
 test('provider configuration is separated from database sections', () => {

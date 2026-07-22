@@ -31,6 +31,16 @@ web-модули, генерирует только отсутствующие �
 npm run migrate:extensions -- C:\path\to\extensions --output-dir C:\path\to\extensions-web
 ```
 
+Проверка всего комплекта после реализации handlers:
+
+```powershell
+# Структура, mappings и явные отметки реализованных handlers:
+npm run verify:extension-bundle -- C:\path\to\extensions-web --offline
+
+# Полная проверка, включая auth, /health и /capabilities всех providers:
+npm run verify:extension-bundle -- C:\path\to\extensions-web --config C:\path\to\dxwebsrv.cfg
+```
+
 Стабильные `Name` функций и `Id` действий сохраняются. Поддерживаемые скалярные
 типы получают готовые HTTP-адаптеры, а Windows API, OLE, `var`/`out` и сложные
 типы остаются явно помеченными для ручной реализации — без скрытого пропуска
