@@ -71,9 +71,93 @@ export function auditSource(source, filename = '<memory>') {
       description: field(header, 'Description'),
     },
     moduleType: isWebModule ? 'web-or-compatible' : 'desktop-or-unknown',
+    providerBacked: /\bExtensionProviderCall\s*\(/i.test(source),
     specifications: specs,
     compatibility: blocking ? 'requires-provider' : findings.length ? 'review' : 'portable',
     findings,
+  };
+}
+
+function runtimeKey(spec) {
+  if (spec.kind === 'function') return `function:${spec.name.toUpperCase()}`;
+  return `action:${spec.id}`;
+}
+
+export function buildRuntimeCompatibility(reports) {
+  const desktopSpecs = [];
+  const webByKey = new Map();
+  const orphanWebMappings = [];
+  const duplicateWebMappings = [];
+
+  for (const report of reports) {
+    for (const spec of report.specifications) {
+      const entry = { ...spec, module: report.file, providerBacked: report.providerBacked };
+      if (spec.origName) {
+        desktopSpecs.push(entry);
+        continue;
+      }
+
+      const key = runtimeKey(spec);
+      const mappings = webByKey.get(key) || [];
+      mappings.push(entry);
+      webByKey.set(key, mappings);
+    }
+  }
+
+  const desktopKeys = new Set(desktopSpecs.map(runtimeKey));
+  for (const [key, mappings] of webByKey) {
+    if (!desktopKeys.has(key)) orphanWebMappings.push(...mappings);
+    if (mappings.length > 1) duplicateWebMappings.push({ key, modules: mappings.map(item => item.module) });
+  }
+
+  let providerBacked = 0;
+  const entries = desktopSpecs.map(spec => {
+    const mappings = webByKey.get(runtimeKey(spec)) || [];
+    let status = 'missing';
+    let webModule = '';
+    if (mappings.length > 1) {
+      status = 'duplicate-web';
+    } else if (mappings.length === 1) {
+      webModule = mappings[0].module;
+      status = mappings[0].providerBacked ? 'provider' : 'web-script';
+      if (status === 'provider') providerBacked++;
+    }
+
+    return {
+      kind: spec.kind,
+      name: spec.name,
+      id: spec.id,
+      origName: spec.origName,
+      desktopModule: spec.module,
+      webModule,
+      status,
+    };
+  });
+
+  const functions = entries.filter(item => item.kind === 'function');
+  const actions = entries.filter(item => item.kind === 'action');
+  const isCompatible = item => item.status === 'provider' || item.status === 'web-script';
+  const functionsCompatible = functions.filter(isCompatible).length;
+  const actionsCompatible = actions.filter(isCompatible).length;
+
+  return {
+    schemaVersion: 1,
+    summary: {
+      functionsTotal: functions.length,
+      functionsCompatible,
+      actionsTotal: actions.length,
+      actionsCompatible,
+      providerBacked,
+      duplicateWebMappings: duplicateWebMappings.length,
+      orphanWebMappings: orphanWebMappings.length,
+      complete: functionsCompatible === functions.length &&
+        actionsCompatible === actions.length &&
+        duplicateWebMappings.length === 0 && orphanWebMappings.length === 0,
+    },
+    functions,
+    actions,
+    duplicateWebMappings,
+    orphanWebMappings,
   };
 }
 
@@ -106,7 +190,12 @@ function main() {
   const output = outputIndex >= 0 ? args[outputIndex + 1] : '';
   const input = resolve(args[0]);
   const reports = collect(input).map(file => auditSource(readFileSync(file, 'utf8'), file));
-  const result = { generatedAt: new Date().toISOString(), summary: summary(reports), modules: reports };
+  const result = {
+    generatedAt: new Date().toISOString(),
+    summary: summary(reports),
+    runtimeCompatibility: buildRuntimeCompatibility(reports),
+    modules: reports,
+  };
   const json = JSON.stringify(result, null, 2);
   if (output) writeFileSync(resolve(output), json + '\n');
   else process.stdout.write(json + '\n');

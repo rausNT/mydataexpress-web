@@ -397,6 +397,7 @@ begin
   else if Fields[0] = 'cleardbg' then
   else if Fields[0] = 'compileerror' then
   else if Fields[0] = 'runtimeerror' then
+  else if Fields[0] = 'extensioncompat' then
   //else if Fields[0] = 'testfm' then
   //else if Fields[0] = 'setsize' then
   begin
@@ -1338,6 +1339,12 @@ begin
   else if LPm = 'runtimeerror' then
   begin
     AResponse.Contents.Text := HS.ShowErrorPage(rsRuntimeError, SS.MainErrorMsg);
+    AResponse.Code := HS.ResultCode;
+  end
+  else if LPm = 'extensioncompat' then
+  begin
+    AResponse.Contents.Text := HS.ShowExtensionCompatibility;
+    AResponse.ContentType := GetMimeType('.json');
     AResponse.Code := HS.ResultCode;
   end
   {else if LPm = 'testfm' then

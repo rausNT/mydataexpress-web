@@ -1,4 +1,9 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { generateWebModule } from './extension-migrate.mjs';
 
@@ -36,18 +41,72 @@ end;
 `;
 
 test('generates stable web specifications and provider calls', () => {
-  const generated = generateWebModule(desktopModule, 'OfficeTools.epas').module;
-  assert.match(generated, /Name=NORMALIZE_PHONE/);
-  assert.match(generated, /Id=action-123/);
-  assert.match(generated, /function NormalizePhone\(Value: String\): String;/);
-  assert.match(generated, /procedure ExportDocument\(FileName: String\);/);
-  assert.match(generated, /"Value":/);
-  assert.match(generated, /ExtensionProviderCall\('OfficeTools', 'NORMALIZE_PHONE', ProviderPayload\)/);
-  assert.match(generated, /Result := ProviderResponse/);
+  const generated = generateWebModule(desktopModule, 'OfficeTools.epas');
+  assert.match(generated.module, /Name=NORMALIZE_PHONE/);
+  assert.match(generated.module, /Id=action-123/);
+  assert.match(generated.module, /function NormalizePhone\(Value: String\): String;/);
+  assert.match(generated.module, /procedure ExportDocument\(FileName: String\);/);
+  assert.match(generated.module, /"Value":/);
+  assert.match(generated.module, /ExtensionProviderCall\('OfficeTools', 'NORMALIZE_PHONE', ProviderPayload\)/);
+  assert.match(generated.module, /ExtensionProviderCall\('OfficeTools', 'action-123', ProviderPayload\)/);
+  assert.match(generated.module, /Result := ProviderResponse/);
+  assert.equal(generated.manifest.provider, 'OfficeTools');
+  assert.equal(generated.manifest.summary.complete, true);
+  assert.deepEqual(generated.manifest.mappings.map(item => item.operation), ['NORMALIZE_PHONE', 'action-123']);
+  assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['provider', 'provider']);
 });
 
 test('does not invent declarations when source cannot be matched', () => {
   const source = desktopModule.replace('procedure ExportDocument(FileName: String);', 'procedure OtherName;');
-  const generated = generateWebModule(source, 'OfficeTools.epas').module;
-  assert.match(generated, /TODO: declaration for ExportDocument was not found/);
+  const generated = generateWebModule(source, 'OfficeTools.epas');
+  assert.match(generated.module, /TODO: declaration for ExportDocument was not found/);
+  assert.equal(generated.manifest.summary.complete, false);
+  assert.equal(generated.manifest.mappings[1].status, 'manual');
+  assert.equal(generated.manifest.mappings[1].reason, 'declaration-not-found');
+});
+
+test('CLI writes a manifest sidecar next to the generated module', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'dataexpress-migrate-'));
+  try {
+    const input = join(directory, 'OfficeTools.epas');
+    const output = join(directory, 'OfficeToolsWeb.epas');
+    const manifest = join(directory, 'OfficeToolsWeb.manifest.json');
+    writeFileSync(input, desktopModule);
+
+    const result = spawnSync(process.execPath, [
+      fileURLToPath(new URL('./extension-migrate.mjs', import.meta.url)),
+      input,
+      '--output', output,
+    ], { encoding: 'utf8' });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(readFileSync(output, 'utf8'), /ExtensionProviderCall/);
+    const payload = JSON.parse(readFileSync(manifest, 'utf8'));
+    assert.equal(payload.webModule, 'OfficeToolsWeb.epas');
+    assert.equal(payload.summary.complete, true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('manifest does not claim automatic compatibility for typed results', () => {
+  const source = `
+    {@function
+    OrigName=CalculateTotal
+    Name=CALCULATE_TOTAL
+    Args=n
+    Result=n
+    Group=Finance
+    Description=Calculate
+    @}
+    function CalculateTotal(Value: Double): Double;
+    begin
+      Result := Value;
+    end;
+  `;
+  const generated = generateWebModule(source, 'Finance.epas');
+  assert.equal(generated.manifest.summary.complete, false);
+  assert.equal(generated.manifest.mappings[0].status, 'manual');
+  assert.equal(generated.manifest.mappings[0].reason, 'unsupported-result-type:double');
+  assert.match(generated.module, /TODO: convert ProviderResponse/);
 });

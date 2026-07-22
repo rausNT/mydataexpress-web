@@ -25,7 +25,7 @@ interface
 uses
   Classes, SysUtils, uPSCompiler, uPSRuntime, uPSUtils, sqldb, dxctrls,
   uPSPreProcessor, uPSDebugger, strconsts, SAX, SAXBaseReader, mytypes,
-  FormManager, LazFileUtils;
+  FormManager, LazFileUtils, fpjson;
 
 type
   TScriptData = class;
@@ -168,6 +168,7 @@ type
   public
     OrigName: String;    		// Имя функции в модуле выражений
     SDi: Integer;						// Индекс модуля
+    DesktopSDi, WebSDi: Integer; // Исходный и web-модули для диагностики
     Name: String;         	// Имя функции в выражении
     Args: String;
     ResultType: Char;
@@ -266,6 +267,7 @@ type
     Target: TActionTarget;  // Где применяется действие: форма, кнопка или везде.
     OrigName: String;   		// Имя процедуре в модуле расширений
     SDi: Integer;						// Индекс модуля
+    DesktopSDi, WebSDi: Integer; // Исходный и web-модули для диагностики
     Name, Group: String;
     //Glyph: String;
     Description: String;
@@ -312,6 +314,7 @@ type
     function FindScriptByName(const aName: String): TScriptData;
     function GetScriptIndex(SD: TScriptData): Integer;
     function ScriptCount: Integer;
+    function ExtensionCompatibilityAsJson: String;
     procedure CompileModule(SD: TScriptData);
     procedure CompileAll;
     //procedure CompileMain;
@@ -639,6 +642,9 @@ constructor TExprAction.Create;
 begin
   FControls := TEAControls.Create;
   FChecks := TEACheckList.Create;
+  SDi := -1;
+  DesktopSDi := -1;
+  WebSDi := -1;
 end;
 
 destructor TExprAction.Destroy;
@@ -1384,6 +1390,7 @@ begin
       else
       begin
         A.WebExists := True;
+        A.WebSDi := FSDi;
         A.SDi := FSDi;          // Подмениваем на веб-модуль
       end;
     end;
@@ -1428,6 +1435,7 @@ begin
   A.Target := at;
   A.OrigName := OrigName;
   A.SDi := FSDi;
+  A.DesktopSDi := FSDi;
   A.Name := Nm;
   A.Group := Grp;
 
@@ -1493,6 +1501,7 @@ begin
       else
       begin
         F.WebExists := True;
+        F.WebSDi := FSDi;
         F.SDi := FSDi;            // Подмениваем на веб-модуль
       end;
     end;
@@ -1505,6 +1514,7 @@ begin
   F := FFuncs.AddFunc;
   F.OrigName := OrigName;
   F.SDi := FSDi;
+  F.DesktopSDi := FSDi;
   F.Name := Nm;
 
   Consume('args');
@@ -1650,6 +1660,9 @@ end;
 function TExprFuncs.AddFunc: TExprFunc;
 begin
 	Result := TExprFunc.Create;
+  Result.SDi := -1;
+  Result.DesktopSDi := -1;
+  Result.WebSDi := -1;
   Add(Result);
 end;
 
@@ -2128,6 +2141,94 @@ end;
 function TScriptManager.ScriptCount: Integer;
 begin
   Result := FScripts.Count;
+end;
+
+function TScriptManager.ExtensionCompatibilityAsJson: String;
+var
+  Root, Summary, Item: TJSONObject;
+  Functions, Actions: TJSONArray;
+  F: TExprFunc;
+  A: TExprAction;
+  i, FuncCompatible, ActionCompatible, ProviderBacked: Integer;
+  Status: String;
+
+  function ModuleName(Index: Integer): String;
+  begin
+    if (Index >= 0) and (Index < ScriptCount) then
+      Result := Scripts[Index].Name
+    else
+      Result := '';
+  end;
+
+  function ImplementationStatus(WebExists: Boolean; WebIndex: Integer): String;
+  begin
+    if not WebExists then Exit('missing');
+    if (WebIndex >= 0) and (WebIndex < ScriptCount) and
+      (Pos('EXTENSIONPROVIDERCALL', UpperCase(Scripts[WebIndex].Source)) > 0) then
+      Result := 'provider'
+    else
+      Result := 'web-script';
+  end;
+
+begin
+  Root := TJSONObject.Create;
+  try
+    Functions := TJSONArray.Create;
+    Actions := TJSONArray.Create;
+    Summary := TJSONObject.Create;
+    Root.Add('schemaVersion', 1);
+    Root.Add('summary', Summary);
+    Root.Add('functions', Functions);
+    Root.Add('actions', Actions);
+
+    FuncCompatible := 0;
+    ActionCompatible := 0;
+    ProviderBacked := 0;
+
+    for i := 0 to FFuncs.Count - 1 do
+    begin
+      F := FFuncs[i];
+      Status := ImplementationStatus(F.WebExists, F.WebSDi);
+      if F.WebExists then Inc(FuncCompatible);
+      if Status = 'provider' then Inc(ProviderBacked);
+
+      Item := TJSONObject.Create;
+      Item.Add('name', F.Name);
+      Item.Add('origName', F.OrigName);
+      Item.Add('desktopModule', ModuleName(F.DesktopSDi));
+      Item.Add('webModule', ModuleName(F.WebSDi));
+      Item.Add('status', Status);
+      Functions.Add(Item);
+    end;
+
+    for i := 0 to FActions.Count - 1 do
+    begin
+      A := FActions[i];
+      Status := ImplementationStatus(A.WebExists, A.WebSDi);
+      if A.WebExists then Inc(ActionCompatible);
+      if Status = 'provider' then Inc(ProviderBacked);
+
+      Item := TJSONObject.Create;
+      Item.Add('id', A.Id);
+      Item.Add('name', A.Name);
+      Item.Add('origName', A.OrigName);
+      Item.Add('desktopModule', ModuleName(A.DesktopSDi));
+      Item.Add('webModule', ModuleName(A.WebSDi));
+      Item.Add('status', Status);
+      Actions.Add(Item);
+    end;
+
+    Summary.Add('functionsTotal', FFuncs.Count);
+    Summary.Add('functionsCompatible', FuncCompatible);
+    Summary.Add('actionsTotal', FActions.Count);
+    Summary.Add('actionsCompatible', ActionCompatible);
+    Summary.Add('providerBacked', ProviderBacked);
+    Summary.Add('complete', (FuncCompatible = FFuncs.Count) and
+      (ActionCompatible = FActions.Count));
+    Result := Root.AsJSON;
+  finally
+    Root.Free;
+  end;
 end;
 
 procedure ExtractColRow(const S: String; var R, C: Integer);

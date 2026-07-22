@@ -235,6 +235,7 @@ type
     function ClearDebug: String;
     function ShowUserMonitor: String;
     function ShowCompileError: String;
+    function ShowExtensionCompatibility: String;
     property Session: TSession read FSs write FSs;
     property ResultCode: Integer read FResultCode;
   end;
@@ -4208,6 +4209,12 @@ begin
   FSS.MetaData.ScriptMan.MessagesToList(SL, True);
   Result := ShowErrorPage(rsCompileError, le2br(SL.Text));
   SL.Free;
+end;
+
+function THtmlShow.ShowExtensionCompatibility: String;
+begin
+  FResultCode := rcOk;
+  Result := FSS.MetaData.ScriptMan.ExtensionCompatibilityAsJson;
 end;
 
 function GetStyleByControl(C: TdxControl): String;

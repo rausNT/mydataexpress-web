@@ -36,8 +36,12 @@ function payloadLines(decl) {
   return result;
 }
 
+function resultType(decl) {
+  return decl.match(/:\s*([\w.]+)\s*;$/i)?.[1]?.toLowerCase() || '';
+}
+
 function defaultResult(decl) {
-  const type = decl.match(/:\s*([\w.]+)\s*;$/i)?.[1]?.toLowerCase() || '';
+  const type = resultType(decl);
   if (['string', 'ansistring', 'unicodestring'].includes(type)) return "''";
   if (['boolean', 'bool'].includes(type)) return 'False';
   if (['variant'].includes(type)) return 'Null';
@@ -56,6 +60,7 @@ export function generateWebModule(source, filename = 'Extension.epas') {
     '@}',
     '',
   ];
+  const mappings = [];
 
   for (const spec of specs) {
     if (spec.kind === 'function') {
@@ -67,10 +72,21 @@ export function generateWebModule(source, filename = 'Extension.epas') {
     const decl = declaration(source, spec);
     if (!decl) {
       lines.push(`{ TODO: declaration for ${spec.origName || spec.name || spec.id} was not found. }`, '');
+      mappings.push({
+        kind: spec.kind,
+        name: spec.name,
+        id: spec.id,
+        origName: spec.origName,
+        args: spec.args,
+        result: spec.result,
+        operation: spec.name || spec.id,
+        status: 'manual',
+        reason: 'declaration-not-found',
+      });
       continue;
     }
 
-    const operation = spec.name || spec.id;
+    const operation = spec.kind === 'function' ? spec.name : spec.id;
     lines.push(decl, 'var', '  ProviderPayload, ProviderResponse: String;', 'begin');
     lines.push(...payloadLines(decl));
     lines.push(`  ProviderResponse := ExtensionProviderCall(${pascalString(moduleName)}, ${pascalString(operation)}, ProviderPayload);`);
@@ -79,27 +95,78 @@ export function generateWebModule(source, filename = 'Extension.epas') {
       else lines.push('  { TODO: convert ProviderResponse to the function result type. }', `  Result := ${defaultResult(decl)};`);
     }
     lines.push('end;', '');
+    const automatic = spec.kind === 'action' || ['string', 'ansistring', 'unicodestring'].includes(resultType(decl));
+    mappings.push({
+      kind: spec.kind,
+      name: spec.name,
+      id: spec.id,
+      origName: spec.origName,
+      args: spec.args,
+      result: spec.result,
+      operation,
+      status: automatic ? 'provider' : 'manual',
+      reason: automatic ? '' : `unsupported-result-type:${resultType(decl) || 'unknown'}`,
+    });
   }
 
-  return { module: lines.join('\n'), report };
+  const compatible = mappings.filter(item => item.status === 'provider').length;
+  const manifest = {
+    schemaVersion: 1,
+    provider: moduleName,
+    sourceModule: basename(filename),
+    webModule: `${moduleName}Web.epas`,
+    summary: {
+      total: mappings.length,
+      compatible,
+      manual: mappings.length - compatible,
+      complete: compatible === mappings.length,
+    },
+    mappings,
+  };
+
+  return { module: lines.join('\n'), report, manifest };
 }
 
 function main() {
   const args = process.argv.slice(2);
   if (!args[0]) {
-    console.error('Usage: node tools/extension-migrate.mjs <extension.epas> [--output extensionWeb.epas]');
+    console.error('Usage: node tools/extension-migrate.mjs <extension.epas> [--output extensionWeb.epas] [--manifest extensionWeb.manifest.json] [--no-manifest]');
     process.exitCode = 2;
     return;
   }
   const input = resolve(args[0]);
   const source = readFileSync(input, 'utf8');
   const outputIndex = args.indexOf('--output');
+  if (outputIndex >= 0 && !args[outputIndex + 1]) {
+    console.error('--output requires a file path');
+    process.exitCode = 2;
+    return;
+  }
   const defaultName = `${basename(input, extname(input))}Web.epas`;
   const output = resolve(outputIndex >= 0 ? args[outputIndex + 1] : defaultName);
+  const manifestIndex = args.indexOf('--manifest');
+  if (manifestIndex >= 0 && !args[manifestIndex + 1]) {
+    console.error('--manifest requires a file path');
+    process.exitCode = 2;
+    return;
+  }
+  const outputExtension = extname(output);
+  const manifestBase = outputExtension ? output.slice(0, -outputExtension.length) : output;
+  const manifestOutput = args.includes('--no-manifest') ? '' : resolve(
+    manifestIndex >= 0
+      ? args[manifestIndex + 1]
+      : `${manifestBase}.manifest.json`
+  );
   const generated = generateWebModule(source, input);
+  generated.manifest.webModule = basename(output);
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, generated.module + '\n');
+  if (manifestOutput) {
+    mkdirSync(dirname(manifestOutput), { recursive: true });
+    writeFileSync(manifestOutput, JSON.stringify(generated.manifest, null, 2) + '\n');
+  }
   process.stdout.write(`${output}\n`);
+  if (manifestOutput) process.stdout.write(`${manifestOutput}\n`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname.replace(/^\/(.:)/, '$1'))) main();

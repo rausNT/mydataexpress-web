@@ -940,3 +940,12 @@ msgstr "Добро пожаловать!"
 msgid "Yes"
 msgstr "Да"
 
+#: strconsts.rsextwebactionmissing
+#, object-pascal-format
+msgid "Action %s has no web implementation. Add a web expression module or provider adapter."
+msgstr "Для действия %s отсутствует веб-реализация. Добавьте веб-модуль выражений или адаптер провайдера."
+
+#: strconsts.rsextwebfunctionmissing
+#, object-pascal-format
+msgid "Function %s has no web implementation. Add a web expression module or provider adapter."
+msgstr "Для функции %s отсутствует веб-реализация. Добавьте веб-модуль выражений или адаптер провайдера."

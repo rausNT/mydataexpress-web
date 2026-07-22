@@ -776,8 +776,11 @@ var
   Exec: TPSDebugExec;
 begin
   F := FRS.Session.ScriptMan.Funcs[FExprIdx];
+  if not F.WebExists then
+    raise ECalcError.Create(rsExtWebFunctionMissing, [F.Name], FPos);
   SD := FRS.Session.ScriptMan.Scripts[F.SDi];
-  if SD.Kind <> skWebExpr then Exit(Null);
+  if SD.Kind <> skWebExpr then
+    raise ECalcError.Create(rsExtWebFunctionMissing, [F.Name], FPos);
   Exec := FRS.Session.ExtRunMan.GetExec(SD);
 
   pV := Exec.GetVar2('Self');

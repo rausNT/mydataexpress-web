@@ -21,3 +21,50 @@ jobs:
         with:
           name: extension-compatibility
           path: extension-compatibility.json
+
+  windows-pascal-build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      LAZARUS_ROOT: ${{ runner.temp }}\lazarus
+      LAZARUS_CONFIG: ${{ runner.temp }}\lazarus-config
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: dxbit/dataexpress-depend
+          path: dependencies/dataexpress-depend
+      - name: Install Lazarus 4.6 and FPC 3.2.2
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'lazarus-4.6-fpc-3.2.2-win32.exe'
+          $downloadUrl = 'https://download.lazarus-ide.org/Lazarus%20Windows%2032%20bits/Lazarus%204.6/lazarus-4.6-fpc-3.2.2-win32.exe'
+          $expectedMd5 = 'B9728418A8FEBD934057861DF8550CFA'
+
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $installer
+          $actualMd5 = (Get-FileHash -LiteralPath $installer -Algorithm MD5).Hash
+          if ($actualMd5 -ne $expectedMd5) {
+            throw "Lazarus installer checksum mismatch: $actualMd5"
+          }
+
+          $process = Start-Process -FilePath $installer -ArgumentList @(
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART',
+            '/SP-',
+            "/DIR=$env:LAZARUS_ROOT"
+          ) -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Lazarus installer failed with exit code $($process.ExitCode)"
+          }
+      - name: Build Win32 server
+        shell: pwsh
+        run: |
+          ./tools/build-windows.ps1 `
+            -LazarusRoot $env:LAZARUS_ROOT `
+            -ComponentsRoot (Join-Path $PWD 'dependencies/dataexpress-depend') `
+            -PrimaryConfigPath $env:LAZARUS_CONFIG
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dxwebsrv-win32
+          path: dxwebsrv.exe

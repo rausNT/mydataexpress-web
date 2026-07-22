@@ -922,7 +922,9 @@ var
 begin
   Result := inherited InnerExecute;
   EAction := FRS.Session.ScriptMan.Actions.FindAction(FActionId);
-  if (EAction = nil) or not EAction.WebExists then Exit;
+  if EAction = nil then Exit;
+  if not EAction.WebExists then
+    raise ECalcError.CreateFmt(rsExtWebActionMissing, [EAction.Name]);
 
   Params := TIfList.Create;
 

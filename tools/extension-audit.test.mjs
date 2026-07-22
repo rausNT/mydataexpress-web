@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { auditSource } from './extension-audit.mjs';
+import { auditSource, buildRuntimeCompatibility } from './extension-audit.mjs';
 
 test('portable web action keeps its stable id', () => {
   const report = auditSource(`
@@ -48,4 +48,70 @@ test('classifies repository extension fixtures', () => {
   assert.equal(portable.moduleType, 'desktop-or-unknown');
   assert.equal(auditSource(fixture('office.epas')).compatibility, 'requires-provider');
   assert.equal(auditSource(fixture('native.epas')).compatibility, 'requires-provider');
+});
+
+test('matches desktop functions by Name and actions by stable Id', () => {
+  const desktop = auditSource(`
+    {@function
+    OrigName=RenderDocument
+    Name=RenderDocument
+    Args=s
+    Result=s
+    Group=Documents
+    Description=Render
+    @}
+    {@action
+    Id=ACTION-42
+    OrigName=SendDocument
+    Name=Send document
+    Group=Documents
+    UI=
+    Description=Send
+    @}
+  `, 'desktop.epas');
+  const web = auditSource(`
+    {@function
+    Name=renderdocument
+    @}
+    {@action
+    Id=ACTION-42
+    @}
+    function RenderDocument(Value: String): String;
+    begin
+      Result := ExtensionProviderCall('documents', 'RenderDocument', '{}');
+    end;
+  `, 'desktopWeb.epas');
+
+  const compatibility = buildRuntimeCompatibility([desktop, web]);
+  assert.equal(compatibility.summary.complete, true);
+  assert.equal(compatibility.summary.providerBacked, 2);
+  assert.equal(compatibility.functions[0].webModule, 'desktopWeb.epas');
+  assert.equal(compatibility.functions[0].status, 'provider');
+  assert.equal(compatibility.actions[0].status, 'provider');
+});
+
+test('reports missing, duplicate and orphan web mappings before runtime', () => {
+  const desktop = auditSource(`
+    {@function
+    OrigName=DesktopOnly
+    Name=DesktopOnly
+    Args=
+    Result=s
+    Group=Test
+    Description=Missing web implementation
+    @}
+  `, 'desktop.epas');
+  const webSource = `
+    {@function
+    Name=Orphan
+    @}
+  `;
+  const webOne = auditSource(webSource, 'web-one.epas');
+  const webTwo = auditSource(webSource, 'web-two.epas');
+
+  const compatibility = buildRuntimeCompatibility([desktop, webOne, webTwo]);
+  assert.equal(compatibility.summary.complete, false);
+  assert.equal(compatibility.functions[0].status, 'missing');
+  assert.equal(compatibility.summary.duplicateWebMappings, 1);
+  assert.equal(compatibility.summary.orphanWebMappings, 2);
 });

@@ -258,6 +258,8 @@ resourcestring
   rsExceptionMsg = '%sException class: %s';
   rsExtModuleFailedMsg = 'Call function %s failed in the extension module %s. Try to find and '
     +'remove the module that causes the error.';
+  rsExtWebFunctionMissing = 'Function %s has no web implementation. Add a web expression module or provider adapter.';
+  rsExtWebActionMissing = 'Action %s has no web implementation. Add a web expression module or provider adapter.';
   rsInvalidMethotCall = 'Invalid method call child form: %s';
   rsComponentWithFieldNameNotFound = 'Component with the specified field name '
     +'[%s] not found.';
