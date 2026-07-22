@@ -74,7 +74,7 @@ Write-Host "lazbuild: $lazbuild"
 Write-Host "project:  $project"
 
 foreach ($package in $packages) {
-    Invoke-Lazbuild -Executable $lazbuild -Arguments ($commonArguments + "--add-package-link=$package")
+    Invoke-Lazbuild -Executable $lazbuild -Arguments ($commonArguments + '--add-package-link' + $package)
 }
 
 Invoke-Lazbuild -Executable $lazbuild -Arguments ($commonArguments + '--build-mode=Win32' + $project)
