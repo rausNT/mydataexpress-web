@@ -24,6 +24,7 @@ tools/*
 !tools/http-client.test.mjs
 !tools/dev-server.mjs
 !tools/dev-server.test.mjs
+!tools/build-windows.ps1
 /_dist
 
 
