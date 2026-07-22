@@ -25,9 +25,6 @@ jobs:
   windows-pascal-build:
     runs-on: windows-latest
     timeout-minutes: 30
-    env:
-      LAZARUS_ROOT: ${{ runner.temp }}\lazarus
-      LAZARUS_CONFIG: ${{ runner.temp }}\lazarus-config
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -38,6 +35,7 @@ jobs:
         shell: pwsh
         run: |
           $installer = Join-Path $env:RUNNER_TEMP 'lazarus-4.6-fpc-3.2.2-win32.exe'
+          $lazarusRoot = Join-Path $env:RUNNER_TEMP 'lazarus'
           $downloadUrl = 'https://download.lazarus-ide.org/Lazarus%20Windows%2032%20bits/Lazarus%204.6/lazarus-4.6-fpc-3.2.2-win32.exe'
           $expectedMd5 = 'B9728418A8FEBD934057861DF8550CFA'
 
@@ -52,7 +50,7 @@ jobs:
             '/SUPPRESSMSGBOXES',
             '/NORESTART',
             '/SP-',
-            "/DIR=$env:LAZARUS_ROOT"
+            "/DIR=$lazarusRoot"
           ) -Wait -PassThru
           if ($process.ExitCode -ne 0) {
             throw "Lazarus installer failed with exit code $($process.ExitCode)"
@@ -60,10 +58,12 @@ jobs:
       - name: Build Win32 server
         shell: pwsh
         run: |
+          $lazarusRoot = Join-Path $env:RUNNER_TEMP 'lazarus'
+          $lazarusConfig = Join-Path $env:RUNNER_TEMP 'lazarus-config'
           ./tools/build-windows.ps1 `
-            -LazarusRoot $env:LAZARUS_ROOT `
+            -LazarusRoot $lazarusRoot `
             -ComponentsRoot (Join-Path $PWD 'dependencies/dataexpress-depend') `
-            -PrimaryConfigPath $env:LAZARUS_CONFIG
+            -PrimaryConfigPath $lazarusConfig
       - uses: actions/upload-artifact@v4
         with:
           name: dxwebsrv-win32
