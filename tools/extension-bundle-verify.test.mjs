@@ -40,7 +40,7 @@ function fixture() {
   const bundle = join(root, 'bundle');
   mkdirSync(input);
   writeFileSync(join(input, 'Alpha.epas'), desktop);
-  writeBatchMigration(input, bundle, { startPort: 13000 });
+  writeBatchMigration(input, bundle, { startPort: 13000, forceProvider: true });
   return { root, bundle };
 }
 

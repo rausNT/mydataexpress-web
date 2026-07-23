@@ -16,8 +16,9 @@ Copyright (c) 2016-2026 Павел Дуборкин
 
 ### Миграция расширения
 
-Для исходного desktop-модуля одна команда создаёт web-модуль, manifest,
-переносимый Node.js provider и пример его секции конфигурации:
+Для исходного desktop-модуля одна команда создаёт web-модуль и manifest.
+Самодостаточные routines переносятся прямо в Pascal Script, а Node.js provider
+и его конфигурация создаются только для непереносимых операций:
 
 ```powershell
 npm run migrate:extension -- C:\path\to\OfficeTools.epas
@@ -41,10 +42,12 @@ npm run verify:extension-bundle -- C:\path\to\extensions-web --offline
 npm run verify:extension-bundle -- C:\path\to\extensions-web --config C:\path\to\dxwebsrv.cfg
 ```
 
-Стабильные `Name` функций и `Id` действий сохраняются. Поддерживаемые скалярные
-типы получают готовые HTTP-адаптеры, а Windows API, OLE, `var`/`out` и сложные
-типы остаются явно помеченными для ручной реализации — без скрытого пропуска
-операции в рабочей системе.
+Стабильные `Name` функций и `Id` действий сохраняются. Чистый код со скалярными
+типами и известными portable built-ins выполняется без HTTP. Windows API, OLE,
+DLL и неизвестные глобальные helpers направляются через provider. `var`/`out`
+и сложные типы остаются явно помеченными для ручной реализации — без скрытого
+пропуска операции в рабочей системе. Флаг `--all-providers` принудительно
+оставляет все поддерживаемые routines на серверной provider-границе.
 
 Результирующий web-модуль имеет штатное расширение `OfficeTools.wepas`. Проверить
 весь каталог desktop/web-модулей перед импортом можно строгим аудитом:

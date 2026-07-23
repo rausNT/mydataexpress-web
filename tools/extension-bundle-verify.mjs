@@ -210,12 +210,16 @@ export async function verifyExtensionBundle({
     if (!module.generated) continue;
     const webModule = bundleFile(root, module.generated.webModule, errors);
     const manifest = bundleFile(root, module.generated.manifest, errors);
-    const provider = bundleFile(root, module.generated.provider, errors);
-    bundleFile(root, module.generated.config, errors);
+    const provider = module.generated.provider
+      ? bundleFile(root, module.generated.provider, errors)
+      : '';
+    if (module.generated.config) bundleFile(root, module.generated.config, errors);
     if (manifest) generatedManifestFiles.push(manifest);
     generated.push({ module, webModule, manifest, provider });
   }
-  if (generated.length) bundleFile(root, 'dataexpress-provider-sdk.mjs', errors);
+  if (generated.some(item => item.provider)) {
+    bundleFile(root, 'dataexpress-provider-sdk.mjs', errors);
+  }
 
   const manifests = manifestCatalog(root, generatedManifestFiles, errors, warnings, allowManual);
   let pendingHandlers = 0;

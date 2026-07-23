@@ -2291,6 +2291,76 @@ begin
   end;
 end;
 
+function ExtractWebMappingSource(const Source, MappingKind,
+  MappingValue: String): String;
+var
+  LowerSource, Marker, Block, FieldName, Line, Value: String;
+  SearchPos, MarkerPos, BlockEnd, NextPos, P, i: Integer;
+  Lines: TStringList;
+
+  function FindFrom(const Needle: String; StartPos: Integer): Integer;
+  var
+    RelativePos: Integer;
+  begin
+    RelativePos := Pos(LowerCase(Needle), Copy(LowerSource, StartPos, MaxInt));
+    if RelativePos = 0 then Exit(0);
+    Result := StartPos + RelativePos - 1;
+  end;
+
+  procedure KeepEarlier(Candidate: Integer);
+  begin
+    if (Candidate > 0) and ((NextPos = 0) or (Candidate < NextPos)) then
+      NextPos := Candidate;
+  end;
+
+begin
+  // Falling back to the complete module preserves the old conservative
+  // diagnosis if a non-standard metadata block cannot be isolated.
+  Result := Source;
+  LowerSource := LowerCase(Source);
+  Marker := '{@' + LowerCase(MappingKind);
+  if SameText(MappingKind, 'function') then FieldName := 'name'
+  else FieldName := 'id';
+  SearchPos := 1;
+  while SearchPos <= Length(Source) do
+  begin
+    MarkerPos := FindFrom(Marker, SearchPos);
+    if (MarkerPos = 0) and SameText(MappingKind, 'action') then
+      MarkerPos := FindFrom('{action', SearchPos);
+    if MarkerPos = 0 then Exit;
+    P := Pos('@}', Copy(LowerSource, MarkerPos, MaxInt));
+    if P = 0 then Exit;
+    BlockEnd := MarkerPos + P;
+    Block := Copy(Source, MarkerPos, BlockEnd - MarkerPos + 1);
+    Value := '';
+    Lines := TStringList.Create;
+    try
+      Lines.Text := Block;
+      for i := 0 to Lines.Count - 1 do
+      begin
+        Line := Trim(Lines[i]);
+        if Pos(FieldName + '=', LowerCase(Line)) = 1 then
+        begin
+          Value := Trim(Copy(Line, Length(FieldName) + 2, MaxInt));
+          Break;
+        end;
+      end;
+    finally
+      Lines.Free;
+    end;
+    if SameText(Value, MappingValue) then
+    begin
+      NextPos := 0;
+      KeepEarlier(FindFrom('{@function', BlockEnd + 1));
+      KeepEarlier(FindFrom('{@action', BlockEnd + 1));
+      KeepEarlier(FindFrom('{action', BlockEnd + 1));
+      if NextPos = 0 then NextPos := Length(Source) + 1;
+      Exit(Copy(Source, BlockEnd + 1, NextPos - BlockEnd - 1));
+    end;
+    SearchPos := BlockEnd + 1;
+  end;
+end;
+
 function TScriptManager.ExtensionCompatibilityAsJson: String;
 var
   Root, Summary, Item: TJSONObject;
@@ -2320,7 +2390,7 @@ var
   end;
 
   function ImplementationStatus(WebExists: Boolean; WebIndex: Integer;
-    Providers: TJSONArray): String;
+    const MappingKind, MappingValue: String; Providers: TJSONArray): String;
   var
     Names: TStringList;
     Calls, LiteralCalls, n: Integer;
@@ -2334,7 +2404,8 @@ var
       Names.CaseSensitive := False;
       Names.Sorted := True;
       Names.Duplicates := dupIgnore;
-      ExtractExtensionProviderNames(Scripts[WebIndex].Source, Names,
+      ExtractExtensionProviderNames(ExtractWebMappingSource(
+        Scripts[WebIndex].Source, MappingKind, MappingValue), Names,
         Calls, LiteralCalls);
       for n := 0 to Names.Count - 1 do Providers.Add(Names[n]);
       if Calls = 0 then Exit('web-script');
@@ -2398,7 +2469,8 @@ begin
       F := FFuncs[i];
       Item := TJSONObject.Create;
       ProvidersJson := TJSONArray.Create;
-      Status := ImplementationStatus(F.WebExists, F.WebSDi, ProvidersJson);
+      Status := ImplementationStatus(F.WebExists, F.WebSDi, 'function',
+        F.Name, ProvidersJson);
       if IsCompatibleStatus(Status) then Inc(FuncCompatible);
       CountProviderStatus(Status);
       Item.Add('name', F.Name);
@@ -2417,7 +2489,8 @@ begin
       A := FActions[i];
       Item := TJSONObject.Create;
       ProvidersJson := TJSONArray.Create;
-      Status := ImplementationStatus(A.WebExists, A.WebSDi, ProvidersJson);
+      Status := ImplementationStatus(A.WebExists, A.WebSDi, 'action',
+        A.Id, ProvidersJson);
       if IsCompatibleStatus(Status) then Inc(ActionCompatible);
       CountProviderStatus(Status);
       Item.Add('id', A.Id);

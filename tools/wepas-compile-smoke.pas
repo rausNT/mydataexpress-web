@@ -19,7 +19,8 @@ begin
   if not Condition then raise Exception.Create(MessageText);
 end;
 
-function CompatibilityStatus(const Json: String; out Complete: Boolean): String;
+procedure CompatibilityStatuses(const Json: String; out FirstStatus,
+  SecondStatus: String; out Complete: Boolean);
 var
   Data: TJSONData;
   Root, Summary, Item: TJSONObject;
@@ -32,9 +33,8 @@ begin
     Functions := TJSONArray(Root.Find('functions'));
     Require(Functions.Count = 2, 'Expected two extension functions');
     Item := TJSONObject(Functions.Items[0]);
-    Result := Item.Get('status', '');
-    Require(TJSONObject(Functions.Items[1]).Get('status', '') = Result,
-      'Extension functions have inconsistent compatibility status');
+    FirstStatus := Item.Get('status', '');
+    SecondStatus := TJSONObject(Functions.Items[1]).Get('status', '');
     Complete := Summary.Get('complete', False);
   finally
     Data.Free;
@@ -44,15 +44,19 @@ end;
 var
   Compiler: TPSPascalCompiler;
   DesktopSource, WebSource: TStringList;
-  Output, Status: String;
+  Output, FirstStatus, SecondStatus, ExpectedMode: String;
   i: Integer;
   Manager: TScriptManager;
   DesktopScript, WebScript: TScriptData;
   Provider: TProviderItem;
   Complete: Boolean;
 begin
-  if ParamCount <> 2 then
-    raise Exception.Create('Usage: wepas-compile-smoke <module.epas> <module.wepas>');
+  if ParamCount <> 3 then
+    raise Exception.Create(
+      'Usage: wepas-compile-smoke <module.epas> <module.wepas> <provider|web-script|mixed>');
+  ExpectedMode := LowerCase(ParamStr(3));
+  Require((ExpectedMode = 'provider') or (ExpectedMode = 'web-script') or
+    (ExpectedMode = 'mixed'), 'Unknown expected compatibility mode');
 
   DesktopSource := TStringList.Create;
   WebSource := TStringList.Create;
@@ -91,22 +95,52 @@ begin
       Manager.ParseExprModule(WebScript);
       Require(not Manager.HasErrors, 'Extension metadata parser rejected the generated pair');
 
-      Status := CompatibilityStatus(Manager.ExtensionCompatibilityAsJson, Complete);
-      Require(Status = 'provider-unconfigured',
-        'Missing provider configuration was not detected: ' + Status);
-      Require(not Complete, 'Unconfigured provider must keep compatibility incomplete');
+      CompatibilityStatuses(Manager.ExtensionCompatibilityAsJson,
+        FirstStatus, SecondStatus, Complete);
+      if ExpectedMode = 'web-script' then
+      begin
+        Require((FirstStatus = 'web-script') and (SecondStatus = 'web-script'),
+          'Inline functions were not detected independently: ' +
+          FirstStatus + ', ' + SecondStatus);
+        Require(Complete, 'Inline web functions must complete compatibility');
+      end
+      else
+      begin
+        if ExpectedMode = 'mixed' then
+          Require((FirstStatus = 'web-script') and
+            (SecondStatus = 'provider-unconfigured'),
+            'Mixed mapping status is incorrect: ' +
+            FirstStatus + ', ' + SecondStatus)
+        else
+          Require((FirstStatus = 'provider-unconfigured') and
+            (SecondStatus = 'provider-unconfigured'),
+            'Missing provider configuration was not detected: ' +
+            FirstStatus + ', ' + SecondStatus);
+        Require(not Complete,
+          'Unconfigured provider must keep compatibility incomplete');
 
-      Provider := AppSet.ProviderList.AddItem;
-      Provider.Name := 'portable';
-      Status := CompatibilityStatus(Manager.ExtensionCompatibilityAsJson, Complete);
-      Require(Status = 'provider-unconfigured',
-        'Provider without Url must remain unconfigured: ' + Status);
-      Require(not Complete, 'Provider without Url must keep compatibility incomplete');
+        Provider := AppSet.ProviderList.AddItem;
+        Provider.Name := ChangeFileExt(ExtractFileName(ParamStr(1)), '');
+        CompatibilityStatuses(Manager.ExtensionCompatibilityAsJson,
+          FirstStatus, SecondStatus, Complete);
+        Require(SecondStatus = 'provider-unconfigured',
+          'Provider without Url must remain unconfigured: ' + SecondStatus);
+        Require(not Complete,
+          'Provider without Url must keep compatibility incomplete');
 
-      Provider.Url := 'http://127.0.0.1:19081/';
-      Status := CompatibilityStatus(Manager.ExtensionCompatibilityAsJson, Complete);
-      Require(Status = 'provider', 'Configured provider was not detected: ' + Status);
-      Require(Complete, 'Configured provider must complete compatibility');
+        Provider.Url := 'http://127.0.0.1:19081/';
+        CompatibilityStatuses(Manager.ExtensionCompatibilityAsJson,
+          FirstStatus, SecondStatus, Complete);
+        if ExpectedMode = 'mixed' then
+          Require((FirstStatus = 'web-script') and (SecondStatus = 'provider'),
+            'Configured mixed provider status is incorrect: ' +
+            FirstStatus + ', ' + SecondStatus)
+        else
+          Require((FirstStatus = 'provider') and (SecondStatus = 'provider'),
+            'Configured provider was not detected: ' +
+            FirstStatus + ', ' + SecondStatus);
+        Require(Complete, 'Configured provider must complete compatibility');
+      end;
     finally
       Manager.Free;
       AppSet.Free;
@@ -114,7 +148,9 @@ begin
     end;
 
     WriteLn('wepas-compile-ok ' + ExtractFileName(ParamStr(2)));
-    WriteLn('provider-config-diagnostics-ok');
+    WriteLn('mapping-granularity-ok ' + ExpectedMode);
+    if ExpectedMode <> 'web-script' then
+      WriteLn('provider-config-diagnostics-ok');
   finally
     Compiler.Free;
     WebSource.Free;

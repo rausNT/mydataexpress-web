@@ -46,6 +46,8 @@ function specifications(source, regex, kind) {
       origName: field(match[1], 'OrigName'),
       args: field(match[1], 'Args'),
       result: field(match[1], 'Result'),
+      blockStart: match.index,
+      blockEnd: match.index + match[0].length,
     });
   }
   return result;
@@ -193,14 +195,25 @@ export function auditSource(source, filename = '<memory>') {
   const specs = [
     ...specifications(source, FUNCTION_RE, 'function'),
     ...specifications(source, ACTION_RE, 'action'),
-  ];
+  ].sort((left, right) => left.blockStart - right.blockStart);
   const kind = sourceKind(filename, specs);
   const formatIssues = validateSpecifications(specs, kind);
   const invalidSpecifications = new Set(formatIssues.map(issue => issue.specification));
-  const checkedSpecs = specs.map((spec, index) => ({
-    ...spec,
-    formatValid: !invalidSpecifications.has(index),
-  }));
+  const checkedSpecs = specs.map((spec, index) => {
+    const next = specs[index + 1];
+    const scopedCalls = kind === 'web'
+      ? extractProviderCalls(source.slice(spec.blockEnd, next?.blockStart ?? source.length))
+      : [];
+    const { blockStart, blockEnd, ...publicSpec } = spec;
+    return {
+      ...publicSpec,
+      formatValid: !invalidSpecifications.has(index),
+      providerBacked: scopedCalls.length > 0,
+      providers: [...new Set(scopedCalls.filter(call => call.literal).map(call => call.provider))],
+      providerCalls: scopedCalls.length,
+      dynamicProviderCalls: scopedCalls.filter(call => !call.literal).length,
+    };
+  });
   const providerCalls = extractProviderCalls(source);
   const providers = [...new Set(providerCalls
     .filter(call => call.literal)
@@ -244,9 +257,11 @@ export function buildRuntimeCompatibility(reports, { configuredProviders = null 
       const entry = {
         ...spec,
         module: report.file,
-        providerBacked: report.providerBacked,
-        providers: report.providers,
-        dynamicProviderCalls: report.dynamicProviderCalls,
+        providerBacked: report.sourceKind === 'web' ? spec.providerBacked : report.providerBacked,
+        providers: report.sourceKind === 'web' ? spec.providers : report.providers,
+        dynamicProviderCalls: report.sourceKind === 'web'
+          ? spec.dynamicProviderCalls
+          : report.dynamicProviderCalls,
       };
       if (spec.formatValid === false) {
         invalidMappings.push({

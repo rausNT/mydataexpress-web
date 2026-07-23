@@ -93,7 +93,7 @@ function classifyDesktopModules(desktopReports, compatibility, duplicateDesktopF
   });
 }
 
-export function buildBatchMigrationPlan(inputRoot) {
+export function buildBatchMigrationPlan(inputRoot, { forceProvider = false } = {}) {
   const files = collectExtensionFiles(inputRoot)
     .filter(file => ['.epas', '.wepas'].includes(extname(file).toLowerCase()))
     .sort((left, right) => left.localeCompare(right));
@@ -118,6 +118,12 @@ export function buildBatchMigrationPlan(inputRoot) {
 
   const providerOwners = new Map();
   for (const item of modules.filter(module => module.state === 'generate')) {
+    item.providerRequired = generateWebModule(
+      readFileSync(item.report.file, 'utf8'),
+      item.report.file,
+      { forceProvider },
+    ).manifest.mappings.some(mapping => mapping.status === 'provider');
+    if (!item.providerRequired) continue;
     const provider = basename(item.report.file, extname(item.report.file)).toLowerCase();
     const owners = providerOwners.get(provider) || [];
     owners.push(item);
@@ -145,8 +151,11 @@ export function buildBatchMigrationPlan(inputRoot) {
   return { files, reports, desktopReports, webReports, compatibility, modules };
 }
 
-export function writeBatchMigration(inputRoot, outputRoot, { startPort = 9081 } = {}) {
-  const plan = buildBatchMigrationPlan(inputRoot);
+export function writeBatchMigration(inputRoot, outputRoot, {
+  startPort = 9081,
+  forceProvider = false,
+} = {}) {
+  const plan = buildBatchMigrationPlan(inputRoot, { forceProvider });
   if (!plan.desktopReports.length) throw new Error('No .epas extension modules found');
   if (existsSync(outputRoot) && readdirSync(outputRoot).length > 0) {
     throw new Error('Output directory must be empty');
@@ -160,11 +169,13 @@ export function writeBatchMigration(inputRoot, outputRoot, { startPort = 9081 } 
   }
 
   const generatedModules = plan.modules.filter(item => item.state === 'generate');
-  const sdkFile = generatedModules.length ? installProviderSdk(outputRoot) : '';
+  let sdkFile = '';
   const configs = [];
   let manualMappings = 0;
   let providerImplementationsRequired = 0;
-  generatedModules.forEach((item, index) => {
+  let inlineMappings = 0;
+  let providerPortIndex = 0;
+  generatedModules.forEach(item => {
     const sourceRelative = relative(inputRoot, item.report.file);
     const webRelative = sourceRelative.slice(0, -extname(sourceRelative).length) + '.wepas';
     const webFile = resolve(outputRoot, webRelative);
@@ -173,10 +184,10 @@ export function writeBatchMigration(inputRoot, outputRoot, { startPort = 9081 } 
     const providerFile = `${base}.provider.mjs`;
     const configFile = `${base}.provider.cfg.example`;
     const source = readFileSync(item.report.file, 'utf8');
-    const generated = generateWebModule(source, item.report.file);
-    const port = startPort + index;
+    const generated = generateWebModule(source, item.report.file, { forceProvider });
     generated.manifest.webModule = basename(webFile);
     manualMappings += generated.manifest.summary.manual;
+    inlineMappings += generated.manifest.summary.webScript;
     const implementationOperations = generated.manifest.mappings
       .filter(mapping => mapping.status === 'provider')
       .map(mapping => mapping.operation);
@@ -185,31 +196,41 @@ export function writeBatchMigration(inputRoot, outputRoot, { startPort = 9081 } 
     mkdirSync(dirname(webFile), { recursive: true });
     writeFileSync(webFile, generated.module + '\n');
     writeFileSync(manifestFile, JSON.stringify(generated.manifest, null, 2) + '\n');
-    writeFileSync(providerFile, generateProviderScaffold(generated.manifest, {
-      manifestImport: importPath(providerFile, manifestFile),
-      sdkImport: importPath(providerFile, sdkFile),
-      port,
-    }));
-    const config = generateProviderConfig(generated.manifest, {
-      url: `http://127.0.0.1:${port}/`,
-    });
-    writeFileSync(configFile, config);
-    configs.push(config.trim());
 
     item.generated = {
       webModule: portablePath(relative(outputRoot, webFile)),
       manifest: portablePath(relative(outputRoot, manifestFile)),
-      provider: portablePath(relative(outputRoot, providerFile)),
-      config: portablePath(relative(outputRoot, configFile)),
-      port,
       complete: generated.manifest.summary.complete,
+      inlineMappings: generated.manifest.summary.webScript,
       manualMappings: generated.manifest.summary.manual,
       implementationOperations,
     };
-    item.ready = false;
-    item.reason = generated.manifest.summary.complete
-      ? 'provider-implementation-required'
-      : 'manual-adaptation-required';
+    if (implementationOperations.length) {
+      const port = startPort + providerPortIndex++;
+      if (port > 65535) throw new Error('Provider port range exceeds 65535');
+      if (!sdkFile) sdkFile = installProviderSdk(outputRoot);
+      writeFileSync(providerFile, generateProviderScaffold(generated.manifest, {
+        manifestImport: importPath(providerFile, manifestFile),
+        sdkImport: importPath(providerFile, sdkFile),
+        port,
+      }));
+      const config = generateProviderConfig(generated.manifest, {
+        url: `http://127.0.0.1:${port}/`,
+      });
+      writeFileSync(configFile, config);
+      configs.push(config.trim());
+      Object.assign(item.generated, {
+        provider: portablePath(relative(outputRoot, providerFile)),
+        config: portablePath(relative(outputRoot, configFile)),
+        port,
+      });
+    }
+    item.ready = generated.manifest.summary.complete && implementationOperations.length === 0;
+    item.reason = !generated.manifest.summary.complete
+      ? 'manual-adaptation-required'
+      : implementationOperations.length
+        ? 'provider-implementation-required'
+        : '';
   });
 
   const blocked = plan.modules.filter(item => item.state === 'blocked').length;
@@ -229,6 +250,7 @@ export function writeBatchMigration(inputRoot, outputRoot, { startPort = 9081 } 
       blocked,
       existingNeedsReview,
       manualMappings,
+      inlineMappings,
       providerImplementationsRequired,
       orphanWebMappings: plan.compatibility.orphanWebMappings.length,
       invalidMappings: plan.compatibility.invalidMappings.length,
@@ -253,7 +275,7 @@ export function writeBatchMigration(inputRoot, outputRoot, { startPort = 9081 } 
 }
 
 function usage() {
-  return 'Usage: node tools/extension-batch-migrate.mjs <extensions-directory> [--output-dir <directory>] [--start-port <port>] [--strict]';
+  return 'Usage: node tools/extension-batch-migrate.mjs <extensions-directory> [--output-dir <directory>] [--start-port <port>] [--all-providers] [--strict]';
 }
 
 function main() {
@@ -274,13 +296,17 @@ function main() {
     if (!Number.isInteger(startPort) || startPort < 1 || startPort > 65535) {
       throw new Error('--start-port must be an integer between 1 and 65535');
     }
-    const plan = buildBatchMigrationPlan(inputRoot);
+    const forceProvider = args.includes('--all-providers');
+    const plan = buildBatchMigrationPlan(inputRoot, { forceProvider });
     if (!plan.desktopReports.length) throw new Error('No .epas extension modules found');
-    const generatedCount = plan.modules.filter(item => item.state === 'generate').length;
-    if (startPort + Math.max(0, generatedCount - 1) > 65535) {
+    const providerCount = plan.modules
+      .filter(item => item.state === 'generate')
+      .filter(item => item.providerRequired)
+      .length;
+    if (startPort + Math.max(0, providerCount - 1) > 65535) {
       throw new Error('Provider port range exceeds 65535');
     }
-    const result = writeBatchMigration(inputRoot, outputRoot, { startPort });
+    const result = writeBatchMigration(inputRoot, outputRoot, { startPort, forceProvider });
     console.log(JSON.stringify({ output: outputRoot, ...result.index.summary }, null, 2));
     if (args.includes('--strict') && !result.index.summary.complete) process.exitCode = 1;
   } catch (error) {

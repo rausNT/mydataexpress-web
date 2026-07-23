@@ -92,9 +92,9 @@ test('matches desktop functions by Name and actions by stable Id', () => {
 
   const compatibility = buildRuntimeCompatibility([desktop, web]);
   assert.equal(compatibility.summary.complete, true);
-  assert.equal(compatibility.summary.providerBacked, 2);
+  assert.equal(compatibility.summary.providerBacked, 1);
   assert.equal(compatibility.functions[0].webModule, 'desktop.wepas');
-  assert.equal(compatibility.functions[0].status, 'provider');
+  assert.equal(compatibility.functions[0].status, 'web-script');
   assert.equal(compatibility.actions[0].status, 'provider');
 });
 
@@ -216,6 +216,48 @@ test('strict compatibility rejects dynamically selected providers', () => {
   assert.equal(compatibility.functions[0].dynamicProviderCalls, 1);
   assert.equal(compatibility.summary.providerUnresolved, 1);
   assert.equal(compatibility.summary.complete, false);
+});
+
+test('provider detection is scoped to each web mapping in a mixed module', () => {
+  const desktop = auditSource(`
+    {@function
+    OrigName=InlineImpl
+    Name=INLINE
+    Args=s
+    Result=s
+    @}
+    function InlineImpl(Value: String): String; begin Result := Value; end;
+    {@function
+    OrigName=RemoteImpl
+    Name=REMOTE
+    Args=s
+    Result=s
+    @}
+    function RemoteImpl(Value: String): String; begin Result := Value; end;
+  `, 'mixed.epas');
+  const web = auditSource(`
+    {@function
+    Name=INLINE
+    @}
+    function InlineImpl(Value: String): String;
+    begin
+      Result := Value;
+    end;
+    {@function
+    Name=REMOTE
+    @}
+    function RemoteImpl(Value: String): String;
+    begin
+      Result := ExtensionProviderCall('RemoteTools', 'REMOTE', '{}');
+    end;
+  `, 'mixed.wepas');
+  assert.equal(web.specifications[0].providerBacked, false);
+  assert.equal(web.specifications[1].providerBacked, true);
+  assert.deepEqual(web.specifications[1].providers, ['RemoteTools']);
+  const compatibility = buildRuntimeCompatibility([desktop, web]);
+  assert.equal(compatibility.functions[0].status, 'web-script');
+  assert.equal(compatibility.functions[1].status, 'provider');
+  assert.equal(compatibility.summary.providerBacked, 1);
 });
 
 test('strict CLI audits .epas/.wepas pairs and fails malformed web modules', () => {

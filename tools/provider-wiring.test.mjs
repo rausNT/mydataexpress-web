@@ -32,6 +32,8 @@ test('runtime exposes extension mapping status and rejects silent fallbacks', ()
   const scripts = source('scriptmanager.pas');
   assert.match(scripts, /DesktopSDi, WebSDi: Integer/);
   assert.match(scripts, /function TScriptManager\.ExtensionCompatibilityAsJson/);
+  assert.match(scripts, /function ExtractWebMappingSource/);
+  assert.match(scripts, /ExtractWebMappingSource\(\s*Scripts\[WebIndex\]\.Source/);
   assert.match(scripts, /'missing'/);
   assert.match(scripts, /'provider'/);
   assert.match(scripts, /'provider-unconfigured'/);

@@ -1,0 +1,36 @@
+{@module
+Author=DataExpress tests
+Version=1.0
+Description=Mixed portable and Windows-backed functions
+@}
+
+{@function
+OrigName=InlineText
+Name=INLINE_TEXT
+Args=s
+Result=s
+Group=Text
+Description=Returns text without external dependencies
+@}
+
+function InlineText(Value: String): String;
+begin
+  Result := Trim(Value);
+end;
+
+{@function
+OrigName=OfficeText
+Name=OFFICE_TEXT
+Args=s
+Result=s
+Group=Documents
+Description=Uses Microsoft Office automation
+@}
+
+function OfficeText(Value: String): String;
+var
+  Word: OleVariant;
+begin
+  Word := CreateOleObject('Word.Application');
+  Result := Value;
+end;

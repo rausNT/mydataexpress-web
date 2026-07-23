@@ -27,8 +27,14 @@ export function validateProviderManifest(manifest, handlers) {
     throw new TypeError('handlers must be an object');
   }
 
+  const invalidStatuses = manifest.mappings
+    .filter(mapping => !['provider', 'web-script', 'manual'].includes(mapping?.status))
+    .map(mapping => mapping?.status ?? 'missing');
+  if (invalidStatuses.length) {
+    throw new ProviderManifestError(`Invalid provider mapping statuses: ${[...new Set(invalidStatuses)].join(', ')}`);
+  }
   const providerMappings = manifest.mappings.filter(mapping => mapping?.status === 'provider');
-  const manualMappings = manifest.mappings.filter(mapping => mapping?.status !== 'provider');
+  const manualMappings = manifest.mappings.filter(mapping => mapping?.status === 'manual');
   const operations = providerMappings.map(mapping => mapping?.operation);
   const invalidOperations = operations.filter(operation => typeof operation !== 'string' || !operation.trim());
   if (invalidOperations.length) {

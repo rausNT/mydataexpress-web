@@ -74,6 +74,7 @@ test('batch migration preserves existing web modules and creates a portable prov
 
     const result = spawnSync(process.execPath, [
       cli, input, '--output-dir', output, '--start-port', '12000', '--strict',
+      '--all-providers',
     ], { encoding: 'utf8' });
     assert.equal(result.status, 1, result.stderr);
 
@@ -86,6 +87,7 @@ test('batch migration preserves existing web modules and creates a portable prov
       blocked: 0,
       existingNeedsReview: 0,
       manualMappings: 0,
+      inlineMappings: 0,
       providerImplementationsRequired: 1,
       orphanWebMappings: 0,
       invalidMappings: 0,
@@ -102,6 +104,27 @@ test('batch migration preserves existing web modules and creates a portable prov
     assert.match(readFileSync(join(output, 'dxwebsrv.providers.cfg.example'), 'utf8'), /127\.0\.0\.1:12000/);
     const syntax = spawnSync(process.execPath, ['--check', provider], { encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('batch migration produces a ready provider-free bundle for portable routines', () => {
+  const { root, input, output } = fixture();
+  try {
+    write(join(input, 'Portable.epas'), desktop('PORTABLE'));
+    const result = spawnSync(process.execPath, [
+      cli, input, '--output-dir', output, '--strict',
+    ], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    const index = JSON.parse(readFileSync(join(output, 'migration-index.json'), 'utf8'));
+    assert.equal(index.summary.inlineMappings, 1);
+    assert.equal(index.summary.providerImplementationsRequired, 0);
+    assert.equal(index.summary.complete, true);
+    assert.equal(index.modules[0].ready, true);
+    assert.equal(existsSync(join(output, 'Portable.provider.mjs')), false);
+    assert.equal(existsSync(join(output, 'dataexpress-provider-sdk.mjs')), false);
+    assert.doesNotMatch(readFileSync(join(output, 'Portable.wepas'), 'utf8'), /ExtensionProviderCall/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -132,7 +155,7 @@ test('strict batch migration reports provider-name collisions and manual mapping
     write(join(collision.input, 'one', 'Shared.epas'), desktop('FIRST'));
     write(join(collision.input, 'two', 'Shared.epas'), desktop('SECOND'));
     const result = spawnSync(process.execPath, [
-      cli, collision.input, '--output-dir', collision.output, '--strict',
+      cli, collision.input, '--output-dir', collision.output, '--strict', '--all-providers',
     ], { encoding: 'utf8' });
     assert.equal(result.status, 1, result.stderr);
     const index = JSON.parse(readFileSync(join(collision.output, 'migration-index.json'), 'utf8'));

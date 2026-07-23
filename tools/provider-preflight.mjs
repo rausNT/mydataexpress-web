@@ -86,6 +86,21 @@ export async function preflightProvider({
     (allowManual ? warnings : errors).push(entry);
   }
 
+  if (contract.operations.length === 0) {
+    return {
+      ok: errors.length === 0,
+      provider: contract.provider,
+      providerRequired: false,
+      url: '',
+      manifestComplete: contract.complete,
+      requiredOperations: [],
+      missingOperations: [],
+      extraOperations: [],
+      errors,
+      warnings,
+    };
+  }
+
   const configuration = parseProviderConfig(configText);
   errors.push(...configuration.errors.map(item => diagnostic('config-invalid', { detail: item.code })));
   warnings.push(...configuration.warnings.map(item => diagnostic('config-warning', { detail: item.code })));
@@ -98,6 +113,7 @@ export async function preflightProvider({
   const report = {
     ok: false,
     provider: contract.provider,
+    providerRequired: true,
     url: safeProviderUrl(validation.url || provider?.url || ''),
     manifestComplete: contract.complete,
     requiredOperations: contract.operations,

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -41,28 +41,30 @@ begin
 end;
 `;
 
-test('generates stable web specifications and provider calls', () => {
+test('inlines self-contained routines while preserving stable web specifications', () => {
   const generated = generateWebModule(desktopModule, 'OfficeTools.epas');
   assert.match(generated.module, /Name=NORMALIZE_PHONE/);
   assert.match(generated.module, /Id=action-123/);
   assert.match(generated.module, /function NormalizePhone\(Value: String\): String;/);
   assert.match(generated.module, /procedure ExportDocument\(FileName: String\);/);
-  assert.match(generated.module, /"Value":/);
-  assert.match(generated.module, /ExtensionProviderEncodeValue\(Value\)/);
-  assert.match(generated.module, /Result := ExtensionProviderCall\('OfficeTools', 'NORMALIZE_PHONE', ProviderPayload\)/);
-  assert.match(generated.module, /ExtensionProviderCall\('OfficeTools', 'action-123', ProviderPayload\)/);
+  assert.match(generated.module, /Result := Value/);
+  assert.doesNotMatch(generated.module, /ExtensionProviderCall/);
   assert.equal(generated.manifest.provider, 'OfficeTools');
   assert.equal(generated.manifest.webModule, 'OfficeTools.wepas');
   assert.equal(generated.manifest.summary.complete, true);
   assert.deepEqual(generated.manifest.mappings.map(item => item.operation), ['NORMALIZE_PHONE', 'action-123']);
-  assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['provider', 'provider']);
+  assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['web-script', 'web-script']);
+  assert.equal(generated.manifest.summary.webScript, 2);
+  assert.equal(generated.manifest.summary.provider, 0);
 
   const compatibility = buildRuntimeCompatibility([
     auditSource(desktopModule, 'OfficeTools.epas'),
     auditSource(generated.module, 'OfficeTools.wepas'),
   ]);
   assert.equal(compatibility.summary.complete, true);
-  assert.equal(compatibility.summary.providerBacked, 2);
+  assert.equal(compatibility.summary.providerBacked, 0);
+  assert.ok(compatibility.functions.concat(compatibility.actions)
+    .every(item => item.status === 'web-script'));
 });
 
 test('does not invent declarations when source cannot be matched', () => {
@@ -74,7 +76,7 @@ test('does not invent declarations when source cannot be matched', () => {
   assert.equal(generated.manifest.mappings[1].reason, 'declaration-not-found');
 });
 
-test('CLI writes the official .wepas module and matching sidecars by default', () => {
+test('CLI omits provider sidecars for inline modules and supports forced providers', () => {
   const directory = mkdtempSync(join(tmpdir(), 'dataexpress-migrate-'));
   try {
     const input = join(directory, 'OfficeTools.epas');
@@ -93,15 +95,30 @@ test('CLI writes the official .wepas module and matching sidecars by default', (
     ], { encoding: 'utf8', cwd: workingDirectory });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(readFileSync(output, 'utf8'), /ExtensionProviderCall/);
+    assert.doesNotMatch(readFileSync(output, 'utf8'), /ExtensionProviderCall/);
     const payload = JSON.parse(readFileSync(manifest, 'utf8'));
     assert.equal(payload.webModule, 'OfficeTools.wepas');
     assert.equal(payload.summary.complete, true);
-    assert.match(readFileSync(provider, 'utf8'), /NORMALIZE_PHONE/);
-    assert.match(readFileSync(provider, 'utf8'), /\.\/dataexpress-provider-sdk\.mjs/);
+    assert.equal(payload.summary.webScript, 2);
+    assert.equal(existsSync(provider), false);
+    assert.equal(existsSync(providerConfig), false);
+    assert.equal(existsSync(providerSdk), false);
+
+    const forcedOutput = join(directory, 'OfficeToolsForced.wepas');
+    const forced = spawnSync(process.execPath, [
+      fileURLToPath(new URL('./extension-migrate.mjs', import.meta.url)),
+      input,
+      '--output', forcedOutput,
+      '--all-providers',
+    ], { encoding: 'utf8', cwd: workingDirectory });
+    assert.equal(forced.status, 0, forced.stderr);
+    const forcedProvider = join(directory, 'OfficeToolsForced.provider.mjs');
+    assert.match(readFileSync(forcedOutput, 'utf8'), /ExtensionProviderCall/);
+    assert.match(readFileSync(forcedProvider, 'utf8'), /NORMALIZE_PHONE/);
+    assert.match(readFileSync(forcedProvider, 'utf8'), /\.\/dataexpress-provider-sdk\.mjs/);
     assert.match(readFileSync(providerSdk, 'utf8'), /createProviderServer/);
-    assert.match(readFileSync(providerConfig, 'utf8'), /Provider:OfficeTools/);
-    const syntax = spawnSync(process.execPath, ['--check', provider], { encoding: 'utf8' });
+    assert.match(readFileSync(join(directory, 'OfficeToolsForced.provider.cfg.example'), 'utf8'), /Provider:OfficeTools/);
+    const syntax = spawnSync(process.execPath, ['--check', forcedProvider], { encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);
 
     const invalidOutput = spawnSync(process.execPath, [
@@ -142,7 +159,7 @@ test('generates typed provider adapters and preserves scalar payload types', () 
       Result := Id > 0;
     end;
   `;
-  const generated = generateWebModule(source, 'Finance.epas');
+  const generated = generateWebModule(source, 'Finance.epas', { forceProvider: true });
   assert.equal(generated.manifest.summary.complete, true);
   assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['provider', 'provider']);
   assert.match(generated.module, /function CalculateTotal\(Value: Double; Tax: Double\): Double;/);
@@ -183,4 +200,70 @@ test('keeps by-reference and custom types explicitly manual', () => {
   assert.equal(generated.manifest.mappings[0].reason, 'by-reference-parameter:Value');
   assert.equal(generated.manifest.mappings[1].reason, 'unsupported-result-type:tcustomresult');
   assert.match(generated.module, /TODO: manual provider adapter required/);
+});
+
+test('routes routines with unknown helper dependencies through a provider', () => {
+  const source = `
+    {@function
+    OrigName=Normalize
+    Name=NORMALIZE
+    Args=s
+    Result=s
+    @}
+    function Normalize(Value: String): String;
+    begin
+      Result := SharedHelper(Value);
+    end;
+
+    function SharedHelper(Value: String): String;
+    begin
+      Result := Trim(Value);
+    end;
+  `;
+  const generated = generateWebModule(source, 'Helpers.epas');
+  assert.equal(generated.manifest.mappings[0].status, 'provider');
+  assert.ok(generated.manifest.mappings[0].issues.includes('external-dependency:SharedHelper'));
+  assert.match(generated.module, /ExtensionProviderCall\('Helpers', 'NORMALIZE'/);
+});
+
+test('inlines routines with local scalar variables and portable built-ins', () => {
+  const source = `
+    {@function
+    OrigName=Normalize
+    Name=NORMALIZE
+    Args=s
+    Result=s
+    @}
+    function Normalize(Value: String): String;
+    var
+      Clean: String;
+    begin
+      Clean := Trim(Value);
+      Result := UpperCase(Clean);
+    end;
+  `;
+  const generated = generateWebModule(source, 'Portable.epas');
+  assert.equal(generated.manifest.mappings[0].status, 'web-script');
+  assert.match(generated.module, /Clean := Trim\(Value\)/);
+  assert.doesNotMatch(generated.module, /ExtensionProviderCall/);
+});
+
+test('generates a mixed inline/provider module at routine granularity', () => {
+  const source = readFileSync(new URL('../test/fixtures/extensions/mixed.epas', import.meta.url), 'utf8');
+  const generated = generateWebModule(source, 'mixed.epas');
+  assert.deepEqual(
+    generated.manifest.mappings.map(mapping => mapping.status),
+    ['web-script', 'provider'],
+  );
+  assert.equal(generated.manifest.summary.webScript, 1);
+  assert.equal(generated.manifest.summary.provider, 1);
+  assert.match(generated.module, /Result := Trim\(Value\)/);
+  assert.match(generated.module, /ExtensionProviderCall\('mixed', 'OFFICE_TEXT'/);
+
+  const compatibility = buildRuntimeCompatibility([
+    auditSource(source, 'mixed.epas'),
+    auditSource(generated.module, 'mixed.wepas'),
+  ]);
+  assert.equal(compatibility.functions[0].status, 'web-script');
+  assert.equal(compatibility.functions[1].status, 'provider');
 });

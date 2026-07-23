@@ -83,6 +83,26 @@ test('validates manifest operations before the provider starts', () => {
   );
 });
 
+test('treats inline web-script mappings as complete without provider handlers', () => {
+  const capabilities = validateProviderManifest({
+    schemaVersion: 1,
+    provider: 'Portable',
+    mappings: [
+      { operation: 'INLINE', status: 'web-script' },
+      { operation: 'REMOTE', status: 'provider' },
+    ],
+  }, { REMOTE: async () => null });
+  assert.deepEqual(capabilities.operations, ['REMOTE']);
+  assert.deepEqual(capabilities.manualOperations, []);
+  assert.equal(capabilities.complete, true);
+
+  assert.throws(() => validateProviderManifest({
+    schemaVersion: 1,
+    provider: 'Portable',
+    mappings: [{ operation: 'UNKNOWN', status: 'ready' }],
+  }, {}), /Invalid provider mapping statuses: ready/);
+});
+
 test('does not accept inherited object properties as provider handlers', () => {
   assert.throws(() => validateProviderManifest({
     schemaVersion: 1,

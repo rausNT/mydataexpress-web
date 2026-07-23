@@ -72,3 +72,20 @@ test('manual mappings require an explicit preflight override', async () => {
     assert.ok(allowed.warnings.some(item => item.code === 'manifest-manual-adaptation'));
   });
 });
+
+test('inline-only manifests do not require a provider section or network call', async () => {
+  const report = await preflightProvider({
+    manifest: {
+      schemaVersion: 1,
+      provider: 'Portable',
+      mappings: [{ status: 'web-script', operation: 'INLINE' }],
+    },
+    configText: '',
+    fetchImpl: () => {
+      throw new Error('fetch must not be called');
+    },
+  });
+  assert.equal(report.ok, true);
+  assert.equal(report.providerRequired, false);
+  assert.deepEqual(report.requiredOperations, []);
+});

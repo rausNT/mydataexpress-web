@@ -53,8 +53,17 @@ node tools/extension-migrate.mjs OfficeTools.epas
 
 - `OfficeTools.wepas` — штатный web-модуль Pascal Script;
 - `OfficeTools.manifest.json` — машинный контракт операций;
-- `OfficeTools.provider.mjs` — Node-provider с handler-заглушками;
-- `OfficeTools.provider.cfg.example` — секция для `dxwebsrv.cfg`.
+- `OfficeTools.provider.mjs` — Node-provider с handler-заглушками, если он нужен;
+- `OfficeTools.provider.cfg.example` — секция для `dxwebsrv.cfg`, если есть
+  provider-backed операции.
+
+Мигратор анализирует каждую routine отдельно. Самодостаточная реализация без
+Windows/OLE/DLL/UI/network/file findings, неизвестных globals и helper-вызовов
+копируется в `.wepas` со статусом `web-script`. Остальные поддерживаемые
+сигнатуры получают provider-адаптер. Анализ консервативен: неизвестная
+зависимость не считается portable только потому, что её реализация не найдена.
+Флаг `--all-providers` отключает inline-перенос для осознанной изоляции всех
+операций за HTTP.
 
 По умолчанию комплект записывается рядом с исходным `.epas`. Параметр `--output`
 может выбрать другой каталог, но имя web-модуля обязано оканчиваться на `.wepas`,
@@ -67,9 +76,10 @@ node tools/extension-migrate.mjs OfficeTools.epas
 npm run scaffold:provider -- OfficeTools.manifest.json
 ```
 
-В сгенерированный комплект также записывается `dataexpress-provider-sdk.mjs`.
-Поэтому provider не зависит от расположения исходного репозитория и может быть
-скопирован на другой компьютер вместе с manifest и `.provider.mjs`.
+Если manifest содержит provider-backed операции, в комплект также записывается
+`dataexpress-provider-sdk.mjs`. Поэтому provider не зависит от расположения
+исходного репозитория и может быть скопирован на другой компьютер вместе с
+manifest и `.provider.mjs`. Для полностью inline-модуля эти sidecars не создаются.
 
 ## Пакетная миграция каталога
 
@@ -84,10 +94,12 @@ npm run migrate:extensions -- C:\extensions --output-dir C:\extensions-web
 
 - копирует исходные `.epas` и уже существующие `.wepas` без изменения;
 - генерирует адаптеры только для полностью отсутствующих web-реализаций;
+- переносит чистые routines напрямую и создаёт provider только при необходимости;
 - не создаёт второй модуль при частичном покрытии `Name`/`Id`;
 - блокирует коллизии имён provider и дублирующиеся desktop/web mapping;
-- назначает provider последовательные localhost-порты начиная с `9081`;
-- пишет общий `dxwebsrv.providers.cfg.example` и `migration-index.json`.
+- назначает необходимым providers последовательные localhost-порты начиная с `9081`;
+- пишет `migration-index.json` и, при наличии providers, общий
+  `dxwebsrv.providers.cfg.example`.
 
 Непустой выходной каталог отклоняется, поэтому в результат не попадут устаревшие
 файлы предыдущей миграции. `--start-port 12000` меняет первый порт. В режиме

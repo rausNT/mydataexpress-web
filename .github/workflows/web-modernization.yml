@@ -90,13 +90,25 @@ jobs:
 
           $migrationInput = Join-Path $env:RUNNER_TEMP 'extension-source'
           $migrationRoot = Join-Path $env:RUNNER_TEMP 'extension-migration'
+          $providerMigrationRoot = Join-Path $env:RUNNER_TEMP 'extension-provider-migration'
+          $mixedInput = Join-Path $env:RUNNER_TEMP 'extension-mixed-source'
+          $mixedMigrationRoot = Join-Path $env:RUNNER_TEMP 'extension-mixed-migration'
           New-Item -ItemType Directory -Path $migrationInput | Out-Null
+          New-Item -ItemType Directory -Path $mixedInput | Out-Null
           $desktopModule = Join-Path $migrationInput 'portable.epas'
           Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/portable.epas') `
             -Destination $desktopModule
+          Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/mixed.epas') `
+            -Destination (Join-Path $mixedInput 'mixed.epas')
           & (Get-Command node).Source (Join-Path $PWD 'tools/extension-batch-migrate.mjs') `
             $migrationInput --output-dir $migrationRoot
           if ($LASTEXITCODE -ne 0) { throw "Batch extension migration failed: $LASTEXITCODE" }
+          & (Get-Command node).Source (Join-Path $PWD 'tools/extension-batch-migrate.mjs') `
+            $migrationInput --output-dir $providerMigrationRoot --all-providers
+          if ($LASTEXITCODE -ne 0) { throw "Forced provider migration failed: $LASTEXITCODE" }
+          & (Get-Command node).Source (Join-Path $PWD 'tools/extension-batch-migrate.mjs') `
+            $mixedInput --output-dir $mixedMigrationRoot
+          if ($LASTEXITCODE -ne 0) { throw "Mixed extension migration failed: $LASTEXITCODE" }
 
           $wepasArguments = @(
             "-Fu$(Join-Path $PWD 'lib/i386-win32')",
@@ -113,8 +125,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Wepas smoke compilation failed: $LASTEXITCODE" }
           & (Join-Path $smokeRoot 'wepas-compile-smoke.exe') `
             (Join-Path $migrationRoot 'portable.epas') `
-            (Join-Path $migrationRoot 'portable.wepas')
-          if ($LASTEXITCODE -ne 0) { throw "Generated wepas compilation failed: $LASTEXITCODE" }
+            (Join-Path $migrationRoot 'portable.wepas') web-script
+          if ($LASTEXITCODE -ne 0) { throw "Inline wepas compilation failed: $LASTEXITCODE" }
+          & (Join-Path $smokeRoot 'wepas-compile-smoke.exe') `
+            (Join-Path $providerMigrationRoot 'portable.epas') `
+            (Join-Path $providerMigrationRoot 'portable.wepas') provider
+          if ($LASTEXITCODE -ne 0) { throw "Provider wepas compilation failed: $LASTEXITCODE" }
+          & (Join-Path $smokeRoot 'wepas-compile-smoke.exe') `
+            (Join-Path $mixedMigrationRoot 'mixed.epas') `
+            (Join-Path $mixedMigrationRoot 'mixed.wepas') mixed
+          if ($LASTEXITCODE -ne 0) { throw "Mixed wepas compilation failed: $LASTEXITCODE" }
 
           $token = 'provider-smoke-secret'
           $port = 19081

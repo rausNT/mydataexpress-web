@@ -116,6 +116,10 @@ npm run scaffold:provider -- OfficeTools.manifest.json
 `provider`, сигнатуры параметров оставлены комментариями, а каждый handler
 содержит явный `TODO`. После реализации задайте токен и запустите файл:
 
+Операции manifest со статусом `web-script` уже выполняются внутри `.wepas` и не
+требуют handler или provider-секции. Если manifest состоит только из таких
+операций, `preflight:provider` завершает структурную проверку без сетевого вызова.
+
 ```powershell
 $env:DX_PROVIDER_TOKEN = 'replace-with-a-long-random-token'
 node OfficeTools.provider.mjs
