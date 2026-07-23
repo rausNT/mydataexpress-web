@@ -10,7 +10,11 @@ function RegisterSystemDeclarations(Sender: TPSPascalCompiler;
 begin
   Result := UpperCase(Name) = 'SYSTEM';
   if Result then
+  begin
     SIRegister_All(Sender);
+    Sender.AddUsedVariableN('Session', 'TSession');
+    Sender.AddUsedVariableN('Self', 'TdxForm');
+  end;
 end;
 
 var
