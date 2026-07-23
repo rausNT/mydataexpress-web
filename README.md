@@ -11,6 +11,7 @@ Copyright (c) 2016-2026 Павел Дуборкин
 
 - `MODERNIZATION.md` — изменения веб-интерфейса;
 - `docs/extension-compatibility.md` — стратегия миграции расширений;
+- `docs/forum-extension-corpus.md` — воспроизводимая проверка реальных модулей форума;
 - `docs/provider-api.md` — API кроссплатформенных провайдеров;
 - `docs/building-windows.md` — подготовка среды и сборка.
 
@@ -43,17 +44,26 @@ npm run verify:extension-bundle -- C:\path\to\extensions-web --config C:\path\to
 ```
 
 Стабильные `Name` функций и `Id` действий сохраняются. Чистый код со скалярными
-типами и известными portable built-ins выполняется без HTTP. Windows API, OLE,
-DLL и неизвестные глобальные helpers направляются через provider. `var`/`out`
-и сложные типы остаются явно помеченными для ручной реализации — без скрытого
-пропуска операции в рабочей системе. Флаг `--all-providers` принудительно
-оставляет все поддерживаемые routines на серверной provider-границе.
+типами, зарегистрированными типами runtime и известными portable built-ins
+выполняется без HTTP. Безопасные локальные helpers переносятся вместе с
+экспортируемой routine. Windows API, OLE, DLL и неизвестные глобальные helpers
+направляются через provider. `var`/`out` и сложные типы допустимы для прямого
+Pascal Script-переноса, если весь используемый runtime зарегистрирован; через
+JSON-provider они не передаются неявно и при невозможной сериализации получают
+явный статус `manual`. Флаг `--all-providers` принудительно оставляет все
+поддерживаемые routines на серверной provider-границе.
 
 Результирующий web-модуль имеет штатное расширение `OfficeTools.wepas`. Проверить
 весь каталог desktop/web-модулей перед импортом можно строгим аудитом:
 
 ```powershell
 node tools/extension-audit.mjs C:\path\to\extensions --config C:\path\to\dxwebsrv.cfg --strict
+```
+
+Для воспроизводимого агрегированного отчёта по набору desktop-модулей:
+
+```powershell
+npm run report:extension-corpus -- C:\path\to\extensions --output corpus-report.json --strict
 ```
 
 Перед включением перенесённого расширения проверьте manifest, конфигурацию и

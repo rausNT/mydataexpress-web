@@ -32,7 +32,10 @@ const EXTENSION_SOURCE_TYPES = new Map([
 ]);
 
 function field(block, name) {
-  const match = block.match(new RegExp(`^\\s*${name}\\s*=\\s*(.+?)\\s*$`, 'im'));
+  const match = block.match(new RegExp(
+    `^[\\t ]*${name}[\\t ]*=[\\t ]*([^\\r\\n]*)[\\t ]*$`,
+    'im',
+  ));
   return match ? match[1].trim() : '';
 }
 

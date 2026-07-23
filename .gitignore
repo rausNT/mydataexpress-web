@@ -19,6 +19,8 @@ tools/*
 !tools/extension-audit.test.mjs
 !tools/extension-batch-migrate.mjs
 !tools/extension-batch-migrate.test.mjs
+!tools/extension-corpus-report.mjs
+!tools/extension-corpus-report.test.mjs
 !tools/extension-bundle-verify.mjs
 !tools/extension-bundle-verify.test.mjs
 !tools/extension-migrate.mjs
@@ -35,6 +37,7 @@ tools/*
 !tools/provider-smoke.pas
 !tools/provider-smoke-server.mjs
 !tools/wepas-compile-smoke.pas
+!tools/wepas-syntax-smoke.pas
 !tools/http-client.test.mjs
 !tools/dev-server.mjs
 !tools/dev-server.test.mjs

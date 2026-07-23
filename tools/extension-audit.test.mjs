@@ -260,6 +260,24 @@ test('provider detection is scoped to each web mapping in a mixed module', () =>
   assert.equal(compatibility.summary.providerBacked, 1);
 });
 
+test('empty metadata values do not consume the following field', () => {
+  const report = auditSource(`
+    {@function
+    OrigName=Probe
+    Name=PROBE
+    Args=s
+    Result=
+    Group=Diagnostics
+    @}
+    function Probe(Value: String): Boolean;
+    begin
+      Result := Value <> '';
+    end;
+  `, 'probe.epas');
+  assert.equal(report.specifications[0].result, '');
+  assert.equal(report.specifications[0].args, 's');
+});
+
 test('strict CLI audits .epas/.wepas pairs and fails malformed web modules', () => {
   const directory = mkdtempSync(join(tmpdir(), 'dataexpress-audit-'));
   const cli = fileURLToPath(new URL('./extension-audit.mjs', import.meta.url));

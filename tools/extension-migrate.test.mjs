@@ -171,7 +171,7 @@ test('generates typed provider adapters and preserves scalar payload types', () 
   assert.deepEqual(generated.manifest.mappings[0].parameters.map(item => item.type), ['Double', 'Double']);
 });
 
-test('keeps by-reference and custom types explicitly manual', () => {
+test('keeps portable by-reference routines inline and unknown custom types manual', () => {
   const source = `
     {@function
     OrigName=MutateValue
@@ -196,13 +196,13 @@ test('keeps by-reference and custom types explicitly manual', () => {
   `;
   const generated = generateWebModule(source, 'Unsafe.epas');
   assert.equal(generated.manifest.summary.complete, false);
-  assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['manual', 'manual']);
-  assert.equal(generated.manifest.mappings[0].reason, 'by-reference-parameter:Value');
+  assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['web-script', 'manual']);
+  assert.equal(generated.manifest.mappings[0].reason, '');
   assert.equal(generated.manifest.mappings[1].reason, 'unsupported-result-type:tcustomresult');
   assert.match(generated.module, /TODO: manual provider adapter required/);
 });
 
-test('routes routines with unknown helper dependencies through a provider', () => {
+test('inlines safe local helper dependencies exactly once', () => {
   const source = `
     {@function
     OrigName=Normalize
@@ -221,9 +221,11 @@ test('routes routines with unknown helper dependencies through a provider', () =
     end;
   `;
   const generated = generateWebModule(source, 'Helpers.epas');
-  assert.equal(generated.manifest.mappings[0].status, 'provider');
-  assert.ok(generated.manifest.mappings[0].issues.includes('external-dependency:SharedHelper'));
-  assert.match(generated.module, /ExtensionProviderCall\('Helpers', 'NORMALIZE'/);
+  assert.equal(generated.manifest.mappings[0].status, 'web-script');
+  assert.equal((generated.module.match(/function SharedHelper/g) || []).length, 1);
+  assert.ok(generated.module.indexOf('function SharedHelper') <
+    generated.module.indexOf('function Normalize'));
+  assert.doesNotMatch(generated.module, /ExtensionProviderCall/);
 });
 
 test('inlines routines with local scalar variables and portable built-ins', () => {
@@ -245,6 +247,97 @@ test('inlines routines with local scalar variables and portable built-ins', () =
   const generated = generateWebModule(source, 'Portable.epas');
   assert.equal(generated.manifest.mappings[0].status, 'web-script');
   assert.match(generated.module, /Clean := Trim\(Value\)/);
+  assert.doesNotMatch(generated.module, /ExtensionProviderCall/);
+});
+
+test('normalizes a unique Cyrillic/Latin identifier homoglyph and records it', () => {
+  const source = `
+    {@action
+    Id=9F257FA8-D21C-4CA9-B19D-E6863AB9DAE7
+    OrigName=UpdateQueryС
+    Name=Обновить запрос
+    @}
+    function UpdateQueryC(Name: String): Boolean;
+    begin
+      Result := Name <> '';
+    end;
+  `;
+  const generated = generateWebModule(source, 'Homoglyph.epas');
+  assert.equal(generated.manifest.mappings[0].status, 'web-script');
+  assert.equal(generated.manifest.mappings[0].routineKind, 'function');
+  assert.deepEqual(generated.manifest.mappings[0].issues, [
+    'identifier-homoglyph-normalized:UpdateQueryС->UpdateQueryC',
+  ]);
+  assert.match(generated.module, /function UpdateQueryC\(Name: String\): Boolean/);
+});
+
+test('rewrites desktop session calls and keeps registered web runtime APIs inline', () => {
+  const source = `
+    function Validate(Name: String): String;
+    begin
+      Result := Trim(Name);
+    end;
+
+    {@action
+    Id=B2C1C477-85A4-4133-9D9C-0FD61CA10F1C
+    OrigName=RunQuery
+    Name=Выполнить запрос
+    @}
+    procedure RunQuery(Expr: String; Rows: TVariantArray2d);
+    var
+      Query: TdxSQLQuery;
+      Value: String;
+    begin
+      Value := VarToStr(EvalExpr(Expr, Self));
+      Query := SQLSelect('select ' + Validate(Value) + ' from rdb$database');
+      Query.Free;
+    end;
+  `;
+  const generated = generateWebModule(source, 'RuntimeApi.epas');
+  assert.equal(generated.manifest.mappings[0].status, 'web-script');
+  assert.match(generated.module, /Session\.EvalExpr\(Expr, Self\)/);
+  assert.match(generated.module, /Session\.SQLSelect\(/);
+  assert.equal((generated.module.match(/function Validate/g) || []).length, 1);
+});
+
+test('does not treat registered object methods as free global routines', () => {
+  const generated = generateWebModule(`
+    {@action
+    Id=method-scope
+    OrigName=MethodScope
+    Name=Method scope
+    @}
+    procedure MethodScope;
+    begin
+      AddHeader('X-Test', 'value');
+    end;
+  `, 'method-scope.epas');
+  assert.equal(generated.manifest.mappings[0].status, 'provider');
+  assert.ok(generated.manifest.mappings[0].issues
+    .some(issue => issue.includes('external-dependency:AddHeader')));
+});
+
+test('migrates the compile-smoke runtime fixture without provider fallbacks', () => {
+  const source = readFileSync(
+    new URL('../test/fixtures/extensions/runtime-api.epas', import.meta.url),
+    'utf8',
+  );
+  const generated = generateWebModule(source, 'runtime-api.epas');
+  assert.deepEqual(generated.manifest.summary, {
+    total: 2,
+    compatible: 2,
+    webScript: 2,
+    provider: 0,
+    reviewRequired: 0,
+    manual: 0,
+    complete: true,
+  });
+  assert.equal(
+    generated.module.match(/function NormalizeNumber\(/g)?.length,
+    1,
+  );
+  assert.match(generated.module, /Session\.EvalExpr\(Expr, Self\)/);
+  assert.match(generated.module, /Session\.SQLSelect\('select 1'\)/);
   assert.doesNotMatch(generated.module, /ExtensionProviderCall/);
 });
 

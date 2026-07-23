@@ -176,7 +176,7 @@ Result=b
 @}
 function Mutate(var Value: Integer): Boolean;
 begin
-  Result := True;
+  Result := DesktopOnly(Value);
 end;
 `);
     const result = spawnSync(process.execPath, [

@@ -20,11 +20,44 @@ function relativeImportPath(fromFile, toFile) {
   return value;
 }
 
+function identifierSkeleton(value) {
+  const homoglyphs = new Map(Object.entries({
+    а: 'a', в: 'b', е: 'e', к: 'k', м: 'm', н: 'h',
+    о: 'o', р: 'p', с: 'c', т: 't', х: 'x', у: 'y',
+  }));
+  return [...value.toLowerCase()]
+    .map(character => homoglyphs.get(character) || character)
+    .join('');
+}
+
 function declarationRange(source, spec) {
   if (!spec.origName) return '';
-  const kind = spec.kind === 'function' ? 'function' : 'procedure';
-  const escaped = spec.origName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = new RegExp(`\\b${kind}\\s+${escaped}\\b`, 'i').exec(source);
+  const allowedKinds = spec.kind === 'function'
+    ? new Set(['function'])
+    : new Set(['function', 'procedure']);
+  const tokens = pascalTokens(source);
+  const candidates = [];
+  for (let index = 0; index < tokens.length - 1; index++) {
+    if (!allowedKinds.has(tokens[index].lower)) continue;
+    const name = tokens[index + 1].value;
+    if (!/^[A-Za-z_]\w*$/.test(name)) continue;
+    candidates.push({
+      kind: tokens[index].lower,
+      name,
+      index: tokens[index].start,
+    });
+  }
+  let match = candidates.find(candidate =>
+    candidate.name.toLowerCase() === spec.origName.toLowerCase());
+  let normalizedMatch = false;
+  if (!match) {
+    const normalized = candidates.filter(candidate =>
+      identifierSkeleton(candidate.name) === identifierSkeleton(spec.origName));
+    if (normalized.length === 1) {
+      [match] = normalized;
+      normalizedMatch = true;
+    }
+  }
   if (!match) return '';
   let depth = 0;
   for (let index = match.index; index < source.length; index++) {
@@ -32,6 +65,9 @@ function declarationRange(source, spec) {
     else if (source[index] === ')') depth = Math.max(0, depth - 1);
     else if (source[index] === ';' && depth === 0) {
       return {
+        kind: match.kind,
+        matchedName: match.name,
+        normalizedMatch,
         start: match.index,
         end: index + 1,
         text: source.slice(match.index, index + 1).trim(),
@@ -109,6 +145,9 @@ function routineImplementation(source, spec) {
         while (/\s/.test(source[end] || '')) end++;
         if (source[end] === ';') end++;
         return {
+          kind: range.kind,
+          matchedName: range.matchedName,
+          normalizedMatch: range.normalizedMatch,
           source: source.slice(range.start, end).trim(),
           declaration: range.text,
           preamble: source.slice(range.end, tokens[bodyIndex].start),
@@ -131,27 +170,92 @@ const pascalKeywords = new Set(`
 `.trim().split(/\s+/));
 
 const portableIdentifiers = new Set(`
-  abs ansichar ansistring boolean byte cardinal char comp copy currency date
-  datetime dayof decodedate decodetime double encodeDate encodetime extended
-  floatToStr format frac inc int64 integer intToStr length longint longword
-  lowercase max min nativeint nativeuint now pos qword real round shortint
-  single smallint string stringreplace time tdate tdatetime trim trunc ttime
-  trystrtofloat trystrtoint trystrtoint64 uppercase unicodestring variant
-  widechar widestring word
+  abs ansichar ansistring arctan assigned boolean byte cardinal char chr comp
+  copy cos currency date datetime dayof decodedate decodetime double encodedate
+  encodetime ercustomerror exp extended false floattostr format frac high inc int64 integer
+  inttostr length ln longint longword low lowercase max min nativeint nativeuint
+  now null ord pi pos pred qword raiseexception real round self session setlength shortint sin
+  single sizeof smallint sqrt string stringreplace strtofloat succ time tdate
+  tdatetime trim trunc true ttime trystrtofloat trystrtoint trystrtoint64
+  uppercase unicodestring variant widechar widestring word evalexpr sqlselect
+  sqlexecute
 `.trim().toLowerCase().split(/\s+/));
 
+function registeredRuntimeIdentifiers() {
+  const globals = new Set();
+  const members = new Set();
+  let source = '';
+  try {
+    source = readFileSync(new URL('../compilerdecls.pas', import.meta.url), 'utf8');
+  } catch {
+    return { globals, members };
+  }
+  source = source
+    .replace(/\{[\s\S]*?\}/g, ' ')
+    .replace(/\(\*[\s\S]*?\*\)/g, ' ')
+    .replace(/\/\/.*$/gm, ' ');
+  const globalPatterns = [
+    /\bAddClassN\([\s\S]*?,\s*'([A-Za-z_]\w*)'\s*\)/gi,
+    /\bAddTypeS\(\s*'([A-Za-z_]\w*)'/gi,
+    /\bAddConstantN\(\s*'([A-Za-z_]\w*)'/gi,
+    /\bAddDelphiFunction\(\s*'(?:function|procedure)\s+([A-Za-z_]\w*)/gi,
+  ];
+  const memberPatterns = [
+    /\bRegisterMethod\(\s*'(?:constructor|destructor|function|procedure)\s+([A-Za-z_]\w*)/gi,
+    /\bRegisterProperty\(\s*'([A-Za-z_]\w*)'/gi,
+  ];
+  for (const pattern of globalPatterns) {
+    for (const match of source.matchAll(pattern)) globals.add(match[1].toLowerCase());
+  }
+  for (const pattern of memberPatterns) {
+    for (const match of source.matchAll(pattern)) members.add(match[1].toLowerCase());
+  }
+  for (const match of source.matchAll(/\bAddTypeS\(\s*'[A-Za-z_]\w*'\s*,\s*'([^']*)'/gi)) {
+    for (const token of match[1].matchAll(/[A-Za-z_]\w*/g)) {
+      globals.add(token[0].toLowerCase());
+    }
+  }
+  return { globals, members };
+}
+
+const registeredRuntime = registeredRuntimeIdentifiers();
+for (const identifier of registeredRuntime.globals) {
+  portableIdentifiers.add(identifier);
+}
+
 function localVariableNames(preamble) {
+  const varStart = preamble.search(/\bvar\b/i);
+  if (varStart < 0) return [];
+  const declarations = preamble.slice(varStart + 3);
   const names = [];
-  for (const match of preamble.matchAll(/(?:^|;)\s*([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*:/gm)) {
+  for (const match of declarations.matchAll(/(?:^|;)\s*([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*:/gm)) {
     names.push(...match[1].split(',').map(name => name.trim().toLowerCase()));
   }
   return names;
 }
 
-function inlineRoutineAnalysis(implementation, params, routineName) {
-  if (!implementation.source) return { portable: false, issues: [implementation.reason] };
+function nextNonWhitespace(source, index) {
+  while (/\s/.test(source[index] || '')) index++;
+  return source[index] || '';
+}
+
+function previousNonWhitespace(source, index) {
+  index--;
+  while (index >= 0 && /\s/.test(source[index])) index--;
+  return source[index] || '';
+}
+
+function inlineRoutineAnalysis(implementation, params, routineName, routineNames = new Set()) {
+  if (!implementation.source) {
+    return { portable: false, issues: [implementation.reason], reviews: [], dependencies: [] };
+  }
   const findings = auditSource(implementation.source, '<routine>').findings;
-  const issues = findings.map(item => `platform-dependency:${item.rule}`);
+  const issues = findings
+    .filter(item => item.severity !== 'review')
+    .map(item => `platform-dependency:${item.rule}`);
+  const reviews = findings
+    .filter(item => item.severity === 'review')
+    .map(item => `review:${item.rule}`);
   const preambleTokens = pascalTokens(implementation.preamble);
   for (const token of preambleTokens) {
     if (['const', 'type', 'function', 'procedure', 'uses', 'label'].includes(token.lower)) {
@@ -168,11 +272,113 @@ function inlineRoutineAnalysis(implementation, params, routineName) {
       ...pascalTokens(parameter.type).map(token => token.lower),
     ]),
     ...localVariableNames(implementation.preamble),
+    ...[...implementation.body.matchAll(/\bon\s+([A-Za-z_]\w*)\s*:/gi)]
+      .map(match => match[1].toLowerCase()),
   ]);
-  for (const token of pascalTokens(`${implementation.preamble}\n${implementation.body}`)) {
+  const dependencies = new Set();
+  const implementationText = `${implementation.preamble}\n${implementation.body}`;
+  for (const token of pascalTokens(implementationText)) {
+    if (previousNonWhitespace(implementationText, token.start) === '.' &&
+        registeredRuntime.members.has(token.lower)) continue;
+    if (routineNames.has(token.lower) && token.lower !== routineName.toLowerCase() &&
+        nextNonWhitespace(implementationText, token.end) === '(' &&
+        previousNonWhitespace(implementationText, token.start) !== '.') {
+      dependencies.add(token.lower);
+      continue;
+    }
     if (!allowed.has(token.lower)) issues.push(`external-dependency:${token.value}`);
   }
-  return { portable: issues.length === 0, issues: [...new Set(issues)] };
+  return {
+    portable: issues.length === 0,
+    issues: [...new Set(issues)],
+    reviews: [...new Set(reviews)],
+    dependencies: [...dependencies],
+  };
+}
+
+function routineCatalog(source) {
+  const result = new Map();
+  const tokens = pascalTokens(source);
+  for (let index = 0; index < tokens.length - 1; index++) {
+    const kind = tokens[index].lower;
+    if (!['function', 'procedure'].includes(kind)) continue;
+    const name = tokens[index + 1].value;
+    if (!/^[A-Za-z_]\w*$/.test(name) || result.has(name.toLowerCase())) continue;
+    const implementation = routineImplementation(source, { kind, origName: name });
+    if (!implementation.source) continue;
+    result.set(name.toLowerCase(), {
+      name,
+      kind,
+      implementation,
+      params: parameters(implementation.declaration),
+    });
+  }
+  return result;
+}
+
+function inlineClosure(catalog, rootName) {
+  const routineNames = new Set(catalog.keys());
+  const visiting = new Set();
+  const visited = new Set();
+  const order = [];
+  const issues = [];
+  const reviews = [];
+
+  function visit(name) {
+    const lower = name.toLowerCase();
+    if (visited.has(lower)) return;
+    if (visiting.has(lower)) {
+      issues.push(`recursive-routine-cycle:${name}`);
+      return;
+    }
+    const routine = catalog.get(lower);
+    if (!routine) {
+      issues.push(`routine-not-found:${name}`);
+      return;
+    }
+    visiting.add(lower);
+    const analysis = inlineRoutineAnalysis(
+      routine.implementation,
+      routine.params,
+      routine.name,
+      routineNames,
+    );
+    issues.push(...analysis.issues.map(issue => `${routine.name}:${issue}`));
+    reviews.push(...analysis.reviews.map(review => `${routine.name}:${review}`));
+    for (const dependency of analysis.dependencies) visit(dependency);
+    visiting.delete(lower);
+    visited.add(lower);
+    order.push(lower);
+  }
+
+  visit(rootName);
+  return {
+    portable: issues.length === 0,
+    issues: [...new Set(issues)],
+    reviews: [...new Set(reviews)],
+    order,
+  };
+}
+
+function rewriteWebPascal(source) {
+  const replacements = new Map([
+    ['evalexpr', 'Session.EvalExpr'],
+    ['sqlselect', 'Session.SQLSelect'],
+    ['sqlexecute', 'Session.SQLExecute'],
+  ]);
+  let result = source;
+  const edits = [];
+  for (const token of pascalTokens(source)) {
+    const replacement = replacements.get(token.lower);
+    if (!replacement) continue;
+    if (previousNonWhitespace(source, token.start) === '.') continue;
+    if (nextNonWhitespace(source, token.end) !== '(') continue;
+    edits.push({ start: token.start, end: token.end, replacement });
+  }
+  for (const edit of edits.reverse()) {
+    result = result.slice(0, edit.start) + edit.replacement + result.slice(edit.end);
+  }
+  return result;
 }
 
 function parameters(decl) {
@@ -230,6 +436,13 @@ function supportedParameter(parameter) {
   return `unsupported-parameter-type:${parameter.type || 'unknown'}`;
 }
 
+function supportedInlineType(type, label) {
+  const unknown = pascalTokens(type)
+    .map(token => token.lower)
+    .filter(token => !pascalKeywords.has(token) && !portableIdentifiers.has(token));
+  return unknown.length ? `unsupported-inline-type:${label}:${type || 'unknown'}` : '';
+}
+
 function resultAdapter(type) {
   const normalized = normalizedType(type);
   if (stringTypes.has(normalized)) return 'ExtensionProviderCall';
@@ -245,26 +458,30 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
   const report = auditSource(source, filename);
   const moduleName = basename(filename, extname(filename));
   const specs = report.specifications.filter(spec => spec.name || spec.id);
+  const catalog = routineCatalog(source);
+  const exportedRoutineNames = new Set(specs
+    .map(spec => spec.origName?.toLowerCase())
+    .filter(Boolean));
+  const emittedHelpers = new Set();
   const lines = [
     '{@module',
     `Author=${report.module.author || 'DataExpress migration tool'}`,
     `Version=${report.module.version || '1.0'}-web`,
-    `Description=Generated web adapter for ${moduleName}. Review provider mappings before production use.`,
+    `Description=Generated portable web module for ${moduleName}. Review migration manifest before production use.`,
     '@}',
     '',
   ];
   const mappings = [];
 
   for (const spec of specs) {
-    if (spec.kind === 'function') {
-      lines.push('{@function', `Name=${spec.name}`, '@}', '');
-    } else {
-      lines.push('{@action', `Id=${spec.id}`, '@}', '');
-    }
+    const mappingHeader = spec.kind === 'function'
+      ? ['{@function', `Name=${spec.name}`, '@}', '']
+      : ['{@action', `Id=${spec.id}`, '@}', ''];
 
     const implementation = routineImplementation(source, spec);
     const decl = implementation.declaration || declaration(source, spec);
     if (!decl) {
+      lines.push(...mappingHeader);
       lines.push(`{ TODO: declaration for ${spec.origName || spec.name || spec.id} was not found. }`, '');
       mappings.push({
         kind: spec.kind,
@@ -281,18 +498,37 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
     }
 
     const operation = spec.kind === 'function' ? spec.name : spec.id;
+    const routineName = implementation.matchedName || spec.origName || operation;
+    const identifierDiagnostics = implementation.normalizedMatch
+      ? [`identifier-homoglyph-normalized:${spec.origName}->${routineName}`]
+      : [];
     const params = parameters(decl);
-    const type = spec.kind === 'function' ? resultType(decl) : '';
-    const adapter = spec.kind === 'function' ? resultAdapter(type) : 'ExtensionProviderCall';
+    const routineKind = implementation.kind || (spec.kind === 'function' ? 'function' : 'procedure');
+    const type = routineKind === 'function' ? resultType(decl) : '';
+    const adapter = routineKind === 'function' ? resultAdapter(type) : 'ExtensionProviderCall';
     const signatureIssues = params.map(supportedParameter).filter(Boolean);
-    if (spec.kind === 'function' && !adapter) {
+    if (routineKind === 'function' && !adapter) {
       signatureIssues.push(`unsupported-result-type:${type || 'unknown'}`);
     }
+    const inlineSignatureIssues = params
+      .map(parameter => supportedInlineType(parameter.type, parameter.name))
+      .filter(Boolean);
+    if (routineKind === 'function') {
+      const inlineResultIssue = supportedInlineType(type, 'result');
+      if (inlineResultIssue) inlineSignatureIssues.push(inlineResultIssue);
+    }
     const inline = forceProvider
-      ? { portable: false, issues: ['provider-forced'] }
-      : inlineRoutineAnalysis(implementation, params, spec.origName || operation);
-    if (inline.portable && signatureIssues.length === 0) {
-      lines.push(implementation.source, '');
+      ? { portable: false, issues: ['provider-forced'], reviews: [], order: [] }
+      : inlineClosure(catalog, routineName);
+    if (inline.portable && inlineSignatureIssues.length === 0) {
+      for (const helperName of inline.order) {
+        if (helperName === routineName.toLowerCase() ||
+            exportedRoutineNames.has(helperName) || emittedHelpers.has(helperName)) continue;
+        lines.push(rewriteWebPascal(catalog.get(helperName).implementation.source), '');
+        emittedHelpers.add(helperName);
+      }
+      lines.push(...mappingHeader);
+      lines.push(rewriteWebPascal(implementation.source), '');
       mappings.push({
         kind: spec.kind,
         name: spec.name,
@@ -301,11 +537,13 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
         args: spec.args,
         result: spec.result,
         resultType: type,
+        routineKind,
         parameters: params,
         operation,
         status: 'web-script',
         reason: '',
-        issues: [],
+        issues: [...identifierDiagnostics, ...inline.reviews],
+        reviewRequired: inline.reviews.length > 0,
         wireFormat: 'pascal-script',
       });
       continue;
@@ -313,14 +551,15 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
     const issues = [...signatureIssues];
     const automatic = issues.length === 0;
 
+    lines.push(...mappingHeader);
     lines.push(decl);
     if (automatic) {
-      lines.push('var', spec.kind === 'action'
+      lines.push('var', routineKind === 'procedure'
         ? '  ProviderPayload, ProviderResponse: String;'
         : '  ProviderPayload: String;', 'begin');
       lines.push(...payloadLines(params));
       const call = `${adapter}(${pascalString(moduleName)}, ${pascalString(operation)}, ProviderPayload)`;
-      if (spec.kind === 'function') lines.push(`  Result := ${call};`);
+      if (routineKind === 'function') lines.push(`  Result := ${call};`);
       else lines.push(`  ProviderResponse := ${call};`);
     } else {
       lines.push('begin', `  { TODO: manual provider adapter required: ${issues.join(', ')}. }`);
@@ -334,17 +573,22 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
       args: spec.args,
       result: spec.result,
       resultType: type,
+      routineKind,
       parameters: params,
       operation,
       status: automatic ? 'provider' : 'manual',
       reason: automatic ? '' : issues[0],
-      issues: automatic ? inline.issues : [...inline.issues, ...issues],
+      issues: automatic
+        ? [...identifierDiagnostics, ...inline.issues, ...inlineSignatureIssues]
+        : [...identifierDiagnostics, ...inline.issues, ...inlineSignatureIssues, ...issues],
+      reviewRequired: false,
       wireFormat: 'json-v1',
     });
   }
 
   const provider = mappings.filter(item => item.status === 'provider').length;
   const webScript = mappings.filter(item => item.status === 'web-script').length;
+  const reviewRequired = mappings.filter(item => item.reviewRequired).length;
   const compatible = provider + webScript;
   const manifest = {
     schemaVersion: 1,
@@ -356,6 +600,7 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
       compatible,
       webScript,
       provider,
+      reviewRequired,
       manual: mappings.length - compatible,
       complete: compatible === mappings.length,
     },

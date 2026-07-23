@@ -1,0 +1,47 @@
+{@module
+Author=DataExpress modernization tests
+Version=1.0
+Description=Registered web runtime and helper dependency fixture
+@}
+
+function NormalizeNumber(Value: Double): Double;
+begin
+  Result := RoundTo(Value, -2);
+end;
+
+{@function
+OrigName=RuntimeValue
+Name=RUNTIME_VALUE
+Args=n
+Result=n
+Group=Compatibility
+Description=Use a local helper and registered math routines
+@}
+function RuntimeValue(Value: Double): Double;
+begin
+  Result := NormalizeNumber(Sin(Value));
+end;
+
+{@action
+Id=runtime-api-action
+Target=button
+OrigName=RefreshData
+Name=Refresh data
+Group=Compatibility
+UI=
+Description=Use session methods and a registered array type
+@}
+function RefreshData(const Expr: String; Values: TVariantArray2d): Boolean;
+var
+  Query: TdxSQLQuery;
+  Evaluated: Variant;
+begin
+  Evaluated := EvalExpr(Expr, Self);
+  Query := SQLSelect('select 1');
+  try
+    Result := (Length(Values) >= 0) and
+      (VarToStr(Evaluated) <> '') and (Query <> nil);
+  finally
+    Query.Free;
+  end;
+end;
