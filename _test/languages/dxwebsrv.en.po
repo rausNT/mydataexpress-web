@@ -855,7 +855,7 @@ msgstr ""
 msgid "Open"
 msgstr ""
 
-#: strconsts.rsinvalidconnectionname
+#: strconsts.rsinvalidconnectionalias
 msgid "Use Latin letters, digits, and underscore."
 msgstr ""
 

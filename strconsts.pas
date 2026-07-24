@@ -244,7 +244,7 @@ resourcestring
   rsConnectionName = 'Connection name';
   rsConnectionPlaceholder = 'For example: demodb';
   rsOpenConnection = 'Open';
-  rsInvalidConnectionName = 'Use Latin letters, digits, and underscore.';
+  rsInvalidConnectionAlias = 'Use Latin letters, digits, and underscore.';
   rsConfiguredConnections = 'Available connections';
   rsConnectionHint = 'Enter the connection name from dxwebsrv.cfg.';
   rsLandingMeta = 'Version: %s &middot; Copyright &#169; 2016-2026 Pavel Duborkin<br><a href="https://mydataexpress.ru">Project Website</a> &middot; <a href="https://forum.mydataexpress.ru">Forum</a> &middot; <a href="https://wiki.mydataexpress.ru">Wiki</a>';

@@ -855,7 +855,7 @@ msgstr "Например: demodb"
 msgid "Open"
 msgstr "Открыть"
 
-#: strconsts.rsinvalidconnectionname
+#: strconsts.rsinvalidconnectionalias
 msgid "Use Latin letters, digits, and underscore."
 msgstr "Используйте латинские буквы, цифры и символ подчёркивания."
 

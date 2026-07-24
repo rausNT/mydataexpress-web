@@ -2458,7 +2458,7 @@ begin
   Result := StringReplace(Result, '[connection-name]', StrToHtml(rsConnectionName), []);
   Result := StringReplace(Result, '[connection-placeholder]', StrToHtml(rsConnectionPlaceholder), []);
   Result := StringReplace(Result, '[open-connection]', StrToHtml(rsOpenConnection), []);
-  Result := StringReplace(Result, '[invalid-connection-name]', StrToHtml(rsInvalidConnectionName), []);
+  Result := StringReplace(Result, '[invalid-connection-name]', StrToHtml(rsInvalidConnectionAlias), []);
   Result := StringReplace(Result, '[connections]', Connections, []);
   Result := StringReplace(Result, '[content]', Format(rsLandingMeta, [AppVer]), []);
 end;

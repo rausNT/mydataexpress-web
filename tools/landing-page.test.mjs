@@ -9,6 +9,13 @@ const styles = readFileSync(new URL('../_test/html/index.css', import.meta.url),
 const script = readFileSync(new URL('../_test/html/index.js', import.meta.url), 'utf8');
 const russian = readFileSync(new URL('../_test/languages/dxwebsrv.ru.po', import.meta.url), 'utf8');
 
+test('Pascal resource-string identifiers stay unique', () => {
+  const identifiers = [...readFileSync(new URL('../strconsts.pas', import.meta.url), 'utf8')
+    .matchAll(/^\s*(rs[A-Za-z0-9_]+)\s*=/gm)]
+    .map((match) => match[1].toLowerCase());
+  assert.equal(new Set(identifiers).size, identifiers.length);
+});
+
 test('connection discovery is explicit and does not expose database paths by default', () => {
   assert.match(settings, /FShowConnections := ReadBool\('Server', 'ShowConnections', False\)/);
   assert.match(settings, /property ShowConnections: Boolean read FShowConnections/);
