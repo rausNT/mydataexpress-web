@@ -30,6 +30,12 @@ if [ "$(dpkg --print-architecture)" != amd64 ]; then
   exit 1
 fi
 
+BUILD_TOOLCHAIN_PREEXISTED=0
+if command -v fpc >/dev/null 2>&1 ||
+   dpkg-query -W -f='${Status}' lazarus-src 2>/dev/null | grep -q 'install ok installed'; then
+  BUILD_TOOLCHAIN_PREEXISTED=1
+fi
+
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
@@ -310,6 +316,21 @@ fi
 
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
   ufw allow 80/tcp
+fi
+
+test "$BUILD_ROOT" = /opt/dataexpress-build
+rm -rf -- "$BUILD_ROOT"
+if [ "$BUILD_TOOLCHAIN_PREEXISTED" -eq 0 ]; then
+  mapfile -t INSTALLED_BUILD_PACKAGES < <(
+    apt list --installed 2>/dev/null |
+      cut -d/ -f1 |
+      grep -E '^(fp-|fpc|lazarus|lcl-)' ||
+      true
+  )
+  if [ "${#INSTALLED_BUILD_PACKAGES[@]}" -gt 0 ]; then
+    apt-get purge -y "${INSTALLED_BUILD_PACKAGES[@]}"
+  fi
+  apt-get clean
 fi
 
 SERVER_ADDRESS="$(hostname -I | awk '{print $1}')"

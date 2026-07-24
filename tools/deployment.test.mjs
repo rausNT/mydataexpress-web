@@ -24,6 +24,8 @@ test('installer keeps persistent state outside an atomic release', () => {
   assert.match(installer, /Firebird=5/);
   assert.match(installer, /firebird25/);
   assert.match(installer, /firebird5/);
+  assert.match(installer, /BUILD_TOOLCHAIN_PREEXISTED/);
+  assert.match(installer, /rm -rf -- "\$BUILD_ROOT"/);
 });
 
 test('README attributes upstream projects and documents the public installer', () => {
