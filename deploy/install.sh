@@ -44,7 +44,7 @@ apt-get update
 apt-get install -y --no-install-recommends \
   ca-certificates curl fail2ban git nginx openssl python3 ufw unattended-upgrades unzip \
   firebird3.0-server-core firebird3.0-utils libfbclient2 \
-  fp-compiler fp-units-base fp-units-db fp-units-fcl fp-units-misc \
+  fp-compiler fp-units-base fp-units-db fp-units-fcl fp-units-misc fp-units-net \
   lazarus-src lcl-nogui lcl-units
 
 if ! id dataexpress >/dev/null 2>&1; then
