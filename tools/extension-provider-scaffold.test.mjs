@@ -115,6 +115,37 @@ test('generates ready stateful handlers and environment for DaData recipes', () 
   assert.match(environment, /DX_DADATA_ALLOW_INSECURE=false/);
 });
 
+test('generates ready LibreOffice handlers and sandbox environment', () => {
+  const officeManifest = {
+    schemaVersion: 1,
+    provider: 'OfficeConvert',
+    mappings: [{
+      kind: 'action',
+      operation: 'convert-word-id',
+      status: 'provider',
+      providerRecipe: {
+        kind: 'office-document-convert',
+        documentType: 'writer',
+        inputParameter: 'aInputFile',
+        outputParameter: 'aOutputFile',
+        formatParameter: 'itemListExt',
+      },
+    }],
+  };
+  const source = generateProviderScaffold(officeManifest);
+  assert.match(source, /createOfficeDocumentHandler/);
+  assert.match(source, /documentType: "writer"/);
+  assert.match(source, /inputParameter: "aInputFile"/);
+  assert.match(source, /handlers\["convert-word-id"\]\.dataExpressImplemented = true/);
+  assert.doesNotMatch(source, /TODO: implement provider operation convert-word-id/);
+
+  const environment = generateProviderEnvironment(officeManifest);
+  assert.match(environment, /DX_OFFICE_BINARY=/);
+  assert.match(environment, /DX_OFFICE_INPUT_ROOTS=C:\\DataExpress\\files/);
+  assert.match(environment, /DX_OFFICE_OUTPUT_ROOTS=C:\\DataExpress\\files/);
+  assert.match(environment, /DX_OFFICE_TIMEOUT_MS=120000/);
+});
+
 test('CLI writes syntax-valid scaffold files', () => {
   const directory = mkdtempSync(join(tmpdir(), 'dataexpress-provider-'));
   try {

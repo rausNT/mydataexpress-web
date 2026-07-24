@@ -1,10 +1,20 @@
 import assert from 'node:assert/strict';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import {
   closeProvider,
   createDadataSuggestHandler,
   createHttpGetHandler,
+  createOfficeDocumentHandler,
   createProviderServer,
   listenProvider,
   ProviderManifestError,
@@ -226,6 +236,113 @@ test('DaData recipe clears legacy state without making a request for null search
       { name: 'data.region', value: null },
     ],
   });
+});
+
+test('Office recipe converts through an isolated headless LibreOffice profile', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dataexpress-office-sdk-'));
+  const inputRoot = join(root, 'input');
+  const outputRoot = join(root, 'output');
+  mkdirSync(inputRoot);
+  mkdirSync(outputRoot);
+  const input = join(inputRoot, 'source document.docx');
+  const output = join(outputRoot, 'converted document');
+  writeFileSync(input, 'synthetic-docx');
+  let execution;
+  try {
+    const handler = createOfficeDocumentHandler({
+      documentType: 'writer',
+      inputRoots: [inputRoot],
+      outputRoots: [outputRoot],
+      environment: {},
+      binary: 'soffice-test',
+      execute: async options => {
+        execution = options;
+        writeFileSync(
+          join(options.convertedDirectory, 'source document.pdf'),
+          'synthetic-pdf',
+        );
+      },
+    });
+    assert.equal(await handler({
+      aInputFile: input,
+      aOutputFile: output,
+      itemListExt: '.PDF   -   wdFormatPDF   -   PDF',
+    }), true);
+    assert.equal(readFileSync(`${output}.pdf`, 'utf8'), 'synthetic-pdf');
+    assert.equal(execution.binary, 'soffice-test');
+    assert.ok(execution.args.includes('--headless'));
+    assert.ok(execution.args.some(argument =>
+      argument.startsWith('-env:UserInstallation=file:')));
+    assert.deepEqual(
+      execution.args.slice(execution.args.indexOf('--convert-to'), -1),
+      [
+        '--convert-to',
+        'pdf:writer_pdf_Export',
+        '--outdir',
+        execution.convertedDirectory,
+      ],
+    );
+    assert.equal(handler.dataExpressImplemented, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Office recipe confines input and output files to configured roots', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dataexpress-office-sandbox-'));
+  const allowed = join(root, 'allowed');
+  const outside = join(root, 'outside');
+  mkdirSync(allowed);
+  mkdirSync(outside);
+  const allowedInput = join(allowed, 'source.xlsx');
+  const outsideInput = join(outside, 'secret.xlsx');
+  writeFileSync(allowedInput, 'allowed');
+  writeFileSync(outsideInput, 'outside');
+  try {
+    const handler = createOfficeDocumentHandler({
+      documentType: 'calc',
+      inputRoots: [allowed],
+      outputRoots: [allowed],
+      environment: {},
+      execute: async () => {
+        throw new Error('conversion must not run for blocked paths');
+      },
+    });
+    await assert.rejects(() => handler({
+      aInputFile: outsideInput,
+      aOutputFile: join(allowed, 'output.pdf'),
+      itemListExt: '.PDF - xlTypePDF - PDF',
+    }), /outside the allowed roots/);
+    await assert.rejects(() => handler({
+      aInputFile: allowedInput,
+      aOutputFile: join(outside, 'output.pdf'),
+      itemListExt: '.PDF - xlTypePDF - PDF',
+    }), /outside the allowed roots/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Office recipe requires explicit filesystem roots', () => {
+  assert.throws(() => createOfficeDocumentHandler({
+    documentType: 'writer',
+    environment: {},
+  }), /DX_OFFICE_INPUT_ROOTS/);
+});
+
+test('Office recipe fails startup when LibreOffice is unavailable', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dataexpress-office-binary-'));
+  try {
+    assert.throws(() => createOfficeDocumentHandler({
+      documentType: 'writer',
+      inputRoots: [root],
+      outputRoots: [root],
+      environment: {},
+      binary: join(root, 'missing-soffice'),
+    }), /LibreOffice executable was not found/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('rejects invalid tokens and unknown operations', async () => {

@@ -12,6 +12,7 @@
     "migrate:extension": "node tools/extension-migrate.mjs",
     "scaffold:provider": "node tools/extension-provider-scaffold.mjs",
     "preflight:provider": "node tools/provider-preflight.mjs",
+    "smoke:office-provider": "node tools/office-provider-smoke.mjs",
     "dev": "node tools/dev-server.mjs"
   },
   "engines": {

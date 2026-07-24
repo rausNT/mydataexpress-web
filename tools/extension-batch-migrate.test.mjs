@@ -72,6 +72,13 @@ function legacyDadataDesktop() {
   );
 }
 
+function legacyOfficeDesktop() {
+  return readFileSync(
+    new URL('../test/fixtures/extensions/legacy-office.epas', import.meta.url),
+    'utf8',
+  );
+}
+
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'dataexpress-batch-'));
   const input = join(root, 'extensions');
@@ -406,6 +413,106 @@ test('generated DaData provider preserves XML results and session variables end 
       await Promise.race([once(child, 'exit'), delay(1000)]);
     }
     await close(dadata);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generated Office provider converts a document end to end', async () => {
+  const { root, input, output } = fixture();
+  const providerPort = await freePort();
+  const files = join(root, 'files');
+  const converted = join(root, 'converted');
+  mkdirSync(files);
+  mkdirSync(converted);
+  const sourceDocument = join(files, 'sample document.docx');
+  writeFileSync(sourceDocument, 'synthetic-office-document');
+  const mockSoffice = join(root, 'mock-soffice.mjs');
+  writeFileSync(mockSoffice, `
+    import { copyFileSync, mkdirSync } from 'node:fs';
+    import { join, parse } from 'node:path';
+    const args = process.argv.slice(2);
+    if (args.length === 1 && args[0] === '--version') {
+      process.stdout.write('LibreOffice mock 1.0');
+      process.exit(0);
+    }
+    const convertIndex = args.indexOf('--convert-to');
+    const outdirIndex = args.indexOf('--outdir');
+    if (convertIndex < 0 || outdirIndex < 0) process.exit(2);
+    const extension = args[convertIndex + 1].split(':', 1)[0];
+    const outdir = args[outdirIndex + 1];
+    const input = args.at(-1);
+    mkdirSync(outdir, { recursive: true });
+    copyFileSync(input, join(outdir, parse(input).name + '.' + extension));
+  `);
+  let child;
+  try {
+    write(join(input, 'LegacyOffice.epas'), legacyOfficeDesktop());
+    const migration = writeBatchMigration(input, output, { startPort: providerPort });
+    assert.equal(migration.index.summary.providerImplementationsRequired, 0);
+    assert.equal(migration.index.summary.complete, true);
+    assert.deepEqual(
+      migration.index.modules[0].generated.automatedProviderOperations,
+      [
+        '7032FCD8-4797-4FC2-AAFA-04DBC1EDCFCA',
+        '814E06E5-E298-4368-8AC7-45F2E25E1578',
+      ],
+    );
+
+    const diagnostics = [];
+    child = spawn(process.execPath, [join(output, 'LegacyOffice.provider.mjs')], {
+      cwd: output,
+      env: {
+        ...process.env,
+        DX_PROVIDER_TOKEN: 'live-secret',
+        DX_PROVIDER_PORT: String(providerPort),
+        DX_OFFICE_BINARY: process.execPath,
+        DX_OFFICE_BINARY_ARGS: JSON.stringify([mockSoffice]),
+        DX_OFFICE_INPUT_ROOTS: files,
+        DX_OFFICE_OUTPUT_ROOTS: converted,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    child.stdout.on('data', chunk => diagnostics.push(chunk.toString()));
+    child.stderr.on('data', chunk => diagnostics.push(chunk.toString()));
+    const providerUrl = `http://127.0.0.1:${providerPort}/`;
+    await waitForProvider(providerUrl, child, diagnostics);
+
+    const manifest = JSON.parse(readFileSync(join(output, 'LegacyOffice.manifest.json'), 'utf8'));
+    const configText = [
+      '[Provider:LegacyOffice]',
+      `Url=${providerUrl}`,
+      'Token=live-secret',
+      'TimeoutMs=3000',
+      'AllowInsecure=False',
+      '',
+    ].join('\n');
+    const preflight = await preflightProvider({ manifest, configText, timeoutMs: 3000 });
+    assert.equal(preflight.ok, true, JSON.stringify(preflight));
+
+    const response = await fetch(providerUrl, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer live-secret',
+        'content-type': 'application/json',
+        'x-dataexpress-provider': 'LegacyOffice',
+      },
+      body: JSON.stringify({
+        operation: '7032FCD8-4797-4FC2-AAFA-04DBC1EDCFCA',
+        payload: {
+          aInputFile: sourceDocument,
+          aOutputFile: join(converted, 'result'),
+          itemListExt: '.PDF - wdFormatPDF - PDF',
+        },
+      }),
+    });
+    assert.equal(response.status, 200, await response.text());
+    assert.equal(readFileSync(join(converted, 'result.pdf'), 'utf8'), 'synthetic-office-document');
+  } finally {
+    if (child && child.exitCode === null) {
+      child.kill();
+      await Promise.race([once(child, 'exit'), delay(1000)]);
+    }
     rmSync(root, { recursive: true, force: true });
   }
 });

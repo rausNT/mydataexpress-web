@@ -45,7 +45,7 @@ export function generateProviderScaffold(manifest, {
   );
   const lines = [
     "import { readFileSync } from 'node:fs';",
-    `import { createDadataSuggestHandler, createHttpGetHandler, createProviderServer, listenProvider } from ${JSON.stringify(sdkImport)};`,
+    `import { createDadataSuggestHandler, createHttpGetHandler, createOfficeDocumentHandler, createProviderServer, listenProvider } from ${JSON.stringify(sdkImport)};`,
     '',
     `const manifest = JSON.parse(readFileSync(new URL(${JSON.stringify(manifestImport)}, import.meta.url), 'utf8'));`,
     '',
@@ -77,6 +77,19 @@ export function generateProviderScaffold(manifest, {
         `  queryParameter: ${JSON.stringify(mapping.providerRecipe.queryParameter)},`,
         `  stateVariables: ${JSON.stringify(mapping.providerRecipe.stateVariables)},`,
         `  resultVariable: ${JSON.stringify(mapping.providerRecipe.resultVariable || '')},`,
+        '});',
+        `handlers[${JSON.stringify(operation)}].dataExpressImplemented = true;`,
+        '',
+      );
+      continue;
+    }
+    if (mapping.providerRecipe?.kind === 'office-document-convert') {
+      lines.push(
+        `handlers[${JSON.stringify(operation)}] = createOfficeDocumentHandler({`,
+        `  documentType: ${JSON.stringify(mapping.providerRecipe.documentType)},`,
+        `  inputParameter: ${JSON.stringify(mapping.providerRecipe.inputParameter)},`,
+        `  outputParameter: ${JSON.stringify(mapping.providerRecipe.outputParameter)},`,
+        `  formatParameter: ${JSON.stringify(mapping.providerRecipe.formatParameter)},`,
         '});',
         `handlers[${JSON.stringify(operation)}].dataExpressImplemented = true;`,
         '',
@@ -132,6 +145,8 @@ export function generateProviderEnvironment(manifest, { port = 9081 } = {}) {
     mappingByOperation.get(operation)?.providerRecipe?.kind === 'http-get');
   const hasDadata = operations.some(operation =>
     mappingByOperation.get(operation)?.providerRecipe?.kind === 'dadata-suggest');
+  const hasOffice = operations.some(operation =>
+    mappingByOperation.get(operation)?.providerRecipe?.kind === 'office-document-convert');
   return [
     'DX_PROVIDER_TOKEN=replace-with-the-same-long-random-token-as-dxwebsrv.cfg',
     'DX_PROVIDER_HOST=127.0.0.1',
@@ -152,6 +167,18 @@ export function generateProviderEnvironment(manifest, { port = 9081 } = {}) {
       'DX_DADATA_ALLOW_INSECURE=false',
       'DX_DADATA_TIMEOUT_MS=15000',
       'DX_DADATA_MAX_RESPONSE_BYTES=2097152',
+    ] : []),
+    ...(hasOffice ? [
+      '# Leave empty when LibreOffice soffice is available on PATH.',
+      'DX_OFFICE_BINARY=',
+      'DX_OFFICE_BINARY_ARGS=[]',
+      '# Use semicolon-separated roots on Windows and colon-separated roots on Linux.',
+      'DX_OFFICE_INPUT_ROOTS=C:\\DataExpress\\files',
+      'DX_OFFICE_OUTPUT_ROOTS=C:\\DataExpress\\files',
+      'DX_OFFICE_TIMEOUT_MS=120000',
+      'DX_OFFICE_MAX_INPUT_BYTES=67108864',
+      'DX_OFFICE_MAX_OUTPUT_BYTES=134217728',
+      'DX_OFFICE_MAX_CONCURRENCY=2',
     ] : []),
     '',
   ].join('\n');

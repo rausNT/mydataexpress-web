@@ -1,6 +1,31 @@
 import { createServer } from 'node:http';
 import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
+import { spawn, spawnSync } from 'node:child_process';
+import { realpathSync, statSync } from 'node:fs';
+import {
+  access,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  realpath,
+  rm,
+  stat,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import {
+  basename,
+  delimiter,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  parse,
+  relative,
+  resolve,
+} from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const DEFAULT_MAX_BODY = 8 * 1024 * 1024;
 const DEFAULT_HTTP_TIMEOUT = 15_000;
@@ -8,6 +33,9 @@ const DEFAULT_HTTP_MAX_RESPONSE = 2 * 1024 * 1024;
 const DEFAULT_HTTP_MAX_REDIRECTS = 3;
 const DEFAULT_DADATA_BASE_URL =
   'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/';
+const DEFAULT_OFFICE_TIMEOUT = 120_000;
+const DEFAULT_OFFICE_MAX_INPUT = 64 * 1024 * 1024;
+const DEFAULT_OFFICE_MAX_OUTPUT = 128 * 1024 * 1024;
 
 const nonPublicIPv4 = new BlockList();
 for (const [address, prefix] of [
@@ -478,6 +506,480 @@ export function createDadataSuggestHandler({
   return handler;
 }
 
+const writerFormats = Object.freeze({
+  wdformatdocument: { extension: 'doc', filter: 'MS Word 97' },
+  wdformatdocument97: { extension: 'doc', filter: 'MS Word 97' },
+  wdformatdocumentdefault: { extension: 'docx', filter: 'Office Open XML Text' },
+  wdformatstrictopenxmldocument: { extension: 'docx', filter: 'Office Open XML Text' },
+  wdformatxmldocument: { extension: 'docx', filter: 'Office Open XML Text' },
+  wdformatxmldocumentmacroenabled: { extension: 'docm', filter: 'Office Open XML Text' },
+  wdformattemplate: { extension: 'dot', filter: 'MS Word 97 Vorlage' },
+  wdformattemplate97: { extension: 'dot', filter: 'MS Word 97 Vorlage' },
+  wdformatxmltemplate: { extension: 'dotx', filter: 'Office Open XML Text Template' },
+  wdformatxmltemplatemacroenabled: {
+    extension: 'dotm',
+    filter: 'Office Open XML Text Template',
+  },
+  wdformatopendocumenttext: { extension: 'odt', filter: 'writer8' },
+  wdformatpdf: { extension: 'pdf', filter: 'writer_pdf_Export' },
+  wdformatrtf: { extension: 'rtf', filter: 'Rich Text Format' },
+  wdformathtml: { extension: 'html', filter: 'HTML (StarWriter)' },
+  wdformatfilteredhtml: { extension: 'html', filter: 'HTML (StarWriter)' },
+  wdformattext: { extension: 'txt', filter: 'Text' },
+  wdformattextlinebreaks: { extension: 'txt', filter: 'Text' },
+  wdformatdostext: { extension: 'txt', filter: 'Text' },
+  wdformatdostextlinebreaks: { extension: 'txt', filter: 'Text' },
+  wdformatencodedtext: { extension: 'txt', filter: 'Text (encoded):UTF8' },
+  wdformatunicodetext: { extension: 'txt', filter: 'Text (encoded):UTF8' },
+});
+
+const calcFormats = Object.freeze({
+  xltypepdf: { extension: 'pdf', filter: 'calc_pdf_Export' },
+  xlworkbookdefault: { extension: 'xlsx', filter: 'Calc MS Excel 2007 XML' },
+  xlopenxmlworkbook: { extension: 'xlsx', filter: 'Calc MS Excel 2007 XML' },
+  xlopenxmlstrictworkbook: { extension: 'xlsx', filter: 'Calc MS Excel 2007 XML' },
+  xlopenxmlworkbookmacroenabled: {
+    extension: 'xlsm',
+    filter: 'Calc MS Excel 2007 VBA XML',
+  },
+  xlworkbooknormal: { extension: 'xls', filter: 'MS Excel 97' },
+  xlexcel8: { extension: 'xls', filter: 'MS Excel 97' },
+  xlexcel9795: { extension: 'xls', filter: 'MS Excel 97' },
+  xlopendocumentspreadsheet: { extension: 'ods', filter: 'calc8' },
+  xlcsv: { extension: 'csv', filter: 'Text - txt - csv (StarCalc)' },
+  xlcsvutf8: { extension: 'csv', filter: 'Text - txt - csv (StarCalc)' },
+  xlcsvwindows: { extension: 'csv', filter: 'Text - txt - csv (StarCalc)' },
+  xlcsvmsdos: { extension: 'csv', filter: 'Text - txt - csv (StarCalc)' },
+  xlcsvmac: { extension: 'csv', filter: 'Text - txt - csv (StarCalc)' },
+  xlunicodetext: { extension: 'txt', filter: 'Text - txt - csv (StarCalc)' },
+  xlcurrentplatformtext: { extension: 'txt', filter: 'Text - txt - csv (StarCalc)' },
+  xltextwindows: { extension: 'txt', filter: 'Text - txt - csv (StarCalc)' },
+  xltextmsdos: { extension: 'txt', filter: 'Text - txt - csv (StarCalc)' },
+  xltextmac: { extension: 'txt', filter: 'Text - txt - csv (StarCalc)' },
+  xlhtml: { extension: 'html', filter: 'HTML (StarCalc)' },
+  xlxmlspreadsheet: { extension: 'xml', filter: 'MS Excel 2003 XML' },
+  xlopenxmltemplate: { extension: 'xltx', filter: 'Calc MS Excel 2007 XML Template' },
+  xlopenxmltemplatemacroenabled: {
+    extension: 'xltm',
+    filter: 'Calc MS Excel 2007 XML Template',
+  },
+});
+
+const writerExtensions = new Set([
+  'doc', 'docx', 'docm', 'dot', 'dotx', 'dotm', 'odt', 'rtf', 'txt', 'html', 'htm',
+]);
+const calcExtensions = new Set([
+  'xls', 'xlsx', 'xlsm', 'xlsb', 'xlt', 'xltx', 'xltm', 'ods', 'csv', 'tsv', 'txt',
+  'html', 'htm', 'xml',
+]);
+
+function officeRoots(value, environmentValue, label, cwd) {
+  const values = Array.isArray(value)
+    ? value
+    : String(value ?? environmentValue ?? '').split(delimiter);
+  const roots = [...new Set(values
+    .map(item => String(item).trim())
+    .filter(Boolean)
+    .map(item => resolve(cwd, item)))];
+  if (!roots.length) {
+    throw new ProviderHttpError(`${label} is required for the Office provider`);
+  }
+  return roots;
+}
+
+function validateOfficeRoots(roots, label) {
+  for (const root of roots) {
+    try {
+      if (!statSync(realpathSync(root)).isDirectory()) throw new Error('not a directory');
+    } catch {
+      throw new ProviderHttpError(`${label} does not exist or is not a directory: ${root}`, 503);
+    }
+  }
+}
+
+function officeInteger(value, fallback, label, minimum, maximum) {
+  const number = Number(value ?? fallback);
+  if (!Number.isInteger(number) || number < minimum || number > maximum) {
+    throw new ProviderHttpError(`${label} must be an integer from ${minimum} to ${maximum}`);
+  }
+  return number;
+}
+
+function officeBinaryArguments(value) {
+  if (value === undefined || value === null || value === '') return [];
+  let items = value;
+  if (!Array.isArray(items)) {
+    try {
+      items = JSON.parse(String(items));
+    } catch {
+      throw new ProviderHttpError('DX_OFFICE_BINARY_ARGS must be a JSON array');
+    }
+  }
+  if (!Array.isArray(items) ||
+      items.some(item => typeof item !== 'string' || item.includes('\0'))) {
+    throw new ProviderHttpError('DX_OFFICE_BINARY_ARGS must be a JSON array of strings');
+  }
+  return [...items];
+}
+
+function pathInside(root, candidate) {
+  const value = relative(root, candidate);
+  return value === '' || (!value.startsWith('..') && !isAbsolute(value));
+}
+
+async function canonicalRoots(roots, label) {
+  const result = [];
+  for (const root of roots) {
+    try {
+      const canonical = await realpath(root);
+      const info = await stat(canonical);
+      if (!info.isDirectory()) throw new Error('not a directory');
+      result.push(canonical);
+    } catch {
+      throw new ProviderHttpError(`${label} does not exist or is not a directory: ${root}`, 503);
+    }
+  }
+  return result;
+}
+
+function payloadPath(payload, parameter, label) {
+  const value = String(payload?.[parameter] ?? '').trim();
+  if (!value) throw new ProviderHttpError(`${label} is required`);
+  if (value.length > 4096 || value.includes('\0')) {
+    throw new ProviderHttpError(`${label} is invalid`);
+  }
+  return value;
+}
+
+async function safeInputPath(value, roots, cwd) {
+  const requested = isAbsolute(value) ? resolve(value) : resolve(cwd, value);
+  let canonical;
+  try {
+    canonical = await realpath(requested);
+  } catch {
+    throw new ProviderHttpError('Office input file does not exist');
+  }
+  const allowed = await canonicalRoots(roots, 'DX_OFFICE_INPUT_ROOTS');
+  if (!allowed.some(root => pathInside(root, canonical))) {
+    throw new ProviderHttpError('Office input file is outside the allowed roots', 403);
+  }
+  const info = await stat(canonical);
+  if (!info.isFile()) throw new ProviderHttpError('Office input path is not a file');
+  return { path: canonical, size: info.size };
+}
+
+async function existingAncestor(path) {
+  let current = path;
+  while (true) {
+    try {
+      await access(current);
+      return current;
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) throw new ProviderHttpError('Office output path has no existing parent');
+      current = parent;
+    }
+  }
+}
+
+async function safeOutputPath(value, roots, cwd) {
+  const requested = isAbsolute(value) ? resolve(value) : resolve(cwd, value);
+  const allowed = await canonicalRoots(roots, 'DX_OFFICE_OUTPUT_ROOTS');
+  const lexicalRoot = roots.find(root => pathInside(root, requested));
+  if (!lexicalRoot) {
+    throw new ProviderHttpError('Office output file is outside the allowed roots', 403);
+  }
+  const rootIndex = roots.indexOf(lexicalRoot);
+  const ancestor = await realpath(await existingAncestor(dirname(requested)));
+  if (!pathInside(allowed[rootIndex], ancestor)) {
+    throw new ProviderHttpError('Office output path escapes the allowed root', 403);
+  }
+  await mkdir(dirname(requested), { recursive: true });
+  const parent = await realpath(dirname(requested));
+  if (!pathInside(allowed[rootIndex], parent)) {
+    throw new ProviderHttpError('Office output path escapes the allowed root', 403);
+  }
+  try {
+    const existing = await realpath(requested);
+    if (!pathInside(allowed[rootIndex], existing)) {
+      throw new ProviderHttpError('Office output file escapes the allowed root', 403);
+    }
+  } catch (error) {
+    if (error instanceof ProviderHttpError) throw error;
+  }
+  return requested;
+}
+
+function officeFormat(documentType, value) {
+  const parts = String(value ?? '').split(/\s+-\s+/).map(item => item.trim());
+  const formatName = String(parts[1] || '').toLowerCase();
+  const selectedExtension = String(parts[0] || '').replace(/^\./, '').toLowerCase();
+  const formats = documentType === 'writer' ? writerFormats : calcFormats;
+  const extensions = documentType === 'writer' ? writerExtensions : calcExtensions;
+  let format = formats[formatName];
+  if (!format && selectedExtension && extensions.has(selectedExtension)) {
+    format = Object.values(formats).find(item => item.extension === selectedExtension);
+  }
+  if (!format) {
+    throw new ProviderHttpError(
+      `LibreOffice does not support the selected ${documentType} conversion format`,
+    );
+  }
+  return format;
+}
+
+async function outputName(value, input, extension) {
+  let output = value;
+  let isDirectory = /[\\/]$/.test(output);
+  if (!isDirectory) {
+    try {
+      isDirectory = (await stat(output)).isDirectory();
+    } catch {
+      // A new file is expected.
+    }
+  }
+  if (isDirectory) output = join(output, parse(input).name);
+  if (!extname(output)) output += `.${extension}`;
+  return output;
+}
+
+async function executeOfficeProcess({ binary, args, timeoutMs }) {
+  await new Promise((resolvePromise, rejectPromise) => {
+    let timedOut = false;
+    let stderr = '';
+    const child = spawn(binary, args, {
+      windowsHide: true,
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', chunk => {
+      if (stderr.length < 32_768) stderr += chunk;
+    });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, timeoutMs);
+    child.once('error', error => {
+      clearTimeout(timer);
+      if (error?.code === 'ENOENT') {
+        rejectPromise(new ProviderHttpError(
+          'LibreOffice executable was not found; set DX_OFFICE_BINARY',
+          503,
+        ));
+      } else {
+        rejectPromise(new ProviderHttpError('LibreOffice could not be started', 502));
+      }
+    });
+    child.once('close', code => {
+      clearTimeout(timer);
+      if (timedOut) {
+        rejectPromise(new ProviderHttpError('LibreOffice conversion timed out', 504));
+      } else if (code !== 0) {
+        const detail = stderr.trim().replace(/\s+/g, ' ').slice(0, 500);
+        rejectPromise(new ProviderHttpError(
+          `LibreOffice conversion failed${detail ? `: ${detail}` : ''}`,
+          502,
+        ));
+      } else {
+        resolvePromise();
+      }
+    });
+  });
+}
+
+async function convertedOfficeFile(workDirectory, input, extension) {
+  const expectedName = `${parse(input).name}.${extension}`;
+  const entries = await readdir(workDirectory);
+  const entry = entries.find(name => name.toLowerCase() === expectedName.toLowerCase());
+  if (!entry) {
+    throw new ProviderHttpError('LibreOffice did not create the converted document', 502);
+  }
+  return join(workDirectory, entry);
+}
+
+function officePolicy(options = {}) {
+  const environment = options.environment || process.env;
+  const cwd = resolve(options.cwd || process.cwd());
+  const inputRoots = officeRoots(
+    options.inputRoots,
+    environment.DX_OFFICE_INPUT_ROOTS,
+    'DX_OFFICE_INPUT_ROOTS',
+    cwd,
+  );
+  const outputRoots = officeRoots(
+    options.outputRoots,
+    environment.DX_OFFICE_OUTPUT_ROOTS,
+    'DX_OFFICE_OUTPUT_ROOTS',
+    cwd,
+  );
+  validateOfficeRoots(inputRoots, 'DX_OFFICE_INPUT_ROOTS');
+  validateOfficeRoots(outputRoots, 'DX_OFFICE_OUTPUT_ROOTS');
+  const binary = String(options.binary || environment.DX_OFFICE_BINARY || 'soffice').trim();
+  const binaryArguments = officeBinaryArguments(
+    options.binaryArguments ?? environment.DX_OFFICE_BINARY_ARGS,
+  );
+  if (options.validateBinary ?? !options.execute) {
+    const check = spawnSync(binary, [...binaryArguments, '--version'], {
+      encoding: 'utf8',
+      timeout: 10_000,
+      windowsHide: true,
+    });
+    if (check.error?.code === 'ENOENT') {
+      throw new ProviderHttpError(
+        'LibreOffice executable was not found; set DX_OFFICE_BINARY',
+        503,
+      );
+    }
+    if (check.error || check.status !== 0) {
+      throw new ProviderHttpError(
+        'LibreOffice executable did not pass the startup check',
+        503,
+      );
+    }
+  }
+  return {
+    inputRoots,
+    outputRoots,
+    binary,
+    binaryArguments,
+    timeoutMs: officeInteger(
+      options.timeoutMs ?? environment.DX_OFFICE_TIMEOUT_MS,
+      DEFAULT_OFFICE_TIMEOUT,
+      'DX_OFFICE_TIMEOUT_MS',
+      1_000,
+      900_000,
+    ),
+    maxInputBytes: officeInteger(
+      options.maxInputBytes ?? environment.DX_OFFICE_MAX_INPUT_BYTES,
+      DEFAULT_OFFICE_MAX_INPUT,
+      'DX_OFFICE_MAX_INPUT_BYTES',
+      1,
+      1024 * 1024 * 1024,
+    ),
+    maxOutputBytes: officeInteger(
+      options.maxOutputBytes ?? environment.DX_OFFICE_MAX_OUTPUT_BYTES,
+      DEFAULT_OFFICE_MAX_OUTPUT,
+      'DX_OFFICE_MAX_OUTPUT_BYTES',
+      1,
+      2 * 1024 * 1024 * 1024,
+    ),
+    maxConcurrency: officeInteger(
+      options.maxConcurrency ?? environment.DX_OFFICE_MAX_CONCURRENCY,
+      2,
+      'DX_OFFICE_MAX_CONCURRENCY',
+      1,
+      16,
+    ),
+    cwd,
+    execute: options.execute || executeOfficeProcess,
+  };
+}
+
+function officeLimiter(maximum) {
+  let active = 0;
+  const waiting = [];
+  return async task => {
+    if (active >= maximum) {
+      await new Promise(resolvePromise => waiting.push(resolvePromise));
+    }
+    active++;
+    try {
+      return await task();
+    } finally {
+      active--;
+      waiting.shift()?.();
+    }
+  };
+}
+
+export function createOfficeDocumentHandler({
+  documentType,
+  inputParameter = 'aInputFile',
+  outputParameter = 'aOutputFile',
+  formatParameter = 'itemListExt',
+  ...policyOptions
+} = {}) {
+  if (!['writer', 'calc'].includes(documentType)) {
+    throw new ProviderHttpError('Office provider has an unsupported document type');
+  }
+  for (const [label, value] of Object.entries({
+    inputParameter,
+    outputParameter,
+    formatParameter,
+  })) {
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new ProviderHttpError(`Office provider ${label} is invalid`);
+    }
+  }
+  const policy = officePolicy(policyOptions);
+  const withSlot = officeLimiter(policy.maxConcurrency);
+  const handler = payload => withSlot(async () => {
+    const rawInput = payloadPath(payload, inputParameter, 'Office input file');
+    const rawOutput = payloadPath(payload, outputParameter, 'Office output file');
+    const format = officeFormat(documentType, payload?.[formatParameter]);
+    const input = await safeInputPath(rawInput, policy.inputRoots, policy.cwd);
+    if (input.size > policy.maxInputBytes) {
+      throw new ProviderHttpError('Office input file is too large', 413);
+    }
+    const requestedOutput = await outputName(rawOutput, input.path, format.extension);
+    const output = await safeOutputPath(
+      requestedOutput,
+      policy.outputRoots,
+      policy.cwd,
+    );
+    const workDirectory = await mkdtemp(join(tmpdir(), 'dataexpress-office-'));
+    try {
+      const profile = join(workDirectory, 'profile');
+      const convertedDirectory = join(workDirectory, 'converted');
+      await mkdir(profile);
+      await mkdir(convertedDirectory);
+      const argumentsList = [
+        ...policy.binaryArguments,
+        '--headless',
+        '--invisible',
+        '--nologo',
+        '--nodefault',
+        '--nolockcheck',
+        '--nofirststartwizard',
+        `-env:UserInstallation=${pathToFileURL(profile).href}`,
+        '--convert-to',
+        `${format.extension}:${format.filter}`,
+        '--outdir',
+        convertedDirectory,
+        input.path,
+      ];
+      await policy.execute({
+        binary: policy.binary,
+        args: argumentsList,
+        timeoutMs: policy.timeoutMs,
+        workDirectory,
+        convertedDirectory,
+        inputPath: input.path,
+        outputPath: output,
+        format,
+      });
+      const converted = await convertedOfficeFile(
+        convertedDirectory,
+        input.path,
+        format.extension,
+      );
+      const resultInfo = await stat(converted);
+      if (!resultInfo.isFile()) {
+        throw new ProviderHttpError('LibreOffice conversion result is not a file', 502);
+      }
+      if (resultInfo.size > policy.maxOutputBytes) {
+        throw new ProviderHttpError('Office output file is too large', 502);
+      }
+      await copyFile(converted, output);
+      return true;
+    } finally {
+      await rm(workDirectory, { recursive: true, force: true });
+    }
+  });
+  handler.dataExpressImplemented = true;
+  return handler;
+}
+
 function validProviderRecipe(recipe) {
   if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) return false;
   if (recipe.kind === 'http-get') {
@@ -492,6 +994,11 @@ function validProviderRecipe(recipe) {
       recipe.stateVariables.every(name => typeof name === 'string' && Boolean(name.trim())) &&
       (recipe.resultVariable === undefined ||
         (typeof recipe.resultVariable === 'string' && Boolean(recipe.resultVariable.trim())));
+  }
+  if (recipe.kind === 'office-document-convert') {
+    return ['writer', 'calc'].includes(recipe.documentType) &&
+      ['inputParameter', 'outputParameter', 'formatParameter']
+        .every(name => typeof recipe[name] === 'string' && Boolean(recipe[name].trim()));
   }
   return false;
 }
