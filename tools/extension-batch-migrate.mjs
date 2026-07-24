@@ -23,6 +23,7 @@ import { auditSource, buildRuntimeCompatibility, collectExtensionFiles } from '.
 import { generateWebModule } from './extension-migrate.mjs';
 import {
   generateProviderConfig,
+  generateProviderEnvironment,
   generateProviderScaffold,
   installProviderSdk,
 } from './extension-provider-scaffold.mjs';
@@ -183,13 +184,16 @@ export function writeBatchMigration(inputRoot, outputRoot, {
     const manifestFile = `${base}.manifest.json`;
     const providerFile = `${base}.provider.mjs`;
     const configFile = `${base}.provider.cfg.example`;
+    const environmentFile = `${base}.provider.env.example`;
     const source = readFileSync(item.report.file, 'utf8');
     const generated = generateWebModule(source, item.report.file, { forceProvider });
     generated.manifest.webModule = basename(webFile);
     manualMappings += generated.manifest.summary.manual;
     inlineMappings += generated.manifest.summary.webScript;
-    const implementationOperations = generated.manifest.mappings
-      .filter(mapping => mapping.status === 'provider')
+    const providerOperations = generated.manifest.mappings
+      .filter(mapping => mapping.status === 'provider');
+    const implementationOperations = providerOperations
+      .filter(mapping => !mapping.providerRecipe)
       .map(mapping => mapping.operation);
     providerImplementationsRequired += implementationOperations.length;
 
@@ -204,8 +208,11 @@ export function writeBatchMigration(inputRoot, outputRoot, {
       inlineMappings: generated.manifest.summary.webScript,
       manualMappings: generated.manifest.summary.manual,
       implementationOperations,
+      automatedProviderOperations: providerOperations
+        .filter(mapping => mapping.providerRecipe)
+        .map(mapping => mapping.operation),
     };
-    if (implementationOperations.length) {
+    if (providerOperations.length) {
       const port = startPort + providerPortIndex++;
       if (port > 65535) throw new Error('Provider port range exceeds 65535');
       if (!sdkFile) sdkFile = installProviderSdk(outputRoot);
@@ -218,10 +225,12 @@ export function writeBatchMigration(inputRoot, outputRoot, {
         url: `http://127.0.0.1:${port}/`,
       });
       writeFileSync(configFile, config);
+      writeFileSync(environmentFile, generateProviderEnvironment(generated.manifest, { port }));
       configs.push(config.trim());
       Object.assign(item.generated, {
         provider: portablePath(relative(outputRoot, providerFile)),
         config: portablePath(relative(outputRoot, configFile)),
+        environment: portablePath(relative(outputRoot, environmentFile)),
         port,
       });
     }

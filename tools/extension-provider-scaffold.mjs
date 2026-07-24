@@ -45,7 +45,7 @@ export function generateProviderScaffold(manifest, {
   );
   const lines = [
     "import { readFileSync } from 'node:fs';",
-    `import { createProviderServer, listenProvider } from ${JSON.stringify(sdkImport)};`,
+    `import { createHttpGetHandler, createProviderServer, listenProvider } from ${JSON.stringify(sdkImport)};`,
     '',
     `const manifest = JSON.parse(readFileSync(new URL(${JSON.stringify(manifestImport)}, import.meta.url), 'utf8'));`,
     '',
@@ -58,8 +58,21 @@ export function generateProviderScaffold(manifest, {
     const parameters = (mapping.parameters || [])
       .map(parameter => `${parameter.name}: ${parameter.type}`)
       .join(', ');
+    lines.push(`// ${mapping.kind || 'operation'} ${operation}${parameters ? ` (${parameters})` : ''}`);
+    if (mapping.providerRecipe?.kind === 'http-get') {
+      lines.push(
+        `handlers[${JSON.stringify(operation)}] = createHttpGetHandler({`,
+        `  urlParameter: ${JSON.stringify(mapping.providerRecipe.urlParameter || 'URL')},`,
+        '});',
+        `handlers[${JSON.stringify(operation)}].dataExpressImplemented = true;`,
+        '',
+      );
+      continue;
+    }
+    if (mapping.providerRecipe) {
+      throw new Error(`Unsupported provider recipe: ${mapping.providerRecipe.kind || 'missing'}`);
+    }
     lines.push(
-      `// ${mapping.kind || 'operation'} ${operation}${parameters ? ` (${parameters})` : ''}`,
       `handlers[${JSON.stringify(operation)}] = async (payload, context) => {`,
       '  void payload;',
       '  void context;',
@@ -96,6 +109,29 @@ export function generateProviderConfig(manifest, { url = 'http://127.0.0.1:9081/
   ].join('\n');
 }
 
+export function generateProviderEnvironment(manifest, { port = 9081 } = {}) {
+  const operations = requiredOperations(manifest);
+  const mappingByOperation = new Map(
+    manifest.mappings.map(mapping => [mapping.operation, mapping]),
+  );
+  const hasHttpGet = operations.some(operation =>
+    mappingByOperation.get(operation)?.providerRecipe?.kind === 'http-get');
+  return [
+    'DX_PROVIDER_TOKEN=replace-with-the-same-long-random-token-as-dxwebsrv.cfg',
+    'DX_PROVIDER_HOST=127.0.0.1',
+    `DX_PROVIDER_PORT=${Number(port)}`,
+    ...(hasHttpGet ? [
+      'DX_HTTP_ALLOW_HOSTS=example.com',
+      'DX_HTTP_ALLOW_PRIVATE=false',
+      'DX_HTTP_ALLOW_INSECURE=false',
+      'DX_HTTP_TIMEOUT_MS=15000',
+      'DX_HTTP_MAX_RESPONSE_BYTES=2097152',
+      'DX_HTTP_MAX_REDIRECTS=3',
+    ] : []),
+    '',
+  ].join('\n');
+}
+
 function optionValue(args, name) {
   const index = args.indexOf(name);
   if (index < 0) return '';
@@ -106,7 +142,7 @@ function optionValue(args, name) {
 function main() {
   const args = process.argv.slice(2);
   if (!args[0]) {
-    console.error('Usage: node tools/extension-provider-scaffold.mjs <manifest.json> [--output provider.mjs] [--config-output provider.cfg.example] [--no-config]');
+    console.error('Usage: node tools/extension-provider-scaffold.mjs <manifest.json> [--output provider.mjs] [--config-output provider.cfg.example] [--env-output provider.env.example] [--no-config] [--no-env]');
     process.exitCode = 2;
     return;
   }
@@ -122,6 +158,9 @@ function main() {
     const configOutput = args.includes('--no-config')
       ? ''
       : resolve(optionValue(args, '--config-output') || `${base}.provider.cfg.example`);
+    const environmentOutput = args.includes('--no-env')
+      ? ''
+      : resolve(optionValue(args, '--env-output') || `${base}.provider.env.example`);
     const sdkFile = installProviderSdk(dirname(output));
 
     mkdirSync(dirname(output), { recursive: true });
@@ -136,6 +175,11 @@ function main() {
       mkdirSync(dirname(configOutput), { recursive: true });
       writeFileSync(configOutput, generateProviderConfig(manifest));
       process.stdout.write(`${configOutput}\n`);
+    }
+    if (environmentOutput) {
+      mkdirSync(dirname(environmentOutput), { recursive: true });
+      writeFileSync(environmentOutput, generateProviderEnvironment(manifest));
+      process.stdout.write(`${environmentOutput}\n`);
     }
   } catch (error) {
     console.error(error.message);

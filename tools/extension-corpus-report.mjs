@@ -18,6 +18,7 @@ function mappingReport(mapping) {
     reason: mapping.reason || '',
     reviewRequired: Boolean(mapping.reviewRequired),
     issues: mapping.issues || [],
+    ...(mapping.providerRecipe ? { providerRecipe: mapping.providerRecipe } : {}),
   };
 }
 
@@ -47,6 +48,7 @@ export function buildExtensionCorpusReport(inputPath, { generatedAt = new Date()
     result.mappings += module.summary.total;
     result.webScript += module.summary.webScript;
     result.provider += module.summary.provider;
+    result.automatedProvider += module.summary.automatedProvider;
     result.manual += module.summary.manual;
     result.reviewRequired += module.summary.reviewRequired;
     return result;
@@ -55,6 +57,7 @@ export function buildExtensionCorpusReport(inputPath, { generatedAt = new Date()
     mappings: 0,
     webScript: 0,
     provider: 0,
+    automatedProvider: 0,
     manual: 0,
     reviewRequired: 0,
     complete: false,

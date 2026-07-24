@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   generateProviderConfig,
+  generateProviderEnvironment,
   generateProviderScaffold,
 } from './extension-provider-scaffold.mjs';
 
@@ -38,6 +39,10 @@ test('generates a manifest-bound provider and config template', () => {
   const config = generateProviderConfig(manifest);
   assert.match(config, /^\[Provider:OfficeTools\]/);
   assert.match(config, /AllowInsecure=False/);
+
+  const environment = generateProviderEnvironment(manifest);
+  assert.match(environment, /DX_PROVIDER_TOKEN=/);
+  assert.doesNotMatch(environment, /DX_HTTP_ALLOW_HOSTS/);
 });
 
 test('special operation names cannot escape the generated handler table', () => {
@@ -50,6 +55,35 @@ test('special operation names cannot escape the generated handler table', () => 
   assert.match(source, /handlers\["__proto__"\] = async/);
 });
 
+test('generates a ready handler for a recognized HTTP_GET recipe', () => {
+  const source = generateProviderScaffold({
+    schemaVersion: 1,
+    provider: 'LegacyHttp',
+    mappings: [{
+      kind: 'function',
+      operation: 'HTTP_GET',
+      status: 'provider',
+      parameters: [{ name: 'URL', type: 'Variant', qualifier: '' }],
+      providerRecipe: { kind: 'http-get', urlParameter: 'URL' },
+    }],
+  });
+  assert.match(source, /createHttpGetHandler/);
+  assert.match(source, /urlParameter: "URL"/);
+  assert.match(source, /handlers\["HTTP_GET"\]\.dataExpressImplemented = true/);
+  assert.doesNotMatch(source, /TODO: implement provider operation HTTP_GET/);
+  const environment = generateProviderEnvironment({
+    schemaVersion: 1,
+    provider: 'LegacyHttp',
+    mappings: [{
+      operation: 'HTTP_GET',
+      status: 'provider',
+      providerRecipe: { kind: 'http-get', urlParameter: 'URL' },
+    }],
+  }, { port: 19081 });
+  assert.match(environment, /DX_PROVIDER_PORT=19081/);
+  assert.match(environment, /DX_HTTP_ALLOW_HOSTS=example\.com/);
+});
+
 test('CLI writes syntax-valid scaffold files', () => {
   const directory = mkdtempSync(join(tmpdir(), 'dataexpress-provider-'));
   try {
@@ -57,6 +91,7 @@ test('CLI writes syntax-valid scaffold files', () => {
     const providerFile = join(directory, 'OfficeToolsWeb.provider.mjs');
     const configFile = join(directory, 'OfficeToolsWeb.provider.cfg.example');
     const sdkFile = join(directory, 'dataexpress-provider-sdk.mjs');
+    const environmentFile = join(directory, 'OfficeToolsWeb.provider.env.example');
     writeFileSync(manifestFile, JSON.stringify(manifest));
 
     const result = spawnSync(process.execPath, [
@@ -68,6 +103,7 @@ test('CLI writes syntax-valid scaffold files', () => {
     assert.match(readFileSync(providerFile, 'utf8'), /\.\/dataexpress-provider-sdk\.mjs/);
     assert.match(readFileSync(sdkFile, 'utf8'), /createProviderServer/);
     assert.match(readFileSync(configFile, 'utf8'), /Provider:OfficeTools/);
+    assert.match(readFileSync(environmentFile, 'utf8'), /DX_PROVIDER_TOKEN/);
 
     const syntax = spawnSync(process.execPath, ['--check', providerFile], { encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);

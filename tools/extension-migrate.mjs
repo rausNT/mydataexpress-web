@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { auditSource } from './extension-audit.mjs';
 import {
   generateProviderConfig,
+  generateProviderEnvironment,
   generateProviderScaffold,
   installProviderSdk,
 } from './extension-provider-scaffold.mjs';
@@ -454,6 +455,24 @@ function resultAdapter(type) {
   return '';
 }
 
+function providerRecipe({ spec, operation, params, type, inline, report }) {
+  const supportedParameterType = params.length === 1 &&
+    (normalizedType(params[0].type) === 'variant' ||
+      stringTypes.has(normalizedType(params[0].type)));
+  const hasNetwork = report.findings.some(finding => finding.rule === 'network');
+  const replacesOle = inline.issues.some(issue =>
+    issue.includes('platform-dependency:ole'));
+  if (spec.kind === 'function' && operation.toUpperCase() === 'HTTP_GET' &&
+      stringTypes.has(normalizedType(type)) && supportedParameterType &&
+      hasNetwork && replacesOle) {
+    return {
+      kind: 'http-get',
+      urlParameter: params[0].name,
+    };
+  }
+  return null;
+}
+
 export function generateWebModule(source, filename = 'Extension.epas', { forceProvider = false } = {}) {
   const report = auditSource(source, filename);
   const moduleName = basename(filename, extname(filename));
@@ -550,6 +569,9 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
     }
     const issues = [...signatureIssues];
     const automatic = issues.length === 0;
+    const recipe = automatic
+      ? providerRecipe({ spec, operation, params, type, inline, report })
+      : null;
 
     lines.push(...mappingHeader);
     lines.push(decl);
@@ -579,14 +601,16 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
       status: automatic ? 'provider' : 'manual',
       reason: automatic ? '' : issues[0],
       issues: automatic
-        ? [...identifierDiagnostics, ...inline.issues, ...inlineSignatureIssues]
-        : [...identifierDiagnostics, ...inline.issues, ...inlineSignatureIssues, ...issues],
+        ? [...identifierDiagnostics, ...inline.issues, ...inline.reviews, ...inlineSignatureIssues]
+        : [...identifierDiagnostics, ...inline.issues, ...inline.reviews, ...inlineSignatureIssues, ...issues],
       reviewRequired: false,
       wireFormat: 'json-v1',
+      ...(recipe ? { providerRecipe: recipe } : {}),
     });
   }
 
   const provider = mappings.filter(item => item.status === 'provider').length;
+  const automatedProvider = mappings.filter(item => item.providerRecipe).length;
   const webScript = mappings.filter(item => item.status === 'web-script').length;
   const reviewRequired = mappings.filter(item => item.reviewRequired).length;
   const compatible = provider + webScript;
@@ -600,6 +624,7 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
       compatible,
       webScript,
       provider,
+      automatedProvider,
       reviewRequired,
       manual: mappings.length - compatible,
       complete: compatible === mappings.length,
@@ -613,7 +638,7 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
 function main() {
   const args = process.argv.slice(2);
   if (!args[0]) {
-    console.error('Usage: node tools/extension-migrate.mjs <extension.epas> [--output extension.wepas] [--manifest extension.manifest.json] [--provider-output extension.provider.mjs] [--provider-config extension.provider.cfg.example] [--all-providers] [--no-provider] [--no-manifest]');
+    console.error('Usage: node tools/extension-migrate.mjs <extension.epas> [--output extension.wepas] [--manifest extension.manifest.json] [--provider-output extension.provider.mjs] [--provider-config extension.provider.cfg.example] [--provider-env extension.provider.env.example] [--all-providers] [--no-provider] [--no-manifest]');
     process.exitCode = 2;
     return;
   }
@@ -659,7 +684,14 @@ function main() {
     process.exitCode = 2;
     return;
   }
-  if (!manifestOutput && (providerIndex >= 0 || providerConfigIndex >= 0)) {
+  const providerEnvironmentIndex = args.indexOf('--provider-env');
+  if (providerEnvironmentIndex >= 0 && !args[providerEnvironmentIndex + 1]) {
+    console.error('--provider-env requires a file path');
+    process.exitCode = 2;
+    return;
+  }
+  if (!manifestOutput &&
+      (providerIndex >= 0 || providerConfigIndex >= 0 || providerEnvironmentIndex >= 0)) {
     console.error('Provider scaffold requires a manifest; remove --no-manifest');
     process.exitCode = 2;
     return;
@@ -675,6 +707,11 @@ function main() {
     ? resolve(providerConfigIndex >= 0
       ? args[providerConfigIndex + 1]
       : `${manifestBase}.provider.cfg.example`)
+    : '';
+  const providerEnvironmentOutput = providerOutput && !args.includes('--no-provider-env')
+    ? resolve(providerEnvironmentIndex >= 0
+      ? args[providerEnvironmentIndex + 1]
+      : `${manifestBase}.provider.env.example`)
     : '';
   generated.manifest.webModule = basename(output);
   mkdirSync(dirname(output), { recursive: true });
@@ -699,6 +736,11 @@ function main() {
     mkdirSync(dirname(providerConfigOutput), { recursive: true });
     writeFileSync(providerConfigOutput, generateProviderConfig(generated.manifest));
     process.stdout.write(`${providerConfigOutput}\n`);
+  }
+  if (providerEnvironmentOutput) {
+    mkdirSync(dirname(providerEnvironmentOutput), { recursive: true });
+    writeFileSync(providerEnvironmentOutput, generateProviderEnvironment(generated.manifest));
+    process.stdout.write(`${providerEnvironmentOutput}\n`);
   }
 }
 

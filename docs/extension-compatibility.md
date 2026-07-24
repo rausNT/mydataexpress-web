@@ -56,6 +56,8 @@ node tools/extension-migrate.mjs OfficeTools.epas
 - `OfficeTools.provider.mjs` — Node-provider с handler-заглушками, если он нужен;
 - `OfficeTools.provider.cfg.example` — секция для `dxwebsrv.cfg`, если есть
   provider-backed операции.
+- `OfficeTools.provider.env.example` — окружение процесса provider: тот же
+  Bearer-токен, порт и политика встроенных рецептов.
 
 Мигратор анализирует каждую routine отдельно. Самодостаточная реализация без
 Windows/OLE/DLL/UI/file findings и неизвестных globals копируется в `.wepas` со
@@ -69,6 +71,12 @@ Windows/OLE/DLL/UI/file findings и неизвестных globals копиру�
 зависимость не считается portable только потому, что её реализация не найдена.
 Флаг `--all-providers` отключает inline-перенос для осознанной изоляции всех
 операций за HTTP.
+
+Для старой одноаргументной функции `HTTP_GET(URL): String`, где OLE используется
+в helper-коде обработки URL, генерируется защищённый кроссплатформенный
+`http-get` recipe. Он уже реализован и не увеличивает
+`providerImplementationsRequired`; обязательный allow-list и остальные
+параметры записываются в `.provider.env.example`.
 
 По умолчанию комплект записывается рядом с исходным `.epas`. Параметр `--output`
 может выбрать другой каталог, но имя web-модуля обязано оканчиваться на `.wepas`,
@@ -105,6 +113,7 @@ npm run migrate:extensions -- C:\extensions --output-dir C:\extensions-web
 - назначает необходимым providers последовательные localhost-порты начиная с `9081`;
 - пишет `migration-index.json` и, при наличии providers, общий
   `dxwebsrv.providers.cfg.example`.
+- создаёт для каждого provider собственный `.provider.env.example`.
 
 Непустой выходной каталог отклоняется, поэтому в результат не попадут устаревшие
 файлы предыдущей миграции. `--start-port 12000` меняет первый порт. В режиме

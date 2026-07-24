@@ -85,6 +85,7 @@ test('CLI omits provider sidecars for inline modules and supports forced provide
     const manifest = join(directory, 'OfficeTools.manifest.json');
     const provider = join(directory, 'OfficeTools.provider.mjs');
     const providerConfig = join(directory, 'OfficeTools.provider.cfg.example');
+    const providerEnvironment = join(directory, 'OfficeTools.provider.env.example');
     const providerSdk = join(directory, 'dataexpress-provider-sdk.mjs');
     mkdirSync(workingDirectory);
     writeFileSync(input, desktopModule);
@@ -102,6 +103,7 @@ test('CLI omits provider sidecars for inline modules and supports forced provide
     assert.equal(payload.summary.webScript, 2);
     assert.equal(existsSync(provider), false);
     assert.equal(existsSync(providerConfig), false);
+    assert.equal(existsSync(providerEnvironment), false);
     assert.equal(existsSync(providerSdk), false);
 
     const forcedOutput = join(directory, 'OfficeToolsForced.wepas');
@@ -118,6 +120,7 @@ test('CLI omits provider sidecars for inline modules and supports forced provide
     assert.match(readFileSync(forcedProvider, 'utf8'), /\.\/dataexpress-provider-sdk\.mjs/);
     assert.match(readFileSync(providerSdk, 'utf8'), /createProviderServer/);
     assert.match(readFileSync(join(directory, 'OfficeToolsForced.provider.cfg.example'), 'utf8'), /Provider:OfficeTools/);
+    assert.match(readFileSync(join(directory, 'OfficeToolsForced.provider.env.example'), 'utf8'), /DX_PROVIDER_TOKEN/);
     const syntax = spawnSync(process.execPath, ['--check', forcedProvider], { encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);
 
@@ -328,6 +331,7 @@ test('migrates the compile-smoke runtime fixture without provider fallbacks', ()
     compatible: 2,
     webScript: 2,
     provider: 0,
+    automatedProvider: 0,
     reviewRequired: 0,
     manual: 0,
     complete: true,
@@ -339,6 +343,20 @@ test('migrates the compile-smoke runtime fixture without provider fallbacks', ()
   assert.match(generated.module, /Session\.EvalExpr\(Expr, Self\)/);
   assert.match(generated.module, /Session\.SQLSelect\('select 1'\)/);
   assert.doesNotMatch(generated.module, /ExtensionProviderCall/);
+});
+
+test('recognizes the legacy one-argument OLE HTTP_GET provider recipe', () => {
+  const source = readFileSync(
+    new URL('../test/fixtures/extensions/legacy-http-get.epas', import.meta.url),
+    'utf8',
+  );
+  const generated = generateWebModule(source, 'legacy-http-get.epas');
+  assert.equal(generated.manifest.summary.provider, 1);
+  assert.equal(generated.manifest.summary.automatedProvider, 1);
+  assert.deepEqual(generated.manifest.mappings[0].providerRecipe, {
+    kind: 'http-get',
+    urlParameter: 'URL',
+  });
 });
 
 test('generates a mixed inline/provider module at routine granularity', () => {

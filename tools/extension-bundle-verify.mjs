@@ -214,6 +214,7 @@ export async function verifyExtensionBundle({
       ? bundleFile(root, module.generated.provider, errors)
       : '';
     if (module.generated.config) bundleFile(root, module.generated.config, errors);
+    if (module.generated.environment) bundleFile(root, module.generated.environment, errors);
     if (manifest) generatedManifestFiles.push(manifest);
     generated.push({ module, webModule, manifest, provider });
   }

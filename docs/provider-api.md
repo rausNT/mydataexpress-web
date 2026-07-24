@@ -104,7 +104,9 @@ npm run scaffold:provider -- OfficeTools.manifest.json
 
 Рядом с provider создаётся `dataexpress-provider-sdk.mjs`, а импорт в scaffold
 указывает на эту локальную копию. Для переноса на другой сервер копируйте
-`.provider.mjs`, `.manifest.json` и `dataexpress-provider-sdk.mjs` вместе.
+`.provider.mjs`, `.manifest.json`, `.provider.env.example` и
+`dataexpress-provider-sdk.mjs` вместе. Файл окружения содержит порт, токен и
+дополнительную политику готовых provider-рецептов.
 
 Каждый сгенерированный handler имеет отметку
 `dataExpressImplemented = false`. После реализации операции измените её на
@@ -113,8 +115,9 @@ npm run scaffold:provider -- OfficeTools.manifest.json
 `/capabilities`.
 
 В сгенерированном `.provider.mjs` перечислены только операции со статусом
-`provider`, сигнатуры параметров оставлены комментариями, а каждый handler
-содержит явный `TODO`. После реализации задайте токен и запустите файл:
+`provider`, сигнатуры параметров оставлены комментариями. Неизвестная операция
+получает явный `TODO`; распознанный встроенный рецепт сразу получает
+`dataExpressImplemented = true`.
 
 Операции manifest со статусом `web-script` уже выполняются внутри `.wepas` и не
 требуют handler или provider-секции. Если manifest состоит только из таких
@@ -124,6 +127,53 @@ npm run scaffold:provider -- OfficeTools.manifest.json
 $env:DX_PROVIDER_TOKEN = 'replace-with-a-long-random-token'
 node OfficeTools.provider.mjs
 ```
+
+Или скопируйте `.provider.env.example` в `.provider.env`, замените значения и
+используйте штатную загрузку окружения Node.js:
+
+```powershell
+node --env-file=OfficeTools.provider.env OfficeTools.provider.mjs
+```
+
+## Автоматический рецепт HTTP_GET
+
+Старое расширение форума `HTTP_GET(URL: Variant): String` использует OLE для
+кодирования URL, но сам запрос выполняет через `THttpClient`. Для этой строго
+ограниченной сигнатуры мигратор создаёт `providerRecipe.kind = "http-get"` и
+готовый handler вместо `TODO`. Остальные функции с похожим именем или другой
+сигнатурой автоматически не подменяются.
+
+Handler использует встроенный стабильный `fetch` Node.js и
+`AbortSignal.timeout`; внешние зависимости не нужны. Документация runtime:
+[Node.js global fetch и AbortSignal](https://nodejs.org/docs/latest/api/globals.html#fetch).
+
+Перед запуском настройте созданный `.provider.env`:
+
+```dotenv
+DX_PROVIDER_TOKEN=replace-with-the-same-long-random-token-as-dxwebsrv.cfg
+DX_PROVIDER_HOST=127.0.0.1
+DX_PROVIDER_PORT=9081
+DX_HTTP_ALLOW_HOSTS=api.example.com,*.trusted.example
+DX_HTTP_ALLOW_PRIVATE=false
+DX_HTTP_ALLOW_INSECURE=false
+DX_HTTP_TIMEOUT_MS=15000
+DX_HTTP_MAX_RESPONSE_BYTES=2097152
+DX_HTTP_MAX_REDIRECTS=3
+```
+
+Без `DX_HTTP_ALLOW_HOSTS` процесс не запускается. `*` разрешает любой публичный
+хост, но предпочтителен короткий явный список. По умолчанию запрещены:
+
+- протоколы кроме HTTPS;
+- логин или пароль внутри URL;
+- loopback, link-local, private, multicast и документационные IP-диапазоны;
+- ответ больше 2 МБ;
+- более трёх redirects.
+
+Каждый redirect заново проходит проверку протокола, hostname и адреса.
+`DX_HTTP_ALLOW_PRIVATE=true` и `DX_HTTP_ALLOW_INSECURE=true` нужны только для
+явно доверенной локальной интеграции. Таймаут ограничен 120 секундами, размер
+ответа — 32 МБ, число redirects — десятью независимо от значений окружения.
 
 Пример запуска:
 

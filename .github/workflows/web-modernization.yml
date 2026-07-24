@@ -95,9 +95,12 @@ jobs:
           $mixedMigrationRoot = Join-Path $env:RUNNER_TEMP 'extension-mixed-migration'
           $runtimeInput = Join-Path $env:RUNNER_TEMP 'extension-runtime-source'
           $runtimeMigrationRoot = Join-Path $env:RUNNER_TEMP 'extension-runtime-migration'
+          $httpInput = Join-Path $env:RUNNER_TEMP 'extension-http-source'
+          $httpMigrationRoot = Join-Path $env:RUNNER_TEMP 'extension-http-migration'
           New-Item -ItemType Directory -Path $migrationInput | Out-Null
           New-Item -ItemType Directory -Path $mixedInput | Out-Null
           New-Item -ItemType Directory -Path $runtimeInput | Out-Null
+          New-Item -ItemType Directory -Path $httpInput | Out-Null
           $desktopModule = Join-Path $migrationInput 'portable.epas'
           Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/portable.epas') `
             -Destination $desktopModule
@@ -105,6 +108,8 @@ jobs:
             -Destination (Join-Path $mixedInput 'mixed.epas')
           Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/runtime-api.epas') `
             -Destination (Join-Path $runtimeInput 'runtime-api.epas')
+          Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/legacy-http-get.epas') `
+            -Destination (Join-Path $httpInput 'legacy-http-get.epas')
           & (Get-Command node).Source (Join-Path $PWD 'tools/extension-batch-migrate.mjs') `
             $migrationInput --output-dir $migrationRoot
           if ($LASTEXITCODE -ne 0) { throw "Batch extension migration failed: $LASTEXITCODE" }
@@ -117,6 +122,9 @@ jobs:
           & (Get-Command node).Source (Join-Path $PWD 'tools/extension-batch-migrate.mjs') `
             $runtimeInput --output-dir $runtimeMigrationRoot --strict
           if ($LASTEXITCODE -ne 0) { throw "Runtime API extension migration failed: $LASTEXITCODE" }
+          & (Get-Command node).Source (Join-Path $PWD 'tools/extension-batch-migrate.mjs') `
+            $httpInput --output-dir $httpMigrationRoot --strict
+          if ($LASTEXITCODE -ne 0) { throw "HTTP recipe extension migration failed: $LASTEXITCODE" }
 
           $wepasArguments = @(
             "-Fu$(Join-Path $PWD 'lib/i386-win32')",
@@ -159,6 +167,9 @@ jobs:
           & (Join-Path $smokeRoot 'wepas-syntax-smoke.exe') `
             (Join-Path $runtimeMigrationRoot 'runtime-api.wepas')
           if ($LASTEXITCODE -ne 0) { throw "Runtime API wepas compilation failed: $LASTEXITCODE" }
+          & (Join-Path $smokeRoot 'wepas-syntax-smoke.exe') `
+            (Join-Path $httpMigrationRoot 'legacy-http-get.wepas')
+          if ($LASTEXITCODE -ne 0) { throw "HTTP recipe wepas compilation failed: $LASTEXITCODE" }
 
           $token = 'provider-smoke-secret'
           $port = 19081

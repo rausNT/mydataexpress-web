@@ -1,0 +1,34 @@
+{@module
+Author=DataExpress modernization tests
+Version=1.0
+Description=Legacy OLE URL helper with a portable HTTP provider recipe
+@}
+
+{@function
+OrigName=HTTP_GET
+Name=HTTP_GET
+Args=v
+Result=s
+Group=Internet
+Description=Fetch text from a URL
+@}
+function LegacyEncode(Value: String): String;
+var
+  Script: Variant;
+begin
+  Script := CreateOleObject('MSScriptControl.ScriptControl');
+  Result := Script.Run('encodeURI', Value);
+end;
+
+function HTTP_GET(URL: Variant): String;
+var
+  Client: THttpClient;
+begin
+  Client := THttpClient.Create;
+  try
+    Client.Send('GET', LegacyEncode(VarToStr(URL)));
+    Result := Client.Content;
+  finally
+    Client.Free;
+  end;
+end;
