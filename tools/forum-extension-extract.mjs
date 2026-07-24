@@ -19,6 +19,7 @@ const DEFAULT_MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_MAX_ENTRIES = 20_000;
 const DEFAULT_MAX_DEPTH = 4;
+let cachedTarCharsetArguments;
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex').toUpperCase();
@@ -65,8 +66,23 @@ function tarResult(args, {
   return Buffer.from(result.stdout || []);
 }
 
+function tarCharsetArguments() {
+  if (cachedTarCharsetArguments) return [...cachedTarCharsetArguments];
+  const probe = spawnSync('tar', [
+    '--options', 'hdrcharset=CP1251', '--version',
+  ], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  cachedTarCharsetArguments =
+    !probe.error && probe.status === 0
+      ? ['--options', 'hdrcharset=CP1251']
+      : [];
+  return [...cachedTarCharsetArguments];
+}
+
 function archiveEntries(source, maximum) {
-  const args = ['--options', 'hdrcharset=CP1251', '-tf', source.path || '-'];
+  const args = [...tarCharsetArguments(), '-tf', source.path || '-'];
   const output = tarResult(args, {
     input: source.bytes,
     maxBuffer: Math.max(1024 * 1024, maximum * 512),
@@ -79,7 +95,7 @@ function archiveEntries(source, maximum) {
 }
 
 function archiveEntryBytes(source, entry, maximum) {
-  const args = ['--options', 'hdrcharset=CP1251', '-xOf', source.path || '-', entry];
+  const args = [...tarCharsetArguments(), '-xOf', source.path || '-', entry];
   const bytes = tarResult(args, {
     input: source.bytes,
     maxBuffer: maximum + 1024 * 1024,
@@ -125,7 +141,7 @@ async function extractArchiveCandidates(archivePath, context, limits, handlers) 
   try {
     const patterns = [...SOURCE_EXTENSIONS, ...ARCHIVE_EXTENSIONS].map(item => `*${item}`);
     const result = spawnSync('tar', [
-      '--options', 'hdrcharset=CP1251',
+      ...tarCharsetArguments(),
       '-xf', archivePath,
       '-C', directory,
       ...patterns,

@@ -24,7 +24,7 @@ uses
   {$IFDEF UNIX}
   {cmem, }cthreads, cwstring, clocale,
   {$ENDIF}
-  Interfaces, Classes, SysUtils, XmlReport, ToWordsFuncs, StrConsts, SqlGen, SAXBaseReader,
+  Classes, SysUtils, XmlReport, ToWordsFuncs, StrConsts, SqlGen, SAXBaseReader,
   ReportManager, padeg, MainServer, LfmParser, HtmlShow, FormManager,
   FilterParsers, ExprFuncs, Expressions, DXUsers, DxTypes, DXReports, DXCtrls,
   DBEngine, AppUtils, AppSettings, Translations, TypesWrapper, MainDaemon,
