@@ -23,6 +23,10 @@ test('connection discovery is explicit and does not expose database paths by def
   assert.match(serverView, /Value\[j\] in \['a'\.\.'z', 'A'\.\.'Z', '0'\.\.'9', '_'\]/);
   assert.match(serverView, /ConnectionUrl := '\/' \+ LowerCase\(ConnectionName\) \+ '\/'/);
   assert.match(serverView, /StrToHtml\(ConnectionName\)/);
+  assert.match(
+    serverView,
+    /StringReplace\(Result, '\[landing-title\]', StrToHtml\(rsLandingTitle\), \[rfReplaceAll\]\)/,
+  );
   assert.doesNotMatch(
     serverView.slice(
       serverView.indexOf('function THtmlShow.ShowIndexPage'),

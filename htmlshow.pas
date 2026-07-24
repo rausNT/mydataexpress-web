@@ -2452,17 +2452,17 @@ begin
     Connections := '<p class="connection-hint">' + StrToHtml(rsConnectionHint) + '</p>';
 
   Result := LoadString(GetHtmlPath + 'index.html');
-  Result := StringReplace(Result, '[lng]', StrToHtml(AppSet.Language), []);
-  Result := StringReplace(Result, '[title]', rsServerItself, []);
-  Result := StringReplace(Result, '[landing-status]', StrToHtml(rsLandingStatus), []);
-  Result := StringReplace(Result, '[landing-title]', StrToHtml(rsLandingTitle), []);
-  Result := StringReplace(Result, '[landing-description]', StrToHtml(rsLandingDescription), []);
-  Result := StringReplace(Result, '[connection-name]', StrToHtml(rsConnectionName), []);
-  Result := StringReplace(Result, '[connection-placeholder]', StrToHtml(rsConnectionPlaceholder), []);
-  Result := StringReplace(Result, '[open-connection]', StrToHtml(rsOpenConnection), []);
-  Result := StringReplace(Result, '[invalid-connection-name]', StrToHtml(rsInvalidConnectionAlias), []);
-  Result := StringReplace(Result, '[connections]', Connections, []);
-  Result := StringReplace(Result, '[content]', Format(rsLandingMeta, [AppVer]), []);
+  Result := StringReplace(Result, '[lng]', StrToHtml(AppSet.Language), [rfReplaceAll]);
+  Result := StringReplace(Result, '[title]', rsServerItself, [rfReplaceAll]);
+  Result := StringReplace(Result, '[landing-status]', StrToHtml(rsLandingStatus), [rfReplaceAll]);
+  Result := StringReplace(Result, '[landing-title]', StrToHtml(rsLandingTitle), [rfReplaceAll]);
+  Result := StringReplace(Result, '[landing-description]', StrToHtml(rsLandingDescription), [rfReplaceAll]);
+  Result := StringReplace(Result, '[connection-name]', StrToHtml(rsConnectionName), [rfReplaceAll]);
+  Result := StringReplace(Result, '[connection-placeholder]', StrToHtml(rsConnectionPlaceholder), [rfReplaceAll]);
+  Result := StringReplace(Result, '[open-connection]', StrToHtml(rsOpenConnection), [rfReplaceAll]);
+  Result := StringReplace(Result, '[invalid-connection-name]', StrToHtml(rsInvalidConnectionAlias), [rfReplaceAll]);
+  Result := StringReplace(Result, '[connections]', Connections, [rfReplaceAll]);
+  Result := StringReplace(Result, '[content]', Format(rsLandingMeta, [AppVer]), [rfReplaceAll]);
 end;
 
 function THtmlShow.FieldChange(AFields: TStrings): String;
