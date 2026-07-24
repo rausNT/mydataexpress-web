@@ -36,6 +36,7 @@ tools/*
 !tools/provider-wiring.test.mjs
 !tools/provider-smoke.pas
 !tools/provider-smoke-server.mjs
+!tools/office-provider-smoke.mjs
 !tools/wepas-compile-smoke.pas
 !tools/wepas-syntax-smoke.pas
 !tools/http-client.test.mjs

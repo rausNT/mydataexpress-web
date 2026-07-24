@@ -389,6 +389,54 @@ test('recognizes stateful DaData OLE recipes and preserves session updates', () 
   assert.match(generated.module, /Result := ProviderValue\.AsString/);
 });
 
+test('recognizes the forum Word and Excel OLE conversion recipes', () => {
+  const source = readFileSync(
+    new URL('../test/fixtures/extensions/legacy-office.epas', import.meta.url),
+    'utf8',
+  );
+  const generated = generateWebModule(source, 'legacy-office.epas');
+  assert.deepEqual(generated.manifest.summary, {
+    total: 2,
+    compatible: 2,
+    webScript: 0,
+    provider: 2,
+    automatedProvider: 2,
+    reviewRequired: 0,
+    manual: 0,
+    complete: true,
+  });
+  assert.deepEqual(
+    generated.manifest.mappings.map(mapping => mapping.operation),
+    [
+      '7032FCD8-4797-4FC2-AAFA-04DBC1EDCFCA',
+      '814E06E5-E298-4368-8AC7-45F2E25E1578',
+    ],
+  );
+  assert.deepEqual(
+    generated.manifest.mappings.map(mapping => mapping.providerRecipe),
+    [
+      {
+        kind: 'office-document-convert',
+        documentType: 'writer',
+        inputParameter: 'aInputFile',
+        outputParameter: 'aOutputFile',
+        formatParameter: 'itemListExt',
+      },
+      {
+        kind: 'office-document-convert',
+        documentType: 'calc',
+        inputParameter: 'aInputFile',
+        outputParameter: 'aOutputFile',
+        formatParameter: 'itemListExt',
+      },
+    ],
+  );
+  assert.match(
+    generated.module,
+    /ExtensionProviderCallBoolean\('legacy-office', '7032FCD8-4797-4FC2-AAFA-04DBC1EDCFCA'/,
+  );
+});
+
 test('generates a mixed inline/provider module at routine granularity', () => {
   const source = readFileSync(new URL('../test/fixtures/extensions/mixed.epas', import.meta.url), 'utf8');
   const generated = generateWebModule(source, 'mixed.epas');

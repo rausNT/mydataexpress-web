@@ -1,0 +1,44 @@
+{@module
+Author=DataExpress tests
+Version=1.0
+Description=Synthetic Word and Excel OLE conversion compatibility fixture.
+@}
+
+{@action
+Id=7032FCD8-4797-4FC2-AAFA-04DBC1EDCFCA
+Target=button
+OrigName=convert_Word
+Name=Convert Word
+Group=Documents
+UI=
+Description=Convert a Word document.
+@}
+function convert_Word(aInputFile, aOutputFile, itemListExt: string): boolean;
+var
+  WordApp, Document: OleVariant;
+begin
+  WordApp := CreateOleObject('Word.Application');
+  Document := WordApp.Documents.Open(aInputFile, False, True);
+  Document.SaveAs2(aOutputFile, 17);
+  Result := True;
+end;
+
+{@action
+Id=814E06E5-E298-4368-8AC7-45F2E25E1578
+Target=button
+OrigName=convert_Excel
+Name=Convert Excel
+Group=Documents
+UI=
+Description=Convert an Excel workbook.
+@}
+function convert_Excel(aInputFile, aOutputFile, itemListExt: string): boolean;
+var
+  ExcelApp, Workbook: OleVariant;
+begin
+  ExcelApp := CreateOleObject('Excel.Application');
+  Workbook := ExcelApp.WorkBooks.Open(aInputFile, False, True);
+  Workbook.ExportAsFixedFormat(0, aOutputFile);
+  Workbook.SaveAs(aOutputFile, 51);
+  Result := True;
+end;

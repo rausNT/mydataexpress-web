@@ -213,6 +213,93 @@ DX_DADATA_MAX_RESPONSE_BYTES=2097152
 оставаться HTTPS. Официальное описание формата запросов:
 [DaData — подсказки по организациям](https://dadata.ru/api/suggest/party/).
 
+## Автоматический рецепт Word/Excel
+
+Форумный модуль конвертации содержит два action с routines `convert_Word` и
+`convert_Excel`. Мигратор проверяет не только имя: требуются исходные три
+строковых параметра, Boolean-результат и характерные OLE/SaveAs-вызовы. После
+совпадения manifest получает `providerRecipe.kind =
+"office-document-convert"`, а scaffold — готовый
+`createOfficeDocumentHandler`. Стабильные GUID действий остаются прежними.
+
+Handler использует LibreOffice CLI, а не Microsoft Office COM:
+
+```text
+soffice --headless --convert-to <extension>:<filter> --outdir <temporary> <input>
+```
+
+На Windows LibreOffice можно установить через актуальный пакет `winget`:
+
+```powershell
+winget install --id TheDocumentFoundation.LibreOffice --exact `
+  --accept-package-agreements --accept-source-agreements
+& 'C:\Program Files\LibreOffice\program\soffice.exe' --version
+```
+
+Если `winget` недоступен, используйте
+[официальную загрузку LibreOffice](https://www.libreoffice.org/download/download-libreoffice/).
+На Debian/Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install libreoffice
+soffice --version
+```
+
+Скопируйте `.provider.env.example` в `.provider.env` и задайте каталоги,
+которыми разрешено пользоваться provider:
+
+```dotenv
+DX_OFFICE_BINARY=C:\Program Files\LibreOffice\program\soffice.exe
+DX_OFFICE_BINARY_ARGS=[]
+DX_OFFICE_INPUT_ROOTS=C:\DataExpress\files
+DX_OFFICE_OUTPUT_ROOTS=C:\DataExpress\files
+DX_OFFICE_TIMEOUT_MS=120000
+DX_OFFICE_MAX_INPUT_BYTES=67108864
+DX_OFFICE_MAX_OUTPUT_BYTES=134217728
+DX_OFFICE_MAX_CONCURRENCY=2
+```
+
+Корневые каталоги должны существовать до запуска. На Windows несколько
+каталогов разделяются `;`, на Linux — `:`. Относительный путь вычисляется от
+рабочего каталога provider. Перед чтением и перед записью проверяется
+канонический путь, поэтому `..` и символьные ссылки не могут вывести операцию за
+разрешённый root. Новые вложенные выходные каталоги создаются только после этой
+проверки. Provider проверяет существование roots и выполняет
+`soffice --version` до открытия порта; поэтому зелёный `/health` не скрывает
+отсутствующую зависимость.
+
+Каждый запрос получает отдельный временный каталог и отдельный LibreOffice
+profile через `-env:UserInstallation=file:...`. Вход ограничен 64 МБ, результат
+— 128 МБ, таймаут — 120 секунд; значения можно уменьшить или увеличить в
+указанных пределах. Одновременно выполняются не более двух конвертаций
+(`DX_OFFICE_MAX_CONCURRENCY`, допустимо 1–16). Успешный handler возвращает
+`true`, как исходные action.
+Существующий выходной файл перезаписывается только внутри разрешённого каталога.
+
+Автоматически сопоставлены распространённые Writer-форматы DOC/DOCX/DOCM,
+DOT/DOTX/DOTM, ODT, PDF, RTF, HTML и TXT, а также Calc-форматы XLS/XLSX/XLSM,
+XLTX/XLTM, ODS, PDF, CSV, TXT, HTML и XML. XPS, MHT, XLSB и редкие устаревшие
+WK/WJ-форматы не имеют равноценного переносимого LibreOffice export filter и
+завершаются явной ошибкой вместо создания файла с неверным содержимым. Макросы
+не исполняются; их сохранение при переходе между macro-enabled форматами зависит
+от фильтра LibreOffice.
+
+Поддерживаемый синтаксис `--convert-to` и имена фильтров описаны в официальной
+документации:
+[параметры запуска LibreOffice](https://help.libreoffice.org/latest/en-US/text/shared/guide/start_parameters.html) и
+[таблица conversion filters](https://help.libreoffice.org/latest/en-US/text/shared/guide/convertfilters.html).
+
+После установки можно проверить Writer и Calc на реальных шаблонах
+дистрибутива:
+
+```powershell
+npm run smoke:office-provider
+```
+
+Тот же smoke автоматически выполняется в Linux CI с настоящим LibreOffice и
+проверяет, что оба результата начинаются с сигнатуры `%PDF-`.
+
 Пример запуска:
 
 ```powershell

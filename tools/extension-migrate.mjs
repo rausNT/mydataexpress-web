@@ -498,6 +498,32 @@ function providerRecipe({ spec, operation, params, type, inline, report, source 
       resultVariable: dadata[1],
     };
   }
+  const officeTypes = {
+    convert_word: {
+      documentType: 'writer',
+      signature: /\bWord\.Application\b/i,
+      conversion: /\b(?:SaveAs2|ExportAsFixedFormat)\s*\(/i,
+    },
+    convert_excel: {
+      documentType: 'calc',
+      signature: /\bExcel\.Application\b/i,
+      conversion: /\b(?:SaveAs|ExportAsFixedFormat)\s*\(/i,
+    },
+  };
+  const office = officeTypes[String(spec.origName || operation).toLowerCase()];
+  const supportedOfficeParameters = params.length === 3 && params.every(parameter =>
+    stringTypes.has(normalizedType(parameter.type)));
+  if (office && spec.kind === 'action' && normalizedType(type) === 'boolean' &&
+      supportedOfficeParameters && replacesOle &&
+      office.signature.test(source) && office.conversion.test(source)) {
+    return {
+      kind: 'office-document-convert',
+      documentType: office.documentType,
+      inputParameter: params[0].name,
+      outputParameter: params[1].name,
+      formatParameter: params[2].name,
+    };
+  }
   return null;
 }
 

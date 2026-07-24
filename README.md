@@ -63,6 +63,13 @@ JSON-provider они не передаются неявно и при невоз
 восстанавливает session variables, от которых зависят существующие
 `DA_FIRM_*`, `DA_BANK_FIELD` и `DA_ADDR_FIELD`.
 
+Два действия форумного модуля конвертации Word/Excel теперь тоже переносятся
+автоматически. Вместо `Word.Application`/`Excel.Application` создаётся
+ограниченный файловыми каталогами LibreOffice handler. Он запускает
+`soffice --headless` с отдельным профилем на каждый запрос, сохраняет прежний
+Boolean-результат и не требует Microsoft Office или Windows. Установка и
+параметры `DX_OFFICE_*` описаны в `docs/provider-api.md`.
+
 Результирующий web-модуль имеет штатное расширение `OfficeTools.wepas`. Проверить
 весь каталог desktop/web-модулей перед импортом можно строгим аудитом:
 
