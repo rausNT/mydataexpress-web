@@ -21,6 +21,8 @@ test('one-line installer pins runtime downloads and runs services unprivileged',
   assert.match(installer, /bantime = 24h/);
   assert.match(installer, /ufw limit OpenSSH/);
   assert.match(installer, /unattended-upgrades/);
+  assert.match(installer, /\.well-known\/acme-challenge/);
+  assert.match(installer, /ssl_protocols TLSv1\.2 TLSv1\.3/);
   assert.match(installer, /MaxAuthTries 3/);
   assert.match(installer, /StartLimitIntervalSec=0/);
   assert.match(installer, /ExecStart=\/usr\/bin\/sleep 1/);

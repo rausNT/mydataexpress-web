@@ -300,6 +300,7 @@ map $args $dx_login_key {
 limit_req_zone $dx_login_key zone=dx_logins:10m rate=10r/m;
 NGINX
 
+install -d -m 0755 /var/www/letsencrypt/.well-known/acme-challenge
 cat >/etc/nginx/sites-available/dataexpress <<'NGINX'
 server {
     listen 80 default_server;
@@ -318,6 +319,11 @@ server {
     add_header Referrer-Policy "same-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+        default_type text/plain;
+        try_files $uri =404;
+    }
     location = /admin { return 301 /admin/; }
     location /admin/ {
         limit_conn dx_connections 3;
@@ -340,6 +346,59 @@ server {
     }
 }
 NGINX
+SERVER_IP="$(hostname -I | awk '{print $1}')"
+if [ -f "/etc/letsencrypt/live/$SERVER_IP/fullchain.pem" ] &&
+   [ -f "/etc/letsencrypt/live/$SERVER_IP/privkey.pem" ]; then
+  cat >>/etc/nginx/sites-available/dataexpress <<NGINX
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    server_name $SERVER_IP;
+    ssl_certificate /etc/letsencrypt/live/$SERVER_IP/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$SERVER_IP/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:DXTLS:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+    client_max_body_size 256m;
+    client_header_timeout 15s;
+    client_body_timeout 60s;
+    keepalive_timeout 20s;
+    send_timeout 60s;
+    reset_timedout_connection on;
+    limit_conn dx_connections 30;
+    limit_req zone=dx_requests burst=80 nodelay;
+    add_header Strict-Transport-Security "max-age=15552000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "same-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    location = /admin { return 301 /admin/; }
+    location /admin/ {
+        limit_conn dx_connections 3;
+        proxy_pass http://127.0.0.1:8090;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+    location / {
+        limit_req zone=dx_requests burst=80 nodelay;
+        limit_req zone=dx_logins burst=10 nodelay;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+NGINX
+fi
 rm -f /etc/nginx/sites-enabled/default
 ln -sfn /etc/nginx/sites-available/dataexpress /etc/nginx/sites-enabled/dataexpress
 nginx -t
