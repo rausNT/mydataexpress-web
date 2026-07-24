@@ -17,7 +17,7 @@ async function withServer(run) {
 	}
 }
 
-test('serves the real modernized login assets and health endpoint', async () => {
+test('serves the connection landing, modernized login and health endpoint', async () => {
 	await withServer(async (baseUrl) => {
 		const health = await fetch(`${baseUrl}/health`);
 		assert.deepEqual(await health.json(), { status: 'ok', mode: 'preview' });
@@ -25,20 +25,29 @@ test('serves the real modernized login assets and health endpoint', async () => 
 		const page = await fetch(`${baseUrl}/`);
 		const html = await page.text();
 		assert.equal(page.status, 200);
-		assert.match(html, /DataExpress Web · локальный preview/);
+		assert.match(html, /Открыть базу данных/);
+		assert.match(html, /class="connection-card"/);
+		assert.match(html, /href="\/demodb\/"/);
 		assert.match(html, /\/html\/modern\.css/);
-		assert.match(html, /\/html\/http\.js/);
-		assert.doesNotMatch(html, /\[(?:lng|title|content)\]/);
+		assert.match(html, /\/html\/index\.js/);
+		assert.doesNotMatch(html, /\[(?:lng|title|landing-[^\]]+|connection-[^\]]+|connections|content)\]/);
 
 		const transport = await fetch(`${baseUrl}/html/http.js`);
 		assert.equal(transport.status, 200);
 		assert.match(transport.headers.get('content-type'), /application\/javascript/);
+
+		const login = await fetch(`${baseUrl}/demodb/`);
+		const loginHtml = await login.text();
+		assert.equal(login.status, 200);
+		assert.match(loginHtml, /DataExpress Web · локальный preview/);
+		assert.match(loginHtml, /\/html\/modern\.css/);
+		assert.match(loginHtml, /\/html\/http\.js/);
 	});
 });
 
 test('keeps the legacy login response code in preview mode', async () => {
 	await withServer(async (baseUrl) => {
-		const response = await fetch(`${baseUrl}/?login`, { method: 'POST', body: 'user=demo' });
+		const response = await fetch(`${baseUrl}/demodb/?login`, { method: 'POST', body: 'user=demo' });
 		const payload = await response.json();
 		assert.equal(response.status, 223);
 		assert.match(payload.error, /Pascal-бэкенда/);

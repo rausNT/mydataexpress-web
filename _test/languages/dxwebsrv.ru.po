@@ -831,6 +831,47 @@ msgstr "Выберите какую-нибудь форму."
 msgid "Server error"
 msgstr "Ошибка сервера"
 
+#: strconsts.rslandingstatus
+msgid "Server is ready"
+msgstr "Сервер готов"
+
+#: strconsts.rslandingtitle
+msgid "Open a database"
+msgstr "Открыть базу данных"
+
+#: strconsts.rslandingdescription
+msgid "Select an available connection or enter its name."
+msgstr "Выберите доступное подключение или введите его имя."
+
+#: strconsts.rsconnectionname
+msgid "Connection name"
+msgstr "Имя подключения"
+
+#: strconsts.rsconnectionplaceholder
+msgid "For example: demodb"
+msgstr "Например: demodb"
+
+#: strconsts.rsopenconnection
+msgid "Open"
+msgstr "Открыть"
+
+#: strconsts.rsinvalidconnectionname
+msgid "Use Latin letters, digits, and underscore."
+msgstr "Используйте латинские буквы, цифры и символ подчёркивания."
+
+#: strconsts.rsconfiguredconnections
+msgid "Available connections"
+msgstr "Доступные подключения"
+
+#: strconsts.rsconnectionhint
+msgid "Enter the connection name from dxwebsrv.cfg."
+msgstr "Введите имя подключения из dxwebsrv.cfg."
+
+#: strconsts.rslandingmeta
+#, object-pascal-format
+msgid "Version: %s &middot; Copyright &#169; 2016-2026 Pavel Duborkin<br><a href=\"https://mydataexpress.ru\">Project Website</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Forum</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Wiki</a>"
+msgstr "Версия: %s &middot; Copyright &#169; 2016-2026 Павел Дуборкин<br><a href=\"https://mydataexpress.ru\">Сайт проекта</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Форум</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Вики</a>"
+
 #: strconsts.rsserveritself
 msgid "Server itself"
 msgstr "Сам сервер"

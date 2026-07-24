@@ -828,6 +828,47 @@ msgstr ""
 msgid "Server error"
 msgstr ""
 
+#: strconsts.rslandingstatus
+msgid "Server is ready"
+msgstr ""
+
+#: strconsts.rslandingtitle
+msgid "Open a database"
+msgstr ""
+
+#: strconsts.rslandingdescription
+msgid "Select an available connection or enter its name."
+msgstr ""
+
+#: strconsts.rsconnectionname
+msgid "Connection name"
+msgstr ""
+
+#: strconsts.rsconnectionplaceholder
+msgid "For example: demodb"
+msgstr ""
+
+#: strconsts.rsopenconnection
+msgid "Open"
+msgstr ""
+
+#: strconsts.rsinvalidconnectionname
+msgid "Use Latin letters, digits, and underscore."
+msgstr ""
+
+#: strconsts.rsconfiguredconnections
+msgid "Available connections"
+msgstr ""
+
+#: strconsts.rsconnectionhint
+msgid "Enter the connection name from dxwebsrv.cfg."
+msgstr ""
+
+#: strconsts.rslandingmeta
+#, object-pascal-format
+msgid "Version: %s &middot; Copyright &#169; 2016-2026 Pavel Duborkin<br><a href=\"https://mydataexpress.ru\">Project Website</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Forum</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Wiki</a>"
+msgstr ""
+
 #: strconsts.rsserveritself
 msgid "Server itself"
 msgstr ""

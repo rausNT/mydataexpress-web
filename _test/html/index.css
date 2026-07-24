@@ -1,61 +1,265 @@
-@keyframes animateHeart {
-
-    /* https://learnwithparam.com/blog/hearbeat-animation-using-css/ */
-    0% {
-        transform: scale(0.8);
-    }
-
-    5% {
-        transform: scale(0.9);
-    }
-
-    10% {
-        transform: scale(0.8);
-    }
-
-    15% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(0.8);
-    }
-
-    100% {
-        transform: scale(0.8);
-    }
+.landing-page {
+    display: grid;
+    min-height: 100vh;
+    padding: clamp(20px, 5vw, 64px);
 }
 
-.heart {
-    animation: animateHeart 1.2s infinite;
+.landing-shell {
+    width: min(100%, 920px);
+    margin: auto;
 }
 
-html {
-    font: 14px verdana;
-    height: 100%;
+.landing-hero {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    gap: clamp(24px, 5vw, 52px);
+    align-items: center;
+    margin-bottom: 28px;
 }
 
-body {
-    background-image: url("/img/background.jpg");
-    background-repeat: repeat-x;
-    background-position: bottom;
+.landing-page .logo {
+    display: grid;
+    width: 132px;
+    height: 132px;
+    margin: 0 !important;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, .82);
+    border-radius: 32px;
+    background: rgba(255, 255, 255, .72);
+    box-shadow: 0 20px 55px rgba(15, 23, 42, .12);
+    backdrop-filter: blur(18px);
 }
 
-.logo {
-    margin-top: 150px;
+.landing-page .logo img {
+    width: 88px !important;
+    height: auto;
+}
+
+.hero-copy h1 {
+    margin: 9px 0 7px;
+    font-size: clamp(30px, 5vw, 48px);
+    line-height: 1.08;
+    letter-spacing: -.035em;
+}
+
+.hero-copy p {
+    max-width: 580px;
+    margin: 0;
+    color: var(--dx-muted);
+    font-size: 16px;
+}
+
+.server-status {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--dx-success);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+
+.server-status > span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 5px rgba(34, 197, 94, .13);
+}
+
+.connection-panel {
+    padding: clamp(22px, 4vw, 36px);
+    border: 1px solid rgba(255, 255, 255, .88);
+    border-radius: 24px;
+    background: rgba(255, 255, 255, .9);
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .12);
+    backdrop-filter: blur(20px);
+}
+
+#connection-form label,
+.connection-section h2 {
+    display: block;
+    margin: 0 0 10px;
+    color: #43516a;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.connection-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+}
+
+.connection-control input {
+    min-width: 0;
+    min-height: 50px !important;
+    padding-inline: 15px !important;
+    font-size: 16px !important;
+}
+
+.connection-control button {
+    display: inline-flex;
+    min-width: 130px;
+    min-height: 50px;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    border-color: var(--dx-primary);
+    background: var(--dx-primary);
+    color: #fff;
+    font-weight: 700;
+}
+
+.connection-control button:hover {
+    border-color: var(--dx-primary-hover);
+    background: var(--dx-primary-hover);
+}
+
+.connection-error {
+    min-height: 21px;
+    margin: 7px 0 0;
+    color: var(--dx-danger);
+    font-size: 13px;
+}
+
+[aria-invalid="true"] {
+    border-color: var(--dx-danger) !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, .1) !important;
+}
+
+.connection-hint {
+    margin: 7px 0 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--dx-border);
+    color: var(--dx-muted);
+}
+
+.connection-section {
+    margin-top: 7px;
+    padding-top: 20px;
+    border-top: 1px solid var(--dx-border);
+}
+
+.connection-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.connection-card {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 11px;
+    align-items: center;
+    min-height: 62px;
+    padding: 10px 14px;
+    border: 1px solid var(--dx-border);
+    border-radius: 13px;
+    background: var(--dx-surface-soft);
+    color: var(--dx-text);
+    text-decoration: none;
+    transition: border-color .15s, background-color .15s, transform .15s, box-shadow .15s;
+}
+
+.connection-card:hover {
+    border-color: #a8bee0;
+    background: var(--dx-primary-soft);
+    box-shadow: 0 9px 24px rgba(37, 99, 235, .1);
+    transform: translateY(-1px);
+}
+
+.connection-card:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .22);
+    outline-offset: 2px;
+}
+
+.connection-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.connection-icon img {
+    width: 21px;
+    height: 21px;
+}
+
+.connection-name {
+    overflow: hidden;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.connection-arrow {
+    color: var(--dx-primary);
+    font-size: 19px;
+}
+
+.server-meta {
+    margin-top: 24px;
+    color: var(--dx-muted);
+    font-size: 12px;
+    line-height: 1.65;
     text-align: center;
-    width: 100%;
 }
 
-.data {
-    text-align: center;
-    width: 100%;
+.server-meta a {
+    color: #53647d;
 }
 
-a {
-    color: blue
+@media (max-width: 640px) {
+    .landing-page {
+        align-items: start;
+        padding: 24px 14px;
+    }
+
+    .landing-hero {
+        grid-template-columns: 74px minmax(0, 1fr);
+        gap: 17px;
+        margin: 0 8px 22px;
+    }
+
+    .landing-page .logo {
+        width: 74px;
+        height: 74px;
+        border-radius: 21px;
+    }
+
+    .landing-page .logo img {
+        width: 51px !important;
+    }
+
+    .hero-copy h1 {
+        margin-top: 6px;
+        font-size: clamp(25px, 8vw, 34px);
+    }
+
+    .hero-copy p {
+        font-size: 14px;
+    }
+
+    .connection-panel {
+        padding: 20px;
+        border-radius: 19px;
+    }
+
+    .connection-control,
+    .connection-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .connection-control button {
+        width: 100%;
+    }
 }
 
-a:visited {
-    color: blue;
+@media (prefers-reduced-motion: reduce) {
+    .connection-card {
+        transition: none;
+    }
 }
