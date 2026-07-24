@@ -462,10 +462,50 @@ function dadataStateVariables(source) {
 }
 
 function providerRecipe({ spec, operation, params, type, inline, report, source }) {
+  const hasNetwork = report.findings.some(finding => finding.rule === 'network');
+  const stringParameters = params.every(parameter =>
+    stringTypes.has(normalizedType(parameter.type)));
+  if (hasNetwork && /\bTHTTPClient\b/i.test(source) &&
+      /\bSendHttpRequest\s*\(/i.test(source)) {
+    if (spec.kind === 'function' &&
+        String(spec.origName || operation).toLowerCase() === 'sendhttprequestfunction' &&
+        normalizedType(type) === 'variant' && params.length === 5 && stringParameters &&
+        /\bHeadersList\.CommaText\s*:=/i.test(source)) {
+      return {
+        kind: 'http-request',
+        contract: 'send-http-request-function-v1',
+        methodParameter: params[0].name,
+        urlParameter: params[1].name,
+        headersParameter: params[2].name,
+        apiKeyParameter: params[3].name,
+        paramsParameter: params[4].name,
+      };
+    }
+    const actionTypes = params.map(parameter => normalizedType(parameter.type));
+    if (spec.kind === 'action' &&
+        String(spec.origName || '').toLowerCase() === 'sendhttprequestaction' &&
+        String(operation).toUpperCase() === 'B2C1C477-85A4-4133-9D9C-0FD61CA10F1C' &&
+        params.length === 7 &&
+        actionTypes.slice(0, 5).every(value => stringTypes.has(value)) &&
+        actionTypes.slice(5).every(value => value === 'tvariantarray2d') &&
+        /\brequest_result\b/i.test(source) &&
+        /\bCreateJSONFromParams\s*\(/i.test(source)) {
+      return {
+        kind: 'http-request',
+        contract: 'send-http-request-action-v1',
+        methodParameter: params[0].name,
+        urlParameter: params[1].name,
+        authTypeParameter: params[2].name,
+        authValueParameter: params[3].name,
+        contentTypeParameter: params[4].name,
+        headersParameter: params[5].name,
+        paramsParameter: params[6].name,
+      };
+    }
+  }
   const supportedParameterType = params.length === 1 &&
     (normalizedType(params[0].type) === 'variant' ||
       stringTypes.has(normalizedType(params[0].type)));
-  const hasNetwork = report.findings.some(finding => finding.rule === 'network');
   const replacesOle = inline.issues.some(issue =>
     issue.includes('platform-dependency:ole'));
   if (spec.kind === 'function' && operation.toUpperCase() === 'HTTP_GET' &&
@@ -525,6 +565,74 @@ function providerRecipe({ spec, operation, params, type, inline, report, source 
     };
   }
   return null;
+}
+
+function httpRequestActionLines(moduleName, operation, decl, recipe) {
+  const method = recipe.methodParameter;
+  const url = recipe.urlParameter;
+  const authType = recipe.authTypeParameter;
+  const authValue = recipe.authValueParameter;
+  const contentType = recipe.contentTypeParameter;
+  const headers = recipe.headersParameter;
+  const params = recipe.paramsParameter;
+  return [
+    decl,
+    'var',
+    '  Method, Url, AuthType, AuthValue, ContentType: String;',
+    '  ProviderPayload, ProviderResponse, ProviderSeparator: String;',
+    '  HeaderName, HeaderValue, ParamName, ParamValue: String;',
+    '  i: Integer;',
+    'begin',
+    `  Method := UpperCase(${method});`,
+    `  Url := VarToStr(Session.EvalExpr(${url}, Self));`,
+    `  AuthType := ${authType};`,
+    `  AuthValue := VarToStr(Session.EvalExpr(${authValue}, Self));`,
+    `  ContentType := ${contentType};`,
+    '  if Url = \'\' then Exit;',
+    '  ProviderPayload := \'{"Method":\' + ExtensionProviderEncodeValue(Method) +',
+    '    \',"URL":\' + ExtensionProviderEncodeValue(Url) + \',"Headers":[\';',
+    '  ProviderSeparator := \'\';',
+    '  HeaderName := \'Content-Type\';',
+    '  HeaderValue := ContentType;',
+    '  ProviderPayload := ProviderPayload + \'{"name":\' + ExtensionProviderEncodeValue(HeaderName) +',
+    '    \',"value":\' + ExtensionProviderEncodeValue(HeaderValue) + \'}\';',
+    '  ProviderSeparator := \',\';',
+    '  case AuthType of',
+    '    \'Basic Auth\': begin HeaderName := \'Authorization\'; HeaderValue := \'Basic \' + EncodeBase64(AuthValue); end;',
+    '    \'Bearer Token\': begin HeaderName := \'Authorization\'; HeaderValue := \'Bearer \' + AuthValue; end;',
+    '    \'API Key\': begin HeaderName := \'X-API-Key\'; HeaderValue := AuthValue; end;',
+    '    \'DaData Token\': begin HeaderName := \'Authorization\'; HeaderValue := \'Token \' + AuthValue; end;',
+    '  else',
+    '    HeaderName := \'\';',
+    '  end;',
+    '  if HeaderName <> \'\' then',
+    '    ProviderPayload := ProviderPayload + ProviderSeparator + \'{"name":\' +',
+    '      ExtensionProviderEncodeValue(HeaderName) + \',"value":\' +',
+    '      ExtensionProviderEncodeValue(HeaderValue) + \'}\';',
+    `  for i := Low(${headers}) to High(${headers}) do`,
+    '  begin',
+    `    HeaderName := VarToStr(Session.EvalExpr(${headers}[i][0], Self));`,
+    `    HeaderValue := VarToStr(Session.EvalExpr(${headers}[i][1], Self));`,
+    '    ProviderPayload := ProviderPayload + ProviderSeparator + \'{"name":\' +',
+    '      ExtensionProviderEncodeValue(HeaderName) + \',"value":\' +',
+    '      ExtensionProviderEncodeValue(HeaderValue) + \'}\';',
+    '  end;',
+    '  ProviderPayload := ProviderPayload + \'],"Params":[\';',
+    '  ProviderSeparator := \'\';',
+    `  for i := Low(${params}) to High(${params}) do`,
+    '  begin',
+    `    ParamName := VarToStr(Session.EvalExpr(${params}[i][0], Self));`,
+    `    ParamValue := VarToStr(Session.EvalExpr(${params}[i][1], Self));`,
+    '    ProviderPayload := ProviderPayload + ProviderSeparator + \'{"name":\' +',
+    '      ExtensionProviderEncodeValue(ParamName) + \',"value":\' +',
+    '      ExtensionProviderEncodeValue(ParamValue) + \'}\';',
+    '    ProviderSeparator := \',\';',
+    '  end;',
+    '  ProviderPayload := ProviderPayload + \']}\';',
+    `  ProviderResponse := ExtensionProviderCall(${pascalString(moduleName)}, ${pascalString(operation)}, ProviderPayload);`,
+    '  Session.SetExprVar(\'request_result\', ProviderResponse);',
+    'end;',
+  ];
 }
 
 export function generateWebModule(source, filename = 'Extension.epas', { forceProvider = false } = {}) {
@@ -593,7 +701,8 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
     const inline = forceProvider
       ? { portable: false, issues: ['provider-forced'], reviews: [], order: [] }
       : inlineClosure(catalog, routineName);
-    if (inline.portable && inlineSignatureIssues.length === 0) {
+    const recipe = providerRecipe({ spec, operation, params, type, inline, report, source });
+    if (inline.portable && inlineSignatureIssues.length === 0 && !recipe) {
       for (const helperName of inline.order) {
         if (helperName === routineName.toLowerCase() ||
             exportedRoutineNames.has(helperName) || emittedHelpers.has(helperName)) continue;
@@ -622,57 +731,68 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
       continue;
     }
     const issues = [...signatureIssues];
-    const automatic = issues.length === 0;
-    const recipe = automatic
-      ? providerRecipe({ spec, operation, params, type, inline, report, source })
-      : null;
+    const automatic = Boolean(recipe) || issues.length === 0;
 
     lines.push(...mappingHeader);
-    lines.push(decl);
+    if (recipe?.kind === 'http-request' &&
+        recipe.contract === 'send-http-request-action-v1') {
+      lines.push(...httpRequestActionLines(moduleName, operation, decl, recipe), '');
+    } else {
+      lines.push(decl);
+    }
     if (automatic) {
-      if (recipe?.kind === 'dadata-suggest') {
-        lines.push(
-          'var',
-          '  ProviderPayload, ProviderResponse: String;',
-          '  ProviderState, ProviderVariables, ProviderEntry, ProviderName, ProviderValue: TJSONData;',
-          '  ProviderIndex: Integer;',
-          'begin',
-        );
+      if (recipe?.kind === 'http-request' &&
+          recipe.contract === 'send-http-request-action-v1') {
+        // The action requires local expression/grid evaluation before calling
+        // the provider, so its complete body was emitted above.
       } else {
-        lines.push('var', routineKind === 'procedure'
-          ? '  ProviderPayload, ProviderResponse: String;'
-          : '  ProviderPayload: String;', 'begin');
+        if (recipe?.kind === 'dadata-suggest') {
+          lines.push(
+            'var',
+            '  ProviderPayload, ProviderResponse: String;',
+            '  ProviderState, ProviderVariables, ProviderEntry, ProviderName, ProviderValue: TJSONData;',
+            '  ProviderIndex: Integer;',
+            'begin',
+          );
+        } else {
+          lines.push('var', routineKind === 'procedure'
+            ? '  ProviderPayload, ProviderResponse: String;'
+            : '  ProviderPayload: String;', 'begin');
+        }
+        lines.push(...payloadLines(params));
+        const call = `${adapter}(${pascalString(moduleName)}, ${pascalString(operation)}, ProviderPayload)`;
+        if (recipe?.kind === 'dadata-suggest') {
+          lines.push(
+            `  ProviderResponse := ${call};`,
+            '  ProviderState := ReadJSONFromString(ProviderResponse);',
+            '  try',
+            "    ProviderVariables := ProviderState.FindPath('variables');",
+            '    if ProviderVariables <> nil then',
+            '      for ProviderIndex := 0 to ProviderVariables.Count - 1 do',
+            '      begin',
+            '        ProviderEntry := ProviderVariables.Items[ProviderIndex];',
+            "        ProviderName := ProviderEntry.FindPath('name');",
+            "        ProviderValue := ProviderEntry.FindPath('value');",
+            '        if (ProviderName <> nil) and (ProviderValue <> nil) then',
+            '          Session.SetExprVar(ProviderName.AsString, ProviderValue.Value);',
+            '      end;',
+            "    ProviderValue := ProviderState.FindPath('value');",
+            "    if ProviderValue = nil then Result := ''",
+            '    else Result := ProviderValue.AsString;',
+            '  finally',
+            '    ProviderState.Free;',
+            '  end;',
+          );
+        } else if (routineKind === 'function') lines.push(`  Result := ${call};`);
+        else lines.push(`  ProviderResponse := ${call};`);
       }
-      lines.push(...payloadLines(params));
-      const call = `${adapter}(${pascalString(moduleName)}, ${pascalString(operation)}, ProviderPayload)`;
-      if (recipe?.kind === 'dadata-suggest') {
-        lines.push(
-          `  ProviderResponse := ${call};`,
-          '  ProviderState := ReadJSONFromString(ProviderResponse);',
-          '  try',
-          "    ProviderVariables := ProviderState.FindPath('variables');",
-          '    if ProviderVariables <> nil then',
-          '      for ProviderIndex := 0 to ProviderVariables.Count - 1 do',
-          '      begin',
-          '        ProviderEntry := ProviderVariables.Items[ProviderIndex];',
-          "        ProviderName := ProviderEntry.FindPath('name');",
-          "        ProviderValue := ProviderEntry.FindPath('value');",
-          '        if (ProviderName <> nil) and (ProviderValue <> nil) then',
-          '          Session.SetExprVar(ProviderName.AsString, ProviderValue.Value);',
-          '      end;',
-          "    ProviderValue := ProviderState.FindPath('value');",
-          "    if ProviderValue = nil then Result := ''",
-          '    else Result := ProviderValue.AsString;',
-          '  finally',
-          '    ProviderState.Free;',
-          '  end;',
-        );
-      } else if (routineKind === 'function') lines.push(`  Result := ${call};`);
-      else lines.push(`  ProviderResponse := ${call};`);
     } else {
       lines.push('begin', `  { TODO: manual provider adapter required: ${issues.join(', ')}. }`);
     }
-    lines.push('end;', '');
+    if (!(recipe?.kind === 'http-request' &&
+        recipe.contract === 'send-http-request-action-v1')) {
+      lines.push('end;', '');
+    }
     mappings.push({
       kind: spec.kind,
       name: spec.name,
@@ -690,7 +810,11 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
         ? [...identifierDiagnostics, ...inline.issues, ...inline.reviews, ...inlineSignatureIssues]
         : [...identifierDiagnostics, ...inline.issues, ...inline.reviews, ...inlineSignatureIssues, ...issues],
       reviewRequired: false,
-      wireFormat: recipe?.kind === 'dadata-suggest' ? 'json-state-v1' : 'json-v1',
+      wireFormat: recipe?.kind === 'dadata-suggest'
+        ? 'json-state-v1'
+        : recipe?.kind === 'http-request'
+          ? 'json-http-request-v1'
+          : 'json-v1',
       ...(recipe ? { providerRecipe: recipe } : {}),
     });
   }

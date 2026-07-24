@@ -65,6 +65,13 @@ function legacyHttpGetDesktop() {
   );
 }
 
+function legacyHttpRequestDesktop() {
+  return readFileSync(
+    new URL('../test/fixtures/extensions/legacy-http-request.epas', import.meta.url),
+    'utf8',
+  );
+}
+
 function legacyDadataDesktop() {
   return readFileSync(
     new URL('../test/fixtures/extensions/legacy-dadata.epas', import.meta.url),
@@ -228,6 +235,46 @@ test('batch migration creates an offline-ready provider for legacy HTTP_GET', ()
     assert.equal(missingEnvironment.status, 1, missingEnvironment.stderr);
     assert.ok(JSON.parse(missingEnvironment.stdout).errors
       .some(error => error.code === 'bundle-file-missing'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('batch migration creates a ready provider for the forum HTTP request contract', () => {
+  const { root, input, output } = fixture();
+  try {
+    write(join(input, 'LegacyHttpRequest.epas'), legacyHttpRequestDesktop());
+    const result = spawnSync(process.execPath, [
+      cli, input, '--output-dir', output, '--strict',
+    ], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    const index = JSON.parse(readFileSync(join(output, 'migration-index.json'), 'utf8'));
+    assert.equal(index.summary.complete, true);
+    assert.equal(index.summary.providerImplementationsRequired, 0);
+    assert.deepEqual(
+      index.modules[0].generated.automatedProviderOperations,
+      [
+        'B2C1C477-85A4-4133-9D9C-0FD61CA10F1C',
+        'SendHttpRequestFunction',
+      ],
+    );
+    const webModule = readFileSync(join(output, 'LegacyHttpRequest.wepas'), 'utf8');
+    assert.match(webModule, /Session\.SetExprVar\('request_result', ProviderResponse\)/);
+    assert.doesNotMatch(webModule, /THTTPClient/);
+    const provider = readFileSync(join(output, 'LegacyHttpRequest.provider.mjs'), 'utf8');
+    assert.match(provider, /createHttpRequestHandler/);
+    assert.doesNotMatch(provider, /TODO: implement provider operation/);
+    const environment = readFileSync(
+      join(output, 'LegacyHttpRequest.provider.env.example'),
+      'utf8',
+    );
+    assert.match(environment, /DX_HTTP_MAX_REQUEST_BYTES=2097152/);
+
+    const verified = spawnSync(process.execPath, [verifier, output, '--offline'], {
+      encoding: 'utf8',
+    });
+    assert.equal(verified.status, 0, verified.stderr);
+    assert.equal(JSON.parse(verified.stdout).summary.pendingHandlers, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

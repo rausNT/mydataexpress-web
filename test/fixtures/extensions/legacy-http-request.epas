@@ -1,0 +1,66 @@
+{@module
+Author=Forum compatibility fixture
+Version=1.3
+Description=Representative contract of the SendHttpRequest forum extension.
+@}
+
+function CreateJSONFromParams(const Params: TVariantArray2d): string;
+begin
+  Result := '{}';
+end;
+
+function SendHttpRequest(const Method: string; const URL: string;
+  const Headers: TStrings; const Params: TStrings): string;
+var
+  HttpClient: THTTPClient;
+begin
+  HttpClient := THTTPClient.Create;
+  try
+    HttpClient.Send(Method, URL);
+    Result := HttpClient.Content;
+  finally
+    HttpClient.Free;
+  end;
+end;
+
+{@action
+ID=B2C1C477-85A4-4133-9D9C-0FD61CA10F1C
+OrigName=SendHttpRequestAction
+Name=Отправить HTTP-запрос
+@}
+
+procedure SendHttpRequestAction(const ExprMethod: string; const ExprUrl: string;
+  const ExprAuthType: string; const ExprAuthValue: string;
+  const ExprContentType: string; ExprHeaders: TVariantArray2d;
+  ExprParams: TVariantArray2d);
+var
+  ResultString: string;
+begin
+  ResultString := CreateJSONFromParams(ExprParams);
+  ResultString := SendHttpRequest(ExprMethod, ExprUrl, nil, nil);
+  EvalExpr('setvar("request_result", "' + ResultString + '")', Self);
+end;
+
+{@function
+OrigName=SendHttpRequestFunction
+Name=SendHttpRequestFunction
+Args=vvvvv
+Result=v
+@}
+
+function SendHttpRequestFunction(const Method: string; const URL: string;
+  const Headers: string; const ApiKey: string; const Params: string): variant;
+var
+  HeadersList, ParamsList: TStringList;
+begin
+  HeadersList := TStringList.Create;
+  ParamsList := TStringList.Create;
+  try
+    HeadersList.CommaText := Headers;
+    ParamsList.CommaText := Params;
+    Result := SendHttpRequest(Method, URL, HeadersList, ParamsList);
+  finally
+    HeadersList.Free;
+    ParamsList.Free;
+  end;
+end;

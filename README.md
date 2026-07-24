@@ -58,6 +58,12 @@ JSON-provider они не передаются неявно и при невоз
 и повторной проверкой redirects. Параметры запуска находятся в созданном
 `.provider.env.example`.
 
+Полный форумный модуль `SendHttpRequest` версии 1.3 переносится тем же способом:
+action сохраняет GUID и переменную `request_result`, а
+`SendHttpRequestFunction` — прежний пятиаргументный контракт. GET/POST/PUT/DELETE
+выполняются provider-ом с URL allow-list, SSRF-защитой и лимитами request/response;
+прямой `THttpClient` из сгенерированного `.wepas` удаляется.
+
 Три OLE-функции форумного модуля DaData также переносятся автоматически.
 Провайдер использует HTTPS API DaData, сохраняет совместимый XML-результат и
 восстанавливает session variables, от которых зависят существующие

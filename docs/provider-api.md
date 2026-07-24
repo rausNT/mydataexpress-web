@@ -157,6 +157,7 @@ DX_HTTP_ALLOW_HOSTS=api.example.com,*.trusted.example
 DX_HTTP_ALLOW_PRIVATE=false
 DX_HTTP_ALLOW_INSECURE=false
 DX_HTTP_TIMEOUT_MS=15000
+DX_HTTP_MAX_REQUEST_BYTES=2097152
 DX_HTTP_MAX_RESPONSE_BYTES=2097152
 DX_HTTP_MAX_REDIRECTS=3
 ```
@@ -174,6 +175,40 @@ DX_HTTP_MAX_REDIRECTS=3
 `DX_HTTP_ALLOW_PRIVATE=true` и `DX_HTTP_ALLOW_INSECURE=true` нужны только для
 явно доверенной локальной интеграции. Таймаут ограничен 120 секундами, размер
 ответа — 32 МБ, число redirects — десятью независимо от значений окружения.
+
+## Автоматический рецепт полного HTTP-запроса
+
+Для форумного модуля `SendHttpRequest` версии 1.3 мигратор распознаёт оба
+публичных контракта:
+
+- action `B2C1C477-85A4-4133-9D9C-0FD61CA10F1C`;
+- функцию `SendHttpRequestFunction(Method, URL, Headers, ApiKey, Params)`.
+
+Они получают `providerRecipe.kind = "http-request"`. Стабильные `Id`/`Name`,
+типы аргументов и переменная сессии `request_result` сохраняются. Action
+по-прежнему вычисляет выражения и grid-параметры внутри DataExpress, но передаёт
+provider только готовые строки. Функция продолжает принимать заголовки и
+параметры в прежнем `CommaText`-формате.
+
+Handler поддерживает GET, POST, PUT и DELETE. Для action POST/PUT формируется
+JSON-объект из пар параметров; для функции тело JSON передаётся как есть. Ответ
+`application/json` преобразуется в прежний плоский формат
+`поле=значение;вложенное.поле=значение`; не-JSON возвращается текстом.
+Одновременно исправлено формирование GET query: имена и значения теперь
+URL-кодируются и соединяются через `&`, а не переводами строк.
+
+К общим ограничениям HTTP policy добавлены:
+
+- максимальный request body `DX_HTTP_MAX_REQUEST_BYTES` (по умолчанию 2 МБ);
+- не более 100 пользовательских заголовков;
+- запрет `Host`, `Content-Length`, hop-by-hop, `Proxy-*` и `Sec-*`;
+- отклонение CR/LF внутри значения заголовка.
+- удаление `Authorization` и `Cookie` при redirect на другой origin.
+
+API-ключ и Authorization остаются внутри provider-вызова и не записываются в
+manifest или диагностический отчёт. Для production используйте короткий
+`DX_HTTP_ALLOW_HOSTS`; включать `*`, private IP или plain HTTP следует только для
+контролируемой интеграции.
 
 ## Автоматический рецепт DaData
 

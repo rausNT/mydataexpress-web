@@ -78,6 +78,15 @@ Windows/OLE/DLL/UI/file findings и неизвестных globals копиру�
 `providerImplementationsRequired`; обязательный allow-list и остальные
 параметры записываются в `.provider.env.example`.
 
+Для форумного `SendHttpRequest` версии 1.3 распознаются action со стабильным
+`Id=B2C1C477-85A4-4133-9D9C-0FD61CA10F1C` и пятиаргументная
+`SendHttpRequestFunction`. Оба mappings получают готовый `http-request` recipe.
+В сгенерированном `.wepas` остаётся вычисление выражений и запись
+`request_result`, а `THttpClient` заменяется provider-вызовом. Поэтому
+allow-list, запрет private/небезопасных URL, redirects, таймаут и лимиты
+request/response действуют централизованно без изменения пользовательского
+`Name`/`Id`.
+
 Для форумного модуля DaData мигратор распознаёт `DA_FIRM_GET`, `DA_BANK_GET` и
 `DA_ADDR_GET` и создаёт `dadata-suggest` recipe. Провайдер вызывает официальный
 HTTPS API с `count=1`, возвращает совместимый `SuggestResponse` XML и state bundle.

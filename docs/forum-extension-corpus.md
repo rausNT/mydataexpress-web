@@ -48,24 +48,28 @@ SHA-256 `BAD18825F23454A6C1BAB690DD0A9E2A8C5F0A5BF756E8B4F96172F7D4FF5011`)
 {
   "modules": 7,
   "mappings": 61,
-  "webScript": 55,
-  "provider": 6,
-  "automatedProvider": 6,
+  "webScript": 53,
+  "provider": 8,
+  "automatedProvider": 8,
   "manual": 0,
-  "reviewRequired": 2,
+  "reviewRequired": 0,
   "complete": true
 }
 ```
 
 Чистые вычисления, известные типы runtime, локальные helpers и существующие
-web-паттерны переносятся напрямую. Все шесть операций с OLE/Office или другой
+web-паттерны переносятся напрямую. Все восемь операций с OLE/Office или
+сетевой/другой
 настольной зависимостью получают автоматически реализованную provider-границу:
 старый `HTTP_GET`, три stateful-вызова DaData (`DA_FIRM_GET`, `DA_BANK_GET`,
 `DA_ADDR_GET`) и два действия конвертации Word/Excel через headless LibreOffice.
+Оставшиеся action и функция модуля `SendHttpRequest` версии 1.3 теперь
+автоматически используют полный HTTP provider с сохранением action GUID,
+`SendHttpRequestFunction` и переменной `request_result`.
 Для Office handler обязательны разрешённые входные/выходные каталоги; это
-проверяется до чтения или записи файла. Два HTTP mappings остаются
-работоспособным Pascal Script, но требуют проверки сетевой политики перед
-эксплуатацией.
+проверяется до чтения или записи файла. Для обоих HTTP-рецептов обязателен
+`DX_HTTP_ALLOW_HOSTS`; private адреса, plain HTTP и URL credentials по умолчанию
+запрещены.
 
 Это результат контрольной выборки, а не утверждение об автоматической
 совместимости каждого файла каталога. Для каждого рабочего набора расширений
