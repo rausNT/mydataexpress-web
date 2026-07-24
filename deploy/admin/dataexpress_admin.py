@@ -1,0 +1,486 @@
+#!/usr/bin/env python3
+"""Small authenticated database-import service for DataExpress Web Server."""
+
+from __future__ import annotations
+
+import configparser
+import fcntl
+import hmac
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import tempfile
+import zipfile
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import unquote
+
+
+MAX_UPLOAD_BYTES = int(os.environ.get("DX_ADMIN_MAX_UPLOAD_BYTES", 256 * 1024 * 1024))
+MAX_DATABASE_BYTES = int(os.environ.get("DX_ADMIN_MAX_DATABASE_BYTES", 1024 * 1024 * 1024))
+ALIAS_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
+ODS_PATTERN = re.compile(r"ODS version\s+([0-9.]+)", re.IGNORECASE)
+
+
+class ImportErrorResponse(Exception):
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+
+
+def validate_alias(value: str) -> str:
+    alias = value.strip()
+    if not ALIAS_PATTERN.fullmatch(alias):
+        raise ImportErrorResponse(
+            HTTPStatus.BAD_REQUEST,
+            "Имя подключения: латинская буква, затем до 31 буквы, цифры или _.",
+        )
+    if alias.casefold() in {"server"} or alias.casefold().startswith("provider"):
+        raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Это имя подключения зарезервировано.")
+    return alias
+
+
+def is_authorized(header: str | None, token: str) -> bool:
+    prefix = "Bearer "
+    if not header or not header.startswith(prefix):
+        return False
+    return hmac.compare_digest(header[len(prefix) :], token)
+
+
+def _copy_bounded(source, destination, expected_size: int) -> None:
+    copied = 0
+    with destination.open("wb") as target:
+        while True:
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
+            copied += len(chunk)
+            if copied > expected_size or copied > MAX_DATABASE_BYTES:
+                raise ImportErrorResponse(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "База слишком большая.")
+            target.write(chunk)
+    if copied != expected_size:
+        raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Размер файла в архиве не совпадает.")
+
+
+def extract_database(upload_path: Path, original_name: str, output_path: Path) -> None:
+    suffix = Path(original_name).suffix.casefold()
+    if suffix in {".dxdb", ".fdb"}:
+        size = upload_path.stat().st_size
+        if size > MAX_DATABASE_BYTES:
+            raise ImportErrorResponse(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "База слишком большая.")
+        with upload_path.open("rb") as source:
+            _copy_bounded(source, output_path, size)
+        return
+
+    if suffix != ".zip":
+        raise ImportErrorResponse(
+            HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+            "Поддерживаются .DXDB, .FDB и ZIP с одной базой внутри.",
+        )
+
+    try:
+        with zipfile.ZipFile(upload_path) as archive:
+            candidates = []
+            for info in archive.infolist():
+                mode = (info.external_attr >> 16) & 0o170000
+                if mode == stat.S_IFLNK:
+                    raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Символические ссылки в ZIP запрещены.")
+                if info.flag_bits & 0x1:
+                    raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Зашифрованные ZIP не поддерживаются.")
+                if info.is_dir():
+                    continue
+                normalized = info.filename.replace("\\", "/")
+                parts = [part for part in normalized.split("/") if part]
+                if normalized.startswith("/") or ".." in parts:
+                    raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Небезопасный путь внутри ZIP.")
+                if Path(normalized).suffix.casefold() in {".dxdb", ".fdb"}:
+                    candidates.append(info)
+
+            if len(candidates) != 1:
+                raise ImportErrorResponse(
+                    HTTPStatus.BAD_REQUEST,
+                    "В ZIP должна находиться ровно одна база .DXDB или .FDB.",
+                )
+
+            item = candidates[0]
+            if item.file_size > MAX_DATABASE_BYTES:
+                raise ImportErrorResponse(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "База слишком большая.")
+            with archive.open(item, "r") as source:
+                _copy_bounded(source, output_path, item.file_size)
+    except zipfile.BadZipFile as exc:
+        raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Повреждённый ZIP-архив.") from exc
+
+
+def inspect_firebird_database(
+    database_path: Path, gstat_path: str, base_env: dict[str, str]
+) -> str | None:
+    process = subprocess.run(
+        [gstat_path, "-h", str(database_path)],
+        capture_output=True,
+        check=False,
+        env=base_env,
+        text=True,
+        timeout=30,
+    )
+    output = f"{process.stdout}\n{process.stderr}"
+    match = ODS_PATTERN.search(output)
+    if process.returncode != 0 or not match:
+        return None
+    return match.group(1)
+
+
+def _run_gbak(
+    executable: str,
+    arguments: list[str],
+    base_env: dict[str, str],
+    error_message: str,
+) -> None:
+    process = subprocess.run(
+        [executable, *arguments],
+        capture_output=True,
+        check=False,
+        env=base_env,
+        text=True,
+        timeout=600,
+    )
+    if process.returncode != 0:
+        raise ImportErrorResponse(
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+            f"{error_message}: {(process.stderr or process.stdout).strip()[:500]}",
+        )
+
+
+def normalize_firebird_database(database_path: Path, settings: dict) -> str:
+    modern_ods = inspect_firebird_database(
+        database_path,
+        settings["modern_gstat_path"],
+        settings["modern_firebird_env"],
+    )
+    if modern_ods:
+        return modern_ods
+
+    source_profile = None
+    source_ods = None
+    for profile in settings["migration_sources"]:
+        source_ods = inspect_firebird_database(
+            database_path,
+            profile["gstat_path"],
+            profile["env"],
+        )
+        if source_ods:
+            source_profile = profile
+            break
+    if source_profile is None or source_ods is None:
+        raise ImportErrorResponse(
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+            "Файл не распознан как поддерживаемая база Firebird ODS 11, 12 или 13.",
+        )
+
+    backup_path = database_path.with_suffix(".fbk")
+    normalized_path = database_path.with_suffix(".normalized")
+    _run_gbak(
+        source_profile["gbak_path"],
+        [
+            "-b",
+            "-user",
+            "sysdba",
+            "-password",
+            "masterkey",
+            str(database_path),
+            str(backup_path),
+        ],
+        source_profile["env"],
+        "Не удалось создать переносимую резервную копию",
+    )
+    try:
+        _run_gbak(
+            settings["modern_gbak_path"],
+            [
+                "-c",
+                "-user",
+                "sysdba",
+                "-password",
+                "masterkey",
+                str(backup_path),
+                str(normalized_path),
+            ],
+            settings["modern_firebird_env"],
+            "Не удалось восстановить базу в Firebird 5",
+        )
+        normalized_ods = inspect_firebird_database(
+            normalized_path,
+            settings["modern_gstat_path"],
+            settings["modern_firebird_env"],
+        )
+        if not normalized_ods:
+            raise ImportErrorResponse(
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+                "Восстановленная база не прошла проверку Firebird 5.",
+            )
+        os.replace(normalized_path, database_path)
+        return f"{source_ods} → {normalized_ods}"
+    finally:
+        backup_path.unlink(missing_ok=True)
+        normalized_path.unlink(missing_ok=True)
+
+
+def read_connections(config_path: Path) -> list[dict[str, str]]:
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.optionxform = str
+    parser.read(config_path, encoding="utf-8")
+    result = []
+    for section in parser.sections():
+        if section.casefold() == "server" or section.casefold().startswith("provider:"):
+            continue
+        result.append(
+            {
+                "alias": section,
+                "url": f"/{section.casefold()}/",
+                "database": parser.get(section, "Database", fallback=""),
+            }
+        )
+    return result
+
+
+def _enable_connection_discovery(text: str) -> str:
+    server_match = re.search(r"(?ims)^\[Server\]\s*$.*?(?=^\[|\Z)", text)
+    if not server_match:
+        raise ImportErrorResponse(HTTPStatus.INTERNAL_SERVER_ERROR, "В конфигурации нет секции Server.")
+    block = server_match.group(0)
+    if re.search(r"(?im)^ShowConnections\s*=", block):
+        updated = re.sub(r"(?im)^ShowConnections\s*=.*$", "ShowConnections=1", block)
+    else:
+        updated = block.rstrip() + "\nShowConnections=1\n\n"
+    return text[: server_match.start()] + updated + text[server_match.end() :]
+
+
+def register_connection(
+    config_path: Path,
+    lock_path: Path,
+    alias: str,
+    database_path: Path,
+    templates_path: Path,
+) -> None:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        existing = {item["alias"].casefold() for item in read_connections(config_path)}
+        if alias.casefold() in existing:
+            raise ImportErrorResponse(HTTPStatus.CONFLICT, "Подключение с таким именем уже существует.")
+
+        current = config_path.read_text(encoding="utf-8")
+        current = _enable_connection_discovery(current)
+        section = (
+            f"\n[{alias}]\n"
+            f"Database={database_path}\n"
+            f"Templates={templates_path}\n"
+            "SessionTime=30\n"
+            "DBPwd=\n"
+            "KeepMetadata=1\n"
+        )
+        fd, temporary_name = tempfile.mkstemp(prefix=".dxwebsrv.", dir=config_path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as temporary:
+                temporary.write(current.rstrip() + "\n" + section)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            os.chmod(temporary_name, 0o660)
+            os.replace(temporary_name, config_path)
+        finally:
+            if os.path.exists(temporary_name):
+                os.unlink(temporary_name)
+
+
+class AdminHandler(BaseHTTPRequestHandler):
+    server_version = "DataExpressAdmin/0.1"
+
+    @property
+    def settings(self):
+        return self.server.settings
+
+    def log_message(self, format_string: str, *args) -> None:
+        print(f"{self.client_address[0]} - {format_string % args}", flush=True)
+
+    def send_json(self, status: int, payload: dict | list) -> None:
+        encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def send_error_json(self, error: ImportErrorResponse) -> None:
+        self.send_json(error.status, {"ok": False, "error": str(error)})
+
+    def require_auth(self) -> bool:
+        if is_authorized(self.headers.get("Authorization"), self.settings["token"]):
+            return True
+        self.send_json(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "Неверный ключ администратора."})
+        return False
+
+    def do_GET(self) -> None:
+        if self.path in {"/admin", "/admin/"}:
+            content = self.settings["html_path"].read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return
+        if self.path == "/admin/api/health":
+            self.send_json(HTTPStatus.OK, {"ok": True, "service": "dataexpress-admin"})
+            return
+        if self.path == "/admin/api/databases":
+            if not self.require_auth():
+                return
+            self.send_json(HTTPStatus.OK, {"ok": True, "databases": read_connections(self.settings["config_path"])})
+            return
+        self.send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Маршрут не найден."})
+
+    def do_POST(self) -> None:
+        if self.path != "/admin/api/databases":
+            self.send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Маршрут не найден."})
+            return
+        if not self.require_auth():
+            return
+
+        try:
+            alias = validate_alias(self.headers.get("X-Database-Alias", ""))
+            original_name = unquote(self.headers.get("X-Filename", ""))
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError as exc:
+                raise ImportErrorResponse(HTTPStatus.LENGTH_REQUIRED, "Нужен корректный Content-Length.") from exc
+            if content_length <= 0:
+                raise ImportErrorResponse(HTTPStatus.LENGTH_REQUIRED, "Пустой файл.")
+            if content_length > MAX_UPLOAD_BYTES:
+                raise ImportErrorResponse(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Архив слишком большой.")
+
+            root = self.settings["database_root"]
+            final_directory = root / alias
+            if final_directory.exists():
+                raise ImportErrorResponse(HTTPStatus.CONFLICT, "Каталог подключения уже существует.")
+
+            staging_root = root / ".staging"
+            staging_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            with tempfile.TemporaryDirectory(prefix=f"{alias}-", dir=staging_root) as temporary:
+                temporary_path = Path(temporary)
+                upload_path = temporary_path / "upload.bin"
+                remaining = content_length
+                with upload_path.open("wb") as upload:
+                    while remaining:
+                        chunk = self.rfile.read(min(1024 * 1024, remaining))
+                        if not chunk:
+                            raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Передача файла оборвалась.")
+                        upload.write(chunk)
+                        remaining -= len(chunk)
+
+                database_path = temporary_path / f"{alias}.DXDB"
+                extract_database(upload_path, original_name, database_path)
+                ods = normalize_firebird_database(database_path, self.settings)
+
+                prepared_directory = root / f".new-{alias}-{os.getpid()}"
+                templates_path = prepared_directory / "templates"
+                prepared_directory.mkdir(mode=0o750)
+                templates_path.mkdir(mode=0o750)
+                shutil.move(str(database_path), prepared_directory / f"{alias}.DXDB")
+                os.chmod(prepared_directory / f"{alias}.DXDB", 0o640)
+                prepared_directory.rename(final_directory)
+
+            final_database = final_directory / f"{alias}.DXDB"
+            final_templates = final_directory / "templates"
+            try:
+                register_connection(
+                    self.settings["config_path"],
+                    self.settings["lock_path"],
+                    alias,
+                    final_database,
+                    final_templates,
+                )
+            except Exception:
+                shutil.rmtree(final_directory, ignore_errors=True)
+                raise
+
+            self.send_json(
+                HTTPStatus.CREATED,
+                {
+                    "ok": True,
+                    "alias": alias,
+                    "url": f"/{alias.casefold()}/",
+                    "ods": ods,
+                    "message": "База зарегистрирована; сервер применяет конфигурацию.",
+                },
+            )
+        except ImportErrorResponse as error:
+            self.send_error_json(error)
+        except (OSError, subprocess.SubprocessError) as error:
+            self.send_error_json(
+                ImportErrorResponse(HTTPStatus.INTERNAL_SERVER_ERROR, f"Ошибка импорта: {error}")
+            )
+
+
+def build_settings() -> dict:
+    token = os.environ.get("DX_ADMIN_TOKEN", "")
+    if len(token) < 24:
+        raise SystemExit("DX_ADMIN_TOKEN must contain at least 24 characters")
+    legacy_root = os.environ.get("DX_FIREBIRD25_ROOT", "/opt/dataexpress/runtime/firebird25")
+    modern_root = os.environ.get("DX_FIREBIRD5_ROOT", "/opt/dataexpress/runtime/firebird5")
+    compat_root = os.environ.get("DX_COMPAT_ROOT", "/opt/dataexpress/runtime/compat")
+    legacy_env = os.environ.copy()
+    legacy_env["FIREBIRD"] = legacy_root
+    legacy_env["LD_LIBRARY_PATH"] = f"{legacy_root}/lib:{compat_root}"
+    modern_env = os.environ.copy()
+    modern_env["FIREBIRD"] = modern_root
+    modern_env["LD_LIBRARY_PATH"] = f"{modern_root}/lib"
+    system_env = os.environ.copy()
+    system_env.pop("FIREBIRD", None)
+    system_env.pop("LD_LIBRARY_PATH", None)
+    return {
+        "token": token,
+        "config_path": Path(os.environ.get("DX_CONFIG", "/etc/dataexpress/dxwebsrv.cfg")),
+        "lock_path": Path(os.environ.get("DX_CONFIG_LOCK", "/var/lib/dataexpress/config.lock")),
+        "database_root": Path(
+            os.environ.get("DX_DATABASE_ROOT", "/var/lib/dataexpress/databases")
+        ),
+        "html_path": Path(
+            os.environ.get("DX_ADMIN_HTML", "/opt/dataexpress/admin/index.html")
+        ),
+        "modern_gstat_path": os.environ.get("DX_FIREBIRD5_GSTAT", f"{modern_root}/bin/gstat"),
+        "modern_gbak_path": os.environ.get("DX_FIREBIRD5_GBAK", f"{modern_root}/bin/gbak"),
+        "modern_firebird_env": modern_env,
+        "migration_sources": [
+            {
+                "gstat_path": os.environ.get(
+                    "DX_FIREBIRD25_GSTAT", f"{legacy_root}/bin/gstat"
+                ),
+                "gbak_path": os.environ.get(
+                    "DX_FIREBIRD25_GBAK", f"{legacy_root}/bin/gbak"
+                ),
+                "env": legacy_env,
+            },
+            {
+                "gstat_path": os.environ.get("DX_FIREBIRD3_GSTAT", "/usr/bin/fbstat"),
+                "gbak_path": os.environ.get("DX_FIREBIRD3_GBAK", "/usr/bin/gbak"),
+                "env": system_env,
+            },
+        ],
+    }
+
+
+def main() -> None:
+    host = os.environ.get("DX_ADMIN_HOST", "127.0.0.1")
+    port = int(os.environ.get("DX_ADMIN_PORT", "8090"))
+    server = ThreadingHTTPServer((host, port), AdminHandler)
+    server.settings = build_settings()
+    print(f"DataExpress admin listening on {host}:{port}", flush=True)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

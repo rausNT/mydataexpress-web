@@ -5,6 +5,12 @@ import { basename, dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditSource } from './extension-audit.mjs';
 import {
+  detectExtensionCapability,
+  normalizedPascalType,
+  parameterWireAdapter,
+  resultWireAdapter,
+} from './extension-capabilities.mjs';
+import {
   generateProviderConfig,
   generateProviderEnvironment,
   generateProviderScaffold,
@@ -31,12 +37,24 @@ function identifierSkeleton(value) {
     .join('');
 }
 
+function commonPrefixRatio(left, right) {
+  left = identifierSkeleton(left);
+  right = identifierSkeleton(right);
+  let length = 0;
+  while (length < left.length && length < right.length &&
+      left[length] === right[length]) length++;
+  return length / Math.max(1, Math.min(left.length, right.length));
+}
+
 function declarationRange(source, spec) {
   if (!spec.origName) return '';
-  const allowedKinds = spec.kind === 'function'
-    ? new Set(['function'])
-    : new Set(['function', 'procedure']);
-  const tokens = pascalTokens(source);
+  // Desktop metadata uses {@function ... @} for expression functions and
+  // procedures alike (an empty Result means a procedure).
+  const allowedKinds = new Set(['function', 'procedure']);
+  const firstMetadata = source.search(/\{@(?:module|function|action)\b/i);
+  const forumWrapped = firstMetadata > 0 &&
+    /\[(?:\/?code|\/?b|\/?i)\]/i.test(source.slice(0, firstMetadata));
+  const tokens = pascalTokens(source, forumWrapped ? firstMetadata : 0);
   const candidates = [];
   for (let index = 0; index < tokens.length - 1; index++) {
     if (!allowedKinds.has(tokens[index].lower)) continue;
@@ -48,15 +66,37 @@ function declarationRange(source, spec) {
       index: tokens[index].start,
     });
   }
+  const declaredNames = [spec.origName];
+  if (spec.kind === 'function' && spec.name) declaredNames.push(spec.name);
   let match = candidates.find(candidate =>
-    candidate.name.toLowerCase() === spec.origName.toLowerCase());
+    declaredNames.some(name => candidate.name.toLowerCase() === name.toLowerCase()));
   let normalizedMatch = false;
+  let metadataFallback = false;
   if (!match) {
     const normalized = candidates.filter(candidate =>
-      identifierSkeleton(candidate.name) === identifierSkeleton(spec.origName));
+      declaredNames.some(name =>
+        identifierSkeleton(candidate.name) === identifierSkeleton(name)));
     if (normalized.length === 1) {
       [match] = normalized;
       normalizedMatch = true;
+    }
+  }
+  if (!match) {
+    const escapedName = spec.origName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const field = new RegExp(`(?:^|\\r?\\n)\\s*OrigName\\s*=\\s*${escapedName}\\s*(?:\\r?\\n|$)`, 'i');
+    const fieldMatch = field.exec(source);
+    if (fieldMatch) {
+      const blockEnd = source.indexOf('@}', fieldMatch.index + fieldMatch[0].length);
+      const nextBlock = blockEnd >= 0 ? source.indexOf('{@', blockEnd + 2) : -1;
+      const nearby = blockEnd >= 0
+        ? candidates.filter(candidate =>
+          candidate.index > blockEnd && (nextBlock < 0 || candidate.index < nextBlock) &&
+          commonPrefixRatio(candidate.name, spec.origName) >= 0.75)
+        : [];
+      if (nearby.length === 1) {
+        [match] = nearby;
+        metadataFallback = true;
+      }
     }
   }
   if (!match) return '';
@@ -69,6 +109,7 @@ function declarationRange(source, spec) {
         kind: match.kind,
         matchedName: match.name,
         normalizedMatch,
+        metadataFallback,
         start: match.index,
         end: index + 1,
         text: source.slice(match.index, index + 1).trim(),
@@ -149,6 +190,7 @@ function routineImplementation(source, spec) {
           kind: range.kind,
           matchedName: range.matchedName,
           normalizedMatch: range.normalizedMatch,
+          metadataFallback: range.metadataFallback,
           source: source.slice(range.start, end).trim(),
           declaration: range.text,
           preamble: source.slice(range.end, tokens[bodyIndex].start),
@@ -299,7 +341,10 @@ function inlineRoutineAnalysis(implementation, params, routineName, routineNames
 
 function routineCatalog(source) {
   const result = new Map();
-  const tokens = pascalTokens(source);
+  const firstMetadata = source.search(/\{@(?:module|function|action)\b/i);
+  const forumWrapped = firstMetadata > 0 &&
+    /\[(?:\/?code|\/?b|\/?i)\]/i.test(source.slice(0, firstMetadata));
+  const tokens = pascalTokens(source, forumWrapped ? firstMetadata : 0);
   for (let index = 0; index < tokens.length - 1; index++) {
     const kind = tokens[index].lower;
     if (!['function', 'procedure'].includes(kind)) continue;
@@ -403,7 +448,8 @@ function payloadLines(params) {
   const result = ["  ProviderPayload := '{';"];
   params.forEach((parameter, index) => {
     const prefix = index ? ',' : '';
-    result.push(`  ProviderPayload := ProviderPayload + '${prefix}"${parameter.name}":' + ExtensionProviderEncodeValue(${parameter.name});`);
+    const encoder = parameterWireAdapter(parameter).encoder || 'ExtensionProviderEncodeValue';
+    result.push(`  ProviderPayload := ProviderPayload + '${prefix}"${parameter.name}":' + ${encoder}(${parameter.name});`);
   });
   result.push("  ProviderPayload := ProviderPayload + '}';");
   return result;
@@ -413,28 +459,12 @@ function resultType(decl) {
   return decl.match(/:\s*([\w.]+)\s*;$/i)?.[1]?.toLowerCase() || '';
 }
 
-const stringTypes = new Set(['string', 'ansistring', 'unicodestring', 'widestring']);
-const booleanTypes = new Set(['boolean', 'bool']);
-const integerTypes = new Set([
-  'byte', 'shortint', 'smallint', 'word', 'integer', 'longint', 'cardinal',
-  'longword', 'int64', 'qword', 'nativeint', 'nativeuint',
-]);
-const floatTypes = new Set(['single', 'double', 'extended', 'real', 'currency', 'comp']);
-const dateTypes = new Set(['tdatetime', 'tdate', 'ttime']);
-
 function normalizedType(type) {
-  return type.replace(/\s+/g, '').toLowerCase();
+  return normalizedPascalType(type);
 }
 
 function supportedParameter(parameter) {
-  if (parameter.qualifier === 'var' || parameter.qualifier === 'out') {
-    return `by-reference-parameter:${parameter.name}`;
-  }
-  const type = normalizedType(parameter.type);
-  if (stringTypes.has(type) || booleanTypes.has(type) || integerTypes.has(type) ||
-      floatTypes.has(type) || dateTypes.has(type) || type === 'variant' ||
-      ['char', 'ansichar', 'widechar'].includes(type)) return '';
-  return `unsupported-parameter-type:${parameter.type || 'unknown'}`;
+  return parameterWireAdapter(parameter).issue;
 }
 
 function supportedInlineType(type, label) {
@@ -445,126 +475,7 @@ function supportedInlineType(type, label) {
 }
 
 function resultAdapter(type) {
-  const normalized = normalizedType(type);
-  if (stringTypes.has(normalized)) return 'ExtensionProviderCall';
-  if (booleanTypes.has(normalized)) return 'ExtensionProviderCallBoolean';
-  if (integerTypes.has(normalized)) return 'ExtensionProviderCallInt64';
-  if (floatTypes.has(normalized)) return 'ExtensionProviderCallFloat';
-  if (dateTypes.has(normalized)) return 'ExtensionProviderCallDateTime';
-  if (normalized === 'variant') return 'ExtensionProviderCallVariant';
-  return '';
-}
-
-function dadataStateVariables(source) {
-  return [...new Set([...source.matchAll(
-    /"((?:data\.)[A-Za-z0-9_.]+|unrestricted_value|value)"/g,
-  )].map(match => match[1]))];
-}
-
-function providerRecipe({ spec, operation, params, type, inline, report, source }) {
-  const hasNetwork = report.findings.some(finding => finding.rule === 'network');
-  const stringParameters = params.every(parameter =>
-    stringTypes.has(normalizedType(parameter.type)));
-  if (hasNetwork && /\bTHTTPClient\b/i.test(source) &&
-      /\bSendHttpRequest\s*\(/i.test(source)) {
-    if (spec.kind === 'function' &&
-        String(spec.origName || operation).toLowerCase() === 'sendhttprequestfunction' &&
-        normalizedType(type) === 'variant' && params.length === 5 && stringParameters &&
-        /\bHeadersList\.CommaText\s*:=/i.test(source)) {
-      return {
-        kind: 'http-request',
-        contract: 'send-http-request-function-v1',
-        methodParameter: params[0].name,
-        urlParameter: params[1].name,
-        headersParameter: params[2].name,
-        apiKeyParameter: params[3].name,
-        paramsParameter: params[4].name,
-      };
-    }
-    const actionTypes = params.map(parameter => normalizedType(parameter.type));
-    if (spec.kind === 'action' &&
-        String(spec.origName || '').toLowerCase() === 'sendhttprequestaction' &&
-        String(operation).toUpperCase() === 'B2C1C477-85A4-4133-9D9C-0FD61CA10F1C' &&
-        params.length === 7 &&
-        actionTypes.slice(0, 5).every(value => stringTypes.has(value)) &&
-        actionTypes.slice(5).every(value => value === 'tvariantarray2d') &&
-        /\brequest_result\b/i.test(source) &&
-        /\bCreateJSONFromParams\s*\(/i.test(source)) {
-      return {
-        kind: 'http-request',
-        contract: 'send-http-request-action-v1',
-        methodParameter: params[0].name,
-        urlParameter: params[1].name,
-        authTypeParameter: params[2].name,
-        authValueParameter: params[3].name,
-        contentTypeParameter: params[4].name,
-        headersParameter: params[5].name,
-        paramsParameter: params[6].name,
-      };
-    }
-  }
-  const supportedParameterType = params.length === 1 &&
-    (normalizedType(params[0].type) === 'variant' ||
-      stringTypes.has(normalizedType(params[0].type)));
-  const replacesOle = inline.issues.some(issue =>
-    issue.includes('platform-dependency:ole'));
-  if (spec.kind === 'function' && operation.toUpperCase() === 'HTTP_GET' &&
-      stringTypes.has(normalizedType(type)) && supportedParameterType &&
-      hasNetwork && replacesOle) {
-    return {
-      kind: 'http-get',
-      urlParameter: params[0].name,
-    };
-  }
-  const dadataTypes = {
-    DA_FIRM_GET: ['party', 'DA_FIRM_FIELD'],
-    DA_BANK_GET: ['bank', 'DA_BANK_GET'],
-    DA_ADDR_GET: ['address', 'DA_ADDR_FIELD'],
-  };
-  const dadata = dadataTypes[operation.toUpperCase()];
-  const supportedDadataParameters = params.length === 2 && params.every(parameter =>
-    normalizedType(parameter.type) === 'variant' ||
-    stringTypes.has(normalizedType(parameter.type)));
-  if (dadata && spec.kind === 'function' && stringTypes.has(normalizedType(type)) &&
-      supportedDadataParameters && replacesOle &&
-      /suggestions\.dadata\.ru/i.test(source) &&
-      /\bGetXMLData\s*\(/i.test(source)) {
-    return {
-      kind: 'dadata-suggest',
-      suggestType: dadata[0],
-      apiKeyParameter: params[0].name,
-      queryParameter: params[1].name,
-      stateVariables: dadataStateVariables(source),
-      resultVariable: dadata[1],
-    };
-  }
-  const officeTypes = {
-    convert_word: {
-      documentType: 'writer',
-      signature: /\bWord\.Application\b/i,
-      conversion: /\b(?:SaveAs2|ExportAsFixedFormat)\s*\(/i,
-    },
-    convert_excel: {
-      documentType: 'calc',
-      signature: /\bExcel\.Application\b/i,
-      conversion: /\b(?:SaveAs|ExportAsFixedFormat)\s*\(/i,
-    },
-  };
-  const office = officeTypes[String(spec.origName || operation).toLowerCase()];
-  const supportedOfficeParameters = params.length === 3 && params.every(parameter =>
-    stringTypes.has(normalizedType(parameter.type)));
-  if (office && spec.kind === 'action' && normalizedType(type) === 'boolean' &&
-      supportedOfficeParameters && replacesOle &&
-      office.signature.test(source) && office.conversion.test(source)) {
-    return {
-      kind: 'office-document-convert',
-      documentType: office.documentType,
-      inputParameter: params[0].name,
-      outputParameter: params[1].name,
-      formatParameter: params[2].name,
-    };
-  }
-  return null;
+  return resultWireAdapter(type);
 }
 
 function httpRequestActionLines(moduleName, operation, decl, recipe) {
@@ -682,7 +593,9 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
     const routineName = implementation.matchedName || spec.origName || operation;
     const identifierDiagnostics = implementation.normalizedMatch
       ? [`identifier-homoglyph-normalized:${spec.origName}->${routineName}`]
-      : [];
+      : implementation.metadataFallback
+        ? [`metadata-routine-name-resolved:${spec.origName}->${routineName}`]
+        : [];
     const params = parameters(decl);
     const routineKind = implementation.kind || (spec.kind === 'function' ? 'function' : 'procedure');
     const type = routineKind === 'function' ? resultType(decl) : '';
@@ -701,7 +614,15 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
     const inline = forceProvider
       ? { portable: false, issues: ['provider-forced'], reviews: [], order: [] }
       : inlineClosure(catalog, routineName);
-    const recipe = providerRecipe({ spec, operation, params, type, inline, report, source });
+    const recipe = detectExtensionCapability({
+      spec,
+      operation,
+      params,
+      type,
+      inline,
+      report,
+      source,
+    });
     if (inline.portable && inlineSignatureIssues.length === 0 && !recipe) {
       for (const helperName of inline.order) {
         if (helperName === routineName.toLowerCase() ||
@@ -731,7 +652,7 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
       continue;
     }
     const issues = [...signatureIssues];
-    const automatic = Boolean(recipe) || issues.length === 0;
+    const wireable = Boolean(recipe) || issues.length === 0;
 
     lines.push(...mappingHeader);
     if (recipe?.kind === 'http-request' &&
@@ -740,7 +661,7 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
     } else {
       lines.push(decl);
     }
-    if (automatic) {
+    if (wireable) {
       if (recipe?.kind === 'http-request' &&
           recipe.contract === 'send-http-request-action-v1') {
         // The action requires local expression/grid evaluation before calling
@@ -804,9 +725,10 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
       routineKind,
       parameters: params,
       operation,
-      status: automatic ? 'provider' : 'manual',
-      reason: automatic ? '' : issues[0],
-      issues: automatic
+      status: wireable ? 'provider' : 'manual',
+      providerReady: Boolean(recipe),
+      reason: recipe ? '' : wireable ? 'capability-unresolved' : issues[0],
+      issues: wireable
         ? [...identifierDiagnostics, ...inline.issues, ...inline.reviews, ...inlineSignatureIssues]
         : [...identifierDiagnostics, ...inline.issues, ...inline.reviews, ...inlineSignatureIssues, ...issues],
       reviewRequired: false,
@@ -821,9 +743,12 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
 
   const provider = mappings.filter(item => item.status === 'provider').length;
   const automatedProvider = mappings.filter(item => item.providerRecipe).length;
+  const pendingProvider = mappings.filter(item =>
+    item.status === 'provider' && !item.providerReady).length;
   const webScript = mappings.filter(item => item.status === 'web-script').length;
   const reviewRequired = mappings.filter(item => item.reviewRequired).length;
-  const compatible = provider + webScript;
+  const compatible = automatedProvider + webScript;
+  const manual = mappings.filter(item => item.status === 'manual').length;
   const manifest = {
     schemaVersion: 1,
     provider: moduleName,
@@ -835,9 +760,10 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
       webScript,
       provider,
       automatedProvider,
+      pendingProvider,
       reviewRequired,
-      manual: mappings.length - compatible,
-      complete: compatible === mappings.length,
+      manual,
+      complete: manual === 0 && pendingProvider === 0,
     },
     mappings,
   };

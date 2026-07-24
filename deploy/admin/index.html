@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DataExpress — базы данных</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, sans-serif; color: #172033; background: #f3f6fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: min(900px, calc(100% - 32px)); margin: 40px auto; }
+    header, .card { background: #fff; border: 1px solid #dfe6f2; border-radius: 20px; box-shadow: 0 12px 36px #23406b12; }
+    header { padding: 28px 32px; margin-bottom: 20px; }
+    h1 { margin: 0 0 8px; font-size: clamp(26px, 5vw, 42px); }
+    header p, .hint { color: #5b6679; }
+    .card { padding: 24px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    label { display: grid; gap: 7px; font-weight: 700; }
+    input { width: 100%; padding: 13px 14px; border: 1px solid #bbc8dc; border-radius: 11px; font: inherit; }
+    input:focus { outline: 3px solid #2f6fed2b; border-color: #2f6fed; }
+    .file { grid-column: 1 / -1; padding: 22px; border: 2px dashed #a9bad5; border-radius: 14px; background: #f8faff; }
+    button { margin-top: 18px; border: 0; border-radius: 11px; padding: 13px 20px; color: #fff; background: #2864e8; font: 700 16px inherit; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    progress { width: 100%; height: 12px; margin-top: 16px; }
+    #status { min-height: 24px; margin-top: 12px; font-weight: 650; }
+    #status.error { color: #b42318; }
+    #status.success { color: #167047; }
+    ul { padding: 0; margin: 0; display: grid; gap: 10px; list-style: none; }
+    li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 15px; border: 1px solid #e2e8f1; border-radius: 12px; }
+    a { color: #1857ce; font-weight: 700; }
+    code { overflow-wrap: anywhere; color: #667085; }
+    @media (max-width: 650px) { main { margin: 18px auto; } header, .card { padding: 20px; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Базы DataExpress</h1>
+    <p>Загрузите `.DXDB`, `.FDB` или официальный `.DXDB.zip`. После проверки база появится на стартовой странице.</p>
+  </header>
+
+  <section class="card">
+    <form id="upload">
+      <div class="grid">
+        <label>Ключ администратора
+          <input id="token" type="password" required autocomplete="current-password">
+        </label>
+        <label>Имя подключения
+          <input id="alias" required maxlength="32" pattern="[A-Za-z][A-Za-z0-9_]{0,31}" placeholder="demo_school">
+        </label>
+        <label class="file">Файл базы
+          <input id="file" type="file" required accept=".dxdb,.fdb,.zip">
+        </label>
+      </div>
+      <button id="submit" type="submit">Загрузить и запустить</button>
+      <progress id="progress" value="0" max="100" hidden></progress>
+      <div id="status" role="status" aria-live="polite"></div>
+    </form>
+    <p class="hint">Ключ хранится только во вкладке браузера. Для рабочих баз включите HTTPS: без него содержимое файла передаётся открыто.</p>
+  </section>
+
+  <section class="card">
+    <h2>Подключения</h2>
+    <ul id="databases"><li>Введите ключ администратора, чтобы обновить список.</li></ul>
+  </section>
+</main>
+<script>
+  const form = document.querySelector('#upload');
+  const token = document.querySelector('#token');
+  const alias = document.querySelector('#alias');
+  const file = document.querySelector('#file');
+  const submit = document.querySelector('#submit');
+  const progress = document.querySelector('#progress');
+  const status = document.querySelector('#status');
+  const databases = document.querySelector('#databases');
+
+  token.value = sessionStorage.getItem('dx-admin-token') || '';
+
+  function showStatus(message, kind = '') {
+    status.textContent = message;
+    status.className = kind;
+  }
+
+  function renderDatabases(items) {
+    databases.replaceChildren();
+    for (const item of items) {
+      const row = document.createElement('li');
+      const text = document.createElement('span');
+      text.textContent = item.alias;
+      const link = document.createElement('a');
+      link.href = item.url;
+      link.textContent = 'Открыть';
+      row.append(text, link);
+      databases.append(row);
+    }
+    if (!items.length) databases.innerHTML = '<li>Подключений пока нет.</li>';
+  }
+
+  async function refresh() {
+    if (!token.value) return;
+    sessionStorage.setItem('dx-admin-token', token.value);
+    const response = await fetch('/admin/api/databases', {
+      headers: { Authorization: `Bearer ${token.value}` }
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Не удалось получить список.');
+    renderDatabases(payload.databases);
+  }
+
+  token.addEventListener('change', () => refresh().catch(error => showStatus(error.message, 'error')));
+  if (token.value) refresh().catch(error => showStatus(error.message, 'error'));
+
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const selected = file.files[0];
+    if (!selected) return;
+    sessionStorage.setItem('dx-admin-token', token.value);
+    submit.disabled = true;
+    progress.hidden = false;
+    progress.value = 0;
+    showStatus('Загрузка…');
+
+    const request = new XMLHttpRequest();
+    request.open('POST', '/admin/api/databases');
+    request.setRequestHeader('Authorization', `Bearer ${token.value}`);
+    request.setRequestHeader('X-Database-Alias', alias.value);
+    request.setRequestHeader('X-Filename', encodeURIComponent(selected.name));
+    request.setRequestHeader('Content-Type', 'application/octet-stream');
+    request.upload.onprogress = event => {
+      if (event.lengthComputable) progress.value = event.loaded / event.total * 100;
+    };
+    request.onload = async () => {
+      submit.disabled = false;
+      let payload;
+      try { payload = JSON.parse(request.responseText); }
+      catch { payload = { error: 'Некорректный ответ сервера.' }; }
+      if (request.status !== 201) {
+        showStatus(payload.error || 'Импорт не выполнен.', 'error');
+        return;
+      }
+      showStatus(`Готово: ${payload.alias}, Firebird ODS ${payload.ods}.`, 'success');
+      setTimeout(() => refresh().catch(error => showStatus(error.message, 'error')), 1800);
+    };
+    request.onerror = () => {
+      submit.disabled = false;
+      showStatus('Сетевая ошибка при загрузке.', 'error');
+    };
+    request.send(selected);
+  });
+</script>
+</body>
+</html>

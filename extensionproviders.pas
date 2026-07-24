@@ -12,7 +12,7 @@ unit ExtensionProviders;
 interface
 
 uses
-  Classes, SysUtils, Variants;
+  Classes, SysUtils, Variants, MyTypes;
 
 function ExtensionProviderCall(const ProviderName, Operation,
   Payload: String): String;
@@ -27,6 +27,8 @@ function ExtensionProviderCallDateTime(const ProviderName, Operation,
 function ExtensionProviderCallVariant(const ProviderName, Operation,
   Payload: String): Variant;
 function ExtensionProviderEncodeValue(const Value: Variant): String;
+function ExtensionProviderEncodeVariantArray2d(
+  const Value: TVariantArray2d): String;
 
 implementation
 
@@ -280,6 +282,27 @@ begin
   finally
     Json.Free;
   end;
+end;
+
+function ExtensionProviderEncodeVariantArray2d(
+  const Value: TVariantArray2d): String;
+var
+  RowIndex, ColumnIndex: Integer;
+begin
+  Result := '[';
+  for RowIndex := 0 to Length(Value) - 1 do
+  begin
+    if RowIndex > 0 then Result := Result + ',';
+    Result := Result + '[';
+    for ColumnIndex := 0 to Length(Value[RowIndex]) - 1 do
+    begin
+      if ColumnIndex > 0 then Result := Result + ',';
+      Result := Result + ExtensionProviderEncodeValue(
+        Value[RowIndex][ColumnIndex]);
+    end;
+    Result := Result + ']';
+  end;
+  Result := Result + ']';
 end;
 
 end.

@@ -45,6 +45,14 @@ tools/*
 !tools/build-windows.ps1
 !tools/server-hardening.test.mjs
 !tools/landing-page.test.mjs
+!tools/extension-capabilities.mjs
+!tools/extension-capabilities.test.mjs
+!tools/forum-extension-inventory.mjs
+!tools/forum-extension-inventory.test.mjs
+!tools/forum-extension-extract.mjs
+!tools/forum-extension-extract.test.mjs
+!tools/admin-upload.test.mjs
+!tools/deployment.test.mjs
 /.tmp/
 /_dist
 

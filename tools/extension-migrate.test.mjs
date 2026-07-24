@@ -163,7 +163,8 @@ test('generates typed provider adapters and preserves scalar payload types', () 
     end;
   `;
   const generated = generateWebModule(source, 'Finance.epas', { forceProvider: true });
-  assert.equal(generated.manifest.summary.complete, true);
+  assert.equal(generated.manifest.summary.complete, false);
+  assert.equal(generated.manifest.summary.pendingProvider, 2);
   assert.deepEqual(generated.manifest.mappings.map(item => item.status), ['provider', 'provider']);
   assert.match(generated.module, /function CalculateTotal\(Value: Double; Tax: Double\): Double;/);
   assert.match(generated.module, /ExtensionProviderEncodeValue\(Value\)/);
@@ -332,6 +333,7 @@ test('migrates the compile-smoke runtime fixture without provider fallbacks', ()
     webScript: 2,
     provider: 0,
     automatedProvider: 0,
+    pendingProvider: 0,
     reviewRequired: 0,
     manual: 0,
     complete: true,
@@ -354,6 +356,8 @@ test('recognizes the legacy one-argument OLE HTTP_GET provider recipe', () => {
   assert.equal(generated.manifest.summary.provider, 1);
   assert.equal(generated.manifest.summary.automatedProvider, 1);
   assert.deepEqual(generated.manifest.mappings[0].providerRecipe, {
+    capability: 'network.http-get',
+    registryVersion: 1,
     kind: 'http-get',
     urlParameter: 'URL',
   });
@@ -371,6 +375,7 @@ test('moves the forum HTTP action and function to hardened request providers', (
     webScript: 0,
     provider: 2,
     automatedProvider: 2,
+    pendingProvider: 0,
     reviewRequired: 0,
     manual: 0,
     complete: true,
@@ -441,6 +446,7 @@ test('recognizes the forum Word and Excel OLE conversion recipes', () => {
     webScript: 0,
     provider: 2,
     automatedProvider: 2,
+    pendingProvider: 0,
     reviewRequired: 0,
     manual: 0,
     complete: true,
@@ -456,6 +462,8 @@ test('recognizes the forum Word and Excel OLE conversion recipes', () => {
     generated.manifest.mappings.map(mapping => mapping.providerRecipe),
     [
       {
+        capability: 'documents.office-convert',
+        registryVersion: 1,
         kind: 'office-document-convert',
         documentType: 'writer',
         inputParameter: 'aInputFile',
@@ -463,6 +471,8 @@ test('recognizes the forum Word and Excel OLE conversion recipes', () => {
         formatParameter: 'itemListExt',
       },
       {
+        capability: 'documents.office-convert',
+        registryVersion: 1,
         kind: 'office-document-convert',
         documentType: 'calc',
         inputParameter: 'aInputFile',
@@ -495,4 +505,42 @@ test('generates a mixed inline/provider module at routine granularity', () => {
   ]);
   assert.equal(compatibility.functions[0].status, 'web-script');
   assert.equal(compatibility.functions[1].status, 'provider');
+});
+
+test('matches procedures published through desktop function metadata', () => {
+  const source = `
+    {@function
+    OrigName=RefreshQuery
+    Name=REFRESH_QUERY
+    Args=s
+    Result=
+    @}
+    procedure RefreshQuery(Name: String);
+    begin
+      Debug(Name);
+    end;
+  `;
+  const generated = generateWebModule(source, 'ProcedureFunction.epas');
+  assert.notEqual(generated.manifest.mappings[0].reason, 'declaration-not-found');
+  assert.match(generated.module, /procedure RefreshQuery\(Name: String\);/);
+});
+
+test('serializes TVariantArray2d provider parameters with the registered wire adapter', () => {
+  const source = `
+    {@action
+    Id=grid-action
+    OrigName=SendGrid
+    Name=Send grid
+    @}
+    procedure SendGrid(Rows: TVariantArray2d);
+    begin
+      ShellExecute('');
+    end;
+  `;
+  const generated = generateWebModule(source, 'Grid.epas', { forceProvider: true });
+  assert.equal(generated.manifest.mappings[0].status, 'provider');
+  assert.match(
+    generated.module,
+    /ExtensionProviderEncodeVariantArray2d\(Rows\)/,
+  );
 });

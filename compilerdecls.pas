@@ -1626,6 +1626,7 @@ begin
   Cl.AddDelphiFunction('function ExtensionProviderCallDateTime(const ProviderName, Operation, Payload: String): TDateTime');
   Cl.AddDelphiFunction('function ExtensionProviderCallVariant(const ProviderName, Operation, Payload: String): Variant');
   Cl.AddDelphiFunction('function ExtensionProviderEncodeValue(const Value: Variant): String');
+  Cl.AddDelphiFunction('function ExtensionProviderEncodeVariantArray2d(const Value: TVariantArray2d): String');
 
   Cl.AddDelphiFunction('function SetExprVar(const aName: String; aValue: Variant): Variant');
   Cl.AddDelphiFunction('function GetExprVar(const aName: String): Variant');

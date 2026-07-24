@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+      - name: Validate Linux one-line installer syntax
+        run: bash -n deploy/install.sh
       - name: Install headless LibreOffice
         run: |
           sudo apt-get update

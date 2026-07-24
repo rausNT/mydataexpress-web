@@ -2522,6 +2522,7 @@ begin
   Exec.RegisterDelphiFunction(@ExtensionProviderCallDateTime, 'ExtensionProviderCallDateTime', cdRegister);
   Exec.RegisterDelphiFunction(@ExtensionProviderCallVariant, 'ExtensionProviderCallVariant', cdRegister);
   Exec.RegisterDelphiFunction(@ExtensionProviderEncodeValue, 'ExtensionProviderEncodeValue', cdRegister);
+  Exec.RegisterDelphiFunction(@ExtensionProviderEncodeVariantArray2d, 'ExtensionProviderEncodeVariantArray2d', cdRegister);
 
   Exec.RegisterDelphiFunction(@CommandExecute, 'CommandExecute', cdRegister);
   Exec.RegisterDelphiFunction(@FileExecute, 'FileExecute', cdRegister);

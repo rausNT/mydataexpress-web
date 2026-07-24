@@ -16,6 +16,7 @@ function mappingReport(mapping) {
     operation: mapping.operation,
     status: mapping.status,
     reason: mapping.reason || '',
+    providerReady: Boolean(mapping.providerReady),
     reviewRequired: Boolean(mapping.reviewRequired),
     issues: mapping.issues || [],
     ...(mapping.providerRecipe ? { providerRecipe: mapping.providerRecipe } : {}),
@@ -49,6 +50,7 @@ export function buildExtensionCorpusReport(inputPath, { generatedAt = new Date()
     result.webScript += module.summary.webScript;
     result.provider += module.summary.provider;
     result.automatedProvider += module.summary.automatedProvider;
+    result.pendingProvider += module.summary.pendingProvider || 0;
     result.manual += module.summary.manual;
     result.reviewRequired += module.summary.reviewRequired;
     return result;
@@ -58,11 +60,13 @@ export function buildExtensionCorpusReport(inputPath, { generatedAt = new Date()
     webScript: 0,
     provider: 0,
     automatedProvider: 0,
+    pendingProvider: 0,
     manual: 0,
     reviewRequired: 0,
     complete: false,
   });
-  summary.complete = summary.modules > 0 && summary.mappings > 0 && summary.manual === 0;
+  summary.complete = summary.modules > 0 && summary.mappings > 0 &&
+    summary.manual === 0 && summary.pendingProvider === 0;
 
   return {
     schemaVersion: 1,
