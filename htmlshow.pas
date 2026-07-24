@@ -2413,9 +2413,11 @@ end;
 function THtmlShow.ShowIndexPage: String;
 var
   AppVer, ConnectionItems, Connections, ConnectionName, ConnectionUrl: String;
-  i, j: Integer;
+  i: Integer;
 
   function IsValidConnectionName(const Value: String): Boolean;
+  var
+    j: Integer;
   begin
     Result := Value <> '';
     if not Result then Exit;
