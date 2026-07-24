@@ -84,6 +84,39 @@ test('generates a ready handler for a recognized HTTP_GET recipe', () => {
   assert.match(environment, /DX_HTTP_ALLOW_HOSTS=example\.com/);
 });
 
+test('generates ready handlers for the full HTTP request contracts', () => {
+  const requestManifest = {
+    schemaVersion: 1,
+    provider: 'HttpRequest',
+    mappings: [{
+      kind: 'function',
+      operation: 'SendHttpRequestFunction',
+      status: 'provider',
+      providerRecipe: {
+        kind: 'http-request',
+        contract: 'send-http-request-function-v1',
+        methodParameter: 'Method',
+        urlParameter: 'URL',
+        headersParameter: 'Headers',
+        apiKeyParameter: 'ApiKey',
+        paramsParameter: 'Params',
+      },
+    }],
+  };
+  const source = generateProviderScaffold(requestManifest);
+  assert.match(source, /createHttpRequestHandler/);
+  assert.match(source, /"contract": "send-http-request-function-v1"/);
+  assert.match(
+    source,
+    /handlers\["SendHttpRequestFunction"\]\.dataExpressImplemented = true/,
+  );
+  assert.doesNotMatch(source, /TODO: implement provider operation/);
+
+  const environment = generateProviderEnvironment(requestManifest);
+  assert.match(environment, /DX_HTTP_MAX_REQUEST_BYTES=2097152/);
+  assert.match(environment, /DX_HTTP_MAX_RESPONSE_BYTES=2097152/);
+});
+
 test('generates ready stateful handlers and environment for DaData recipes', () => {
   const dadataManifest = {
     schemaVersion: 1,

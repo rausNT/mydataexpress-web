@@ -14,6 +14,7 @@ import {
   closeProvider,
   createDadataSuggestHandler,
   createHttpGetHandler,
+  createHttpRequestHandler,
   createOfficeDocumentHandler,
   createProviderServer,
   listenProvider,
@@ -168,6 +169,155 @@ test('HTTP_GET recipe allows a DNS hostname that resolves only to public IPv4', 
     }),
   });
   assert.equal(await handler({ URL: 'https://api.example/resource' }), 'public-ok');
+});
+
+test('HTTP request recipes preserve action/function contracts behind the URL policy', async () => {
+  const requests = [];
+  const target = createServer((request, response) => {
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      requests.push({
+        method: request.method,
+        url: request.url,
+        headers: request.headers,
+        body: Buffer.concat(chunks).toString('utf8'),
+      });
+      response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({
+        ok: true,
+        nested: { text: 'a/b"c' },
+        items: [3, null],
+        empty: '',
+      }));
+    });
+  });
+  const targetUrl = await listenProvider(target);
+  const policy = {
+    allowHosts: ['127.0.0.1'],
+    allowPrivate: true,
+    allowInsecure: true,
+  };
+  const action = createHttpRequestHandler({
+    kind: 'http-request',
+    contract: 'send-http-request-action-v1',
+  }, policy);
+  const fn = createHttpRequestHandler({
+    kind: 'http-request',
+    contract: 'send-http-request-function-v1',
+  }, policy);
+  try {
+    const actionResult = await action({
+      Method: 'GET',
+      URL: new URL('/lookup', targetUrl).href,
+      Headers: [
+        { name: 'Accept', value: 'application/json' },
+        { name: 'Authorization', value: 'Bearer action-secret' },
+      ],
+      Params: [
+        { name: 'q', value: 'Иван Иванов' },
+        { name: 'active', value: '1' },
+      ],
+    });
+    assert.equal(
+      actionResult,
+      'ok=True;nested.text=abc;items_0=3;items_1=null',
+    );
+    assert.equal(requests[0].method, 'GET');
+    assert.equal(
+      requests[0].url,
+      '/lookup?q=%D0%98%D0%B2%D0%B0%D0%BD+%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2&active=1',
+    );
+    assert.equal(requests[0].headers.authorization, 'Bearer action-secret');
+    assert.equal(requests[0].headers['user-agent'], 'DataExpress');
+
+    const functionResult = await fn({
+      Method: 'POST',
+      URL: new URL('/submit', targetUrl).href,
+      Headers: 'Content-Type=application/json,Accept=application/json',
+      ApiKey: 'function-secret',
+      Params: '{"query":"test"}',
+    });
+    assert.equal(
+      functionResult,
+      'ok=True;nested.text=abc;items_0=3;items_1=null',
+    );
+    assert.equal(requests[1].method, 'POST');
+    assert.equal(requests[1].body, '{"query":"test"}');
+    assert.equal(requests[1].headers.authorization, 'Token function-secret');
+  } finally {
+    await closeProvider(target);
+  }
+});
+
+test('HTTP request recipe rejects unsafe headers and oversized request bodies', async () => {
+  const handler = createHttpRequestHandler({
+    kind: 'http-request',
+    contract: 'send-http-request-function-v1',
+  }, {
+    allowHosts: ['example.com'],
+    allowPrivate: true,
+    maxRequestBytes: 8,
+    fetch: async () => {
+      throw new Error('fetch must not run');
+    },
+  });
+  await assert.rejects(
+    () => handler({
+      Method: 'GET',
+      URL: 'https://example.com/',
+      Headers: 'Host=internal.example',
+      Params: '',
+    }),
+    /does not allow the Host request header/,
+  );
+  await assert.rejects(
+    () => handler({
+      Method: 'POST',
+      URL: 'https://example.com/',
+      Headers: 'Content-Type=text/plain',
+      Params: '123456789',
+    }),
+    /request is too large/,
+  );
+  assert.equal(
+    await handler({ Method: 'PATCH', URL: 'https://example.com/' }),
+    'Не поддерживаемый метод HTTP-запроса',
+  );
+});
+
+test('HTTP request recipe strips credentials on an allowed cross-origin redirect', async () => {
+  const seen = [];
+  const handler = createHttpRequestHandler({
+    kind: 'http-request',
+    contract: 'send-http-request-function-v1',
+  }, {
+    allowHosts: ['api.example', 'cdn.example'],
+    lookup: async () => [{ address: '8.8.8.8', family: 4 }],
+    fetch: async (url, options) => {
+      seen.push({ url: String(url), headers: new Headers(options.headers) });
+      if (seen.length === 1) {
+        return new Response('', {
+          status: 302,
+          headers: { location: 'https://cdn.example/result' },
+        });
+      }
+      return new Response('redirect-ok', {
+        headers: { 'content-type': 'text/plain' },
+      });
+    },
+  });
+  const result = await handler({
+    Method: 'GET',
+    URL: 'https://api.example/start',
+    Headers: 'Authorization=Bearer secret,Cookie=session=secret',
+    Params: '',
+  });
+  assert.equal(result, 'redirect-ok');
+  assert.equal(seen[0].headers.get('authorization'), 'Bearer secret');
+  assert.equal(seen[0].headers.get('cookie'), 'session=secret');
+  assert.equal(seen[1].headers.has('authorization'), false);
+  assert.equal(seen[1].headers.has('cookie'), false);
 });
 
 test('DaData recipe preserves legacy XML and session field semantics', async () => {

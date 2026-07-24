@@ -45,7 +45,7 @@ export function generateProviderScaffold(manifest, {
   );
   const lines = [
     "import { readFileSync } from 'node:fs';",
-    `import { createDadataSuggestHandler, createHttpGetHandler, createOfficeDocumentHandler, createProviderServer, listenProvider } from ${JSON.stringify(sdkImport)};`,
+    `import { createDadataSuggestHandler, createHttpGetHandler, createHttpRequestHandler, createOfficeDocumentHandler, createProviderServer, listenProvider } from ${JSON.stringify(sdkImport)};`,
     '',
     `const manifest = JSON.parse(readFileSync(new URL(${JSON.stringify(manifestImport)}, import.meta.url), 'utf8'));`,
     '',
@@ -64,6 +64,14 @@ export function generateProviderScaffold(manifest, {
         `handlers[${JSON.stringify(operation)}] = createHttpGetHandler({`,
         `  urlParameter: ${JSON.stringify(mapping.providerRecipe.urlParameter || 'URL')},`,
         '});',
+        `handlers[${JSON.stringify(operation)}].dataExpressImplemented = true;`,
+        '',
+      );
+      continue;
+    }
+    if (mapping.providerRecipe?.kind === 'http-request') {
+      lines.push(
+        `handlers[${JSON.stringify(operation)}] = createHttpRequestHandler(${JSON.stringify(mapping.providerRecipe, null, 2)});`,
         `handlers[${JSON.stringify(operation)}].dataExpressImplemented = true;`,
         '',
       );
@@ -143,6 +151,8 @@ export function generateProviderEnvironment(manifest, { port = 9081 } = {}) {
   );
   const hasHttpGet = operations.some(operation =>
     mappingByOperation.get(operation)?.providerRecipe?.kind === 'http-get');
+  const hasHttpRequest = operations.some(operation =>
+    mappingByOperation.get(operation)?.providerRecipe?.kind === 'http-request');
   const hasDadata = operations.some(operation =>
     mappingByOperation.get(operation)?.providerRecipe?.kind === 'dadata-suggest');
   const hasOffice = operations.some(operation =>
@@ -151,11 +161,12 @@ export function generateProviderEnvironment(manifest, { port = 9081 } = {}) {
     'DX_PROVIDER_TOKEN=replace-with-the-same-long-random-token-as-dxwebsrv.cfg',
     'DX_PROVIDER_HOST=127.0.0.1',
     `DX_PROVIDER_PORT=${Number(port)}`,
-    ...(hasHttpGet ? [
+    ...(hasHttpGet || hasHttpRequest ? [
       'DX_HTTP_ALLOW_HOSTS=example.com',
       'DX_HTTP_ALLOW_PRIVATE=false',
       'DX_HTTP_ALLOW_INSECURE=false',
       'DX_HTTP_TIMEOUT_MS=15000',
+      'DX_HTTP_MAX_REQUEST_BYTES=2097152',
       'DX_HTTP_MAX_RESPONSE_BYTES=2097152',
       'DX_HTTP_MAX_REDIRECTS=3',
     ] : []),

@@ -103,6 +103,8 @@ jobs:
           $runtimeMigrationRoot = Join-Path $env:RUNNER_TEMP 'extension-runtime-migration'
           $httpInput = Join-Path $env:RUNNER_TEMP 'extension-http-source'
           $httpMigrationRoot = Join-Path $env:RUNNER_TEMP 'extension-http-migration'
+          $httpRequestInput = Join-Path $env:RUNNER_TEMP 'extension-http-request-source'
+          $httpRequestMigrationRoot = Join-Path $env:RUNNER_TEMP 'extension-http-request-migration'
           $dadataInput = Join-Path $env:RUNNER_TEMP 'extension-dadata-source'
           $dadataMigrationRoot = Join-Path $env:RUNNER_TEMP 'extension-dadata-migration'
           $officeInput = Join-Path $env:RUNNER_TEMP 'extension-office-source'
@@ -111,6 +113,7 @@ jobs:
           New-Item -ItemType Directory -Path $mixedInput | Out-Null
           New-Item -ItemType Directory -Path $runtimeInput | Out-Null
           New-Item -ItemType Directory -Path $httpInput | Out-Null
+          New-Item -ItemType Directory -Path $httpRequestInput | Out-Null
           New-Item -ItemType Directory -Path $dadataInput | Out-Null
           New-Item -ItemType Directory -Path $officeInput | Out-Null
           $desktopModule = Join-Path $migrationInput 'portable.epas'
@@ -122,6 +125,8 @@ jobs:
             -Destination (Join-Path $runtimeInput 'runtime-api.epas')
           Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/legacy-http-get.epas') `
             -Destination (Join-Path $httpInput 'legacy-http-get.epas')
+          Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/legacy-http-request.epas') `
+            -Destination (Join-Path $httpRequestInput 'legacy-http-request.epas')
           Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/legacy-dadata.epas') `
             -Destination (Join-Path $dadataInput 'legacy-dadata.epas')
           Copy-Item -LiteralPath (Join-Path $PWD 'test/fixtures/extensions/legacy-office.epas') `
@@ -141,6 +146,9 @@ jobs:
           & (Get-Command node).Source (Join-Path $PWD 'tools/extension-batch-migrate.mjs') `
             $httpInput --output-dir $httpMigrationRoot --strict
           if ($LASTEXITCODE -ne 0) { throw "HTTP recipe extension migration failed: $LASTEXITCODE" }
+          & (Get-Command node).Source (Join-Path $PWD 'tools/extension-batch-migrate.mjs') `
+            $httpRequestInput --output-dir $httpRequestMigrationRoot --strict
+          if ($LASTEXITCODE -ne 0) { throw "HTTP request extension migration failed: $LASTEXITCODE" }
           & (Get-Command node).Source (Join-Path $PWD 'tools/extension-batch-migrate.mjs') `
             $dadataInput --output-dir $dadataMigrationRoot --strict
           if ($LASTEXITCODE -ne 0) { throw "DaData recipe extension migration failed: $LASTEXITCODE" }
@@ -192,6 +200,9 @@ jobs:
           & (Join-Path $smokeRoot 'wepas-syntax-smoke.exe') `
             (Join-Path $httpMigrationRoot 'legacy-http-get.wepas')
           if ($LASTEXITCODE -ne 0) { throw "HTTP recipe wepas compilation failed: $LASTEXITCODE" }
+          & (Join-Path $smokeRoot 'wepas-syntax-smoke.exe') `
+            (Join-Path $httpRequestMigrationRoot 'legacy-http-request.wepas')
+          if ($LASTEXITCODE -ne 0) { throw "HTTP request wepas compilation failed: $LASTEXITCODE" }
           & (Join-Path $smokeRoot 'wepas-syntax-smoke.exe') `
             (Join-Path $dadataMigrationRoot 'legacy-dadata.wepas')
           if ($LASTEXITCODE -ne 0) { throw "DaData recipe wepas compilation failed: $LASTEXITCODE" }

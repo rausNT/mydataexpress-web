@@ -29,6 +29,7 @@ import { pathToFileURL } from 'node:url';
 
 const DEFAULT_MAX_BODY = 8 * 1024 * 1024;
 const DEFAULT_HTTP_TIMEOUT = 15_000;
+const DEFAULT_HTTP_MAX_REQUEST = 2 * 1024 * 1024;
 const DEFAULT_HTTP_MAX_RESPONSE = 2 * 1024 * 1024;
 const DEFAULT_HTTP_MAX_REDIRECTS = 3;
 const DEFAULT_DADATA_BASE_URL =
@@ -131,6 +132,11 @@ function normalizeHttpPolicy(options = {}) {
       options.timeoutMs ?? environment.DX_HTTP_TIMEOUT_MS,
       DEFAULT_HTTP_TIMEOUT,
       { maximum: 120_000 },
+    ),
+    maxRequestBytes: positiveInteger(
+      options.maxRequestBytes ?? environment.DX_HTTP_MAX_REQUEST_BYTES,
+      DEFAULT_HTTP_MAX_REQUEST,
+      { maximum: 32 * 1024 * 1024 },
     ),
     maxResponseBytes: positiveInteger(
       options.maxResponseBytes ?? environment.DX_HTTP_MAX_RESPONSE_BYTES,
@@ -240,18 +246,45 @@ function decodeResponse(bytes, contentType) {
   }
 }
 
-async function httpGet(urlValue, policy) {
+function requestBodyBytes(value, maximum) {
+  if (value === null || value === undefined) return undefined;
+  const body = String(value);
+  if (Buffer.byteLength(body) > maximum) {
+    throw new ProviderHttpError('HTTP provider request is too large');
+  }
+  return body;
+}
+
+function redirectedRequest(status, method, headers, body, crossOrigin) {
+  const redirectedHeaders = new Headers(headers);
+  if (crossOrigin) {
+    redirectedHeaders.delete('authorization');
+    redirectedHeaders.delete('cookie');
+  }
+  if (status === 303 || ((status === 301 || status === 302) && method === 'POST')) {
+    redirectedHeaders.delete('content-length');
+    redirectedHeaders.delete('content-type');
+    return { method: 'GET', headers: redirectedHeaders, body: undefined };
+  }
+  return { method, headers: redirectedHeaders, body };
+}
+
+async function httpRequest(urlValue, requestOptions, policy) {
   if (typeof policy.fetch !== 'function') {
     throw new ProviderHttpError('HTTP fetch is unavailable in this Node.js runtime', 500);
   }
   const signal = AbortSignal.timeout(policy.timeoutMs);
   let url = await validateHttpUrl(urlValue, policy);
+  let method = requestOptions.method || 'GET';
+  let headers = requestOptions.headers || new Headers();
+  let body = requestBodyBytes(requestOptions.body, policy.maxRequestBytes);
   for (let redirect = 0; redirect <= policy.maxRedirects; redirect++) {
     let response;
     try {
       response = await policy.fetch(url, {
-        method: 'GET',
-        headers: { accept: '*/*', 'user-agent': 'DataExpress-Web-Provider/1.0' },
+        method,
+        headers,
+        ...(body === undefined ? {} : { body }),
         redirect: 'manual',
         signal,
       });
@@ -271,11 +304,27 @@ async function httpGet(urlValue, policy) {
       } catch {
         // Redirect validation still runs even if the body cannot be cancelled.
       }
-      url = await validateHttpUrl(new URL(response.headers.get('location'), url), policy);
+      const redirectUrl = await validateHttpUrl(
+        new URL(response.headers.get('location'), url),
+        policy,
+      );
+      ({ method, headers, body } = redirectedRequest(
+        response.status,
+        method,
+        headers,
+        body,
+        redirectUrl.origin !== url.origin,
+      ));
+      url = redirectUrl;
       continue;
     }
     const bytes = await responseBytes(response, policy.maxResponseBytes);
-    return decodeResponse(bytes, response.headers.get('content-type'));
+    const contentType = response.headers.get('content-type') || '';
+    return {
+      status: response.status,
+      contentType,
+      text: decodeResponse(bytes, contentType),
+    };
   }
   throw new ProviderHttpError('HTTP provider redirect limit exceeded', 502);
 }
@@ -288,7 +337,202 @@ export function createHttpGetHandler({
   const handler = async payload => {
     const value = payload?.[urlParameter] ?? payload?.URL ?? payload?.url;
     if (value === null || value === undefined || String(value) === '') return '';
-    return httpGet(value, policy);
+    const response = await httpRequest(value, {
+      method: 'GET',
+      headers: new Headers({
+        accept: '*/*',
+        'user-agent': 'DataExpress-Web-Provider/1.0',
+      }),
+    }, policy);
+    return response.text;
+  };
+  handler.dataExpressImplemented = true;
+  return handler;
+}
+
+const forbiddenRequestHeaders = new Set([
+  'connection',
+  'content-length',
+  'host',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+]);
+
+function commaTextItems(value) {
+  const source = String(value || '');
+  const items = [];
+  let item = '';
+  let quoted = false;
+  for (let index = 0; index < source.length; index++) {
+    const character = source[index];
+    if (character === '"') {
+      if (quoted && source[index + 1] === '"') {
+        item += '"';
+        index++;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === ',' && !quoted) {
+      items.push(item.trim());
+      item = '';
+    } else {
+      item += character;
+    }
+  }
+  if (item.trim() || source.endsWith(',')) items.push(item.trim());
+  return items.filter(Boolean);
+}
+
+function splitNameValue(value) {
+  const separator = value.indexOf('=');
+  return separator < 0
+    ? { name: value.trim(), value: '' }
+    : { name: value.slice(0, separator).trim(), value: value.slice(separator + 1) };
+}
+
+function requestPairs(value) {
+  if (Array.isArray(value)) {
+    return value.map(item => {
+      if (Array.isArray(item)) {
+        return { name: String(item[0] ?? ''), value: String(item[1] ?? '') };
+      }
+      if (item && typeof item === 'object') {
+        return { name: String(item.name ?? ''), value: String(item.value ?? '') };
+      }
+      return splitNameValue(String(item ?? ''));
+    });
+  }
+  return commaTextItems(value).map(splitNameValue);
+}
+
+function requestHeaders(pairs) {
+  if (pairs.length > 100) {
+    throw new ProviderHttpError('HTTP provider received too many request headers');
+  }
+  const headers = new Headers();
+  for (const pair of pairs) {
+    const name = pair.name.trim();
+    const lower = name.toLowerCase();
+    if (!name) continue;
+    if (forbiddenRequestHeaders.has(lower) || lower.startsWith('proxy-') ||
+        lower.startsWith('sec-')) {
+      throw new ProviderHttpError(`HTTP provider does not allow the ${name} request header`);
+    }
+    if (/[\r\n]/.test(pair.value)) {
+      throw new ProviderHttpError('HTTP provider request header contains a line break');
+    }
+    try {
+      headers.append(name, pair.value);
+    } catch {
+      throw new ProviderHttpError('HTTP provider received an invalid request header');
+    }
+  }
+  if (!headers.has('user-agent')) headers.set('user-agent', 'DataExpress');
+  return headers;
+}
+
+function appendQuery(urlValue, pairs) {
+  if (!pairs.length) return String(urlValue);
+  let url;
+  try {
+    url = new URL(String(urlValue));
+  } catch {
+    throw new ProviderHttpError('HTTP provider received an invalid URL');
+  }
+  for (const pair of pairs) {
+    if (pair.name) url.searchParams.append(pair.name, pair.value);
+  }
+  return url.href;
+}
+
+function legacyText(value) {
+  return String(value).replace(/["\\/\b\t\n\f\r]/g, '');
+}
+
+function flattenLegacyJson(value, prefix = '') {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) =>
+      flattenLegacyJson(item, prefix ? `${prefix}_${index}` : String(index)));
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.entries(value).flatMap(([name, item]) =>
+      flattenLegacyJson(item, prefix ? `${prefix}.${name}` : name));
+  }
+  if (typeof value === 'string') {
+    const text = legacyText(value);
+    return text ? [`${prefix}=${text}`] : [];
+  }
+  if (typeof value === 'boolean') return [`${prefix}=${value ? 'True' : 'False'}`];
+  if (value === null) return [`${prefix}=null`];
+  if (typeof value === 'number') return [`${prefix}=${String(value)}`];
+  return [];
+}
+
+function legacyResponse(text, contentType) {
+  if (!/(?:application\/json|\+json)(?:\s*;|$)/i.test(contentType)) return text;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed === null || typeof parsed !== 'object') return 'Ошибка парсинга JSON';
+    return flattenLegacyJson(parsed).join(';');
+  } catch {
+    return text;
+  }
+}
+
+function httpRequestContract(payload, recipe) {
+  const contract = recipe.contract;
+  const method = String(payload?.[recipe.methodParameter || 'Method'] || '').toUpperCase();
+  const url = payload?.[recipe.urlParameter || 'URL'];
+  if (!['GET', 'POST', 'PUT', 'DELETE'].includes(method)) {
+    return { unsupported: true };
+  }
+
+  if (contract === 'send-http-request-function-v1') {
+    const headers = requestPairs(payload?.[recipe.headersParameter || 'Headers']);
+    const apiKey = String(payload?.[recipe.apiKeyParameter || 'ApiKey'] || '');
+    if (apiKey) headers.push({ name: 'Authorization', value: `Token ${apiKey}` });
+    const params = String(payload?.[recipe.paramsParameter || 'Params'] || '');
+    const query = ['GET'].includes(method) ? requestPairs(params) : [];
+    return {
+      method,
+      url: appendQuery(url, query),
+      headers: requestHeaders(headers),
+      body: ['POST', 'PUT'].includes(method) ? params : undefined,
+    };
+  }
+
+  if (contract === 'send-http-request-action-v1') {
+    const headers = requestPairs(payload?.Headers);
+    const params = requestPairs(payload?.Params);
+    const body = ['POST', 'PUT'].includes(method)
+      ? JSON.stringify(Object.fromEntries(params
+        .filter(pair => pair.name)
+        .map(pair => [pair.name, legacyText(pair.value)])))
+      : undefined;
+    return {
+      method,
+      url: method === 'GET' ? appendQuery(url, params) : String(url),
+      headers: requestHeaders(headers),
+      body,
+    };
+  }
+
+  throw new ProviderHttpError('HTTP provider received an unsupported request contract', 500);
+}
+
+export function createHttpRequestHandler(recipe = {}, policyOptions = {}) {
+  const policy = normalizeHttpPolicy(policyOptions);
+  const handler = async payload => {
+    const request = httpRequestContract(payload, recipe);
+    if (request.unsupported) return 'Не поддерживаемый метод HTTP-запроса';
+    if (request.url === null || request.url === undefined || String(request.url) === '') return '';
+    const response = await httpRequest(request.url, request, policy);
+    return legacyResponse(response.text, response.contentType);
   };
   handler.dataExpressImplemented = true;
   return handler;
@@ -985,6 +1229,19 @@ function validProviderRecipe(recipe) {
   if (recipe.kind === 'http-get') {
     return recipe.urlParameter === undefined ||
       (typeof recipe.urlParameter === 'string' && Boolean(recipe.urlParameter.trim()));
+  }
+  if (recipe.kind === 'http-request') {
+    if (!['send-http-request-function-v1', 'send-http-request-action-v1']
+      .includes(recipe.contract)) return false;
+    const names = [
+      'methodParameter',
+      'urlParameter',
+      'headersParameter',
+      'apiKeyParameter',
+      'paramsParameter',
+    ];
+    return names.every(name => recipe[name] === undefined ||
+      (typeof recipe[name] === 'string' && Boolean(recipe[name].trim())));
   }
   if (recipe.kind === 'dadata-suggest') {
     return ['party', 'bank', 'address'].includes(recipe.suggestType) &&

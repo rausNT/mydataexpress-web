@@ -359,6 +359,46 @@ test('recognizes the legacy one-argument OLE HTTP_GET provider recipe', () => {
   });
 });
 
+test('moves the forum HTTP action and function to hardened request providers', () => {
+  const source = readFileSync(
+    new URL('../test/fixtures/extensions/legacy-http-request.epas', import.meta.url),
+    'utf8',
+  );
+  const generated = generateWebModule(source, 'legacy-http-request.epas');
+  assert.deepEqual(generated.manifest.summary, {
+    total: 2,
+    compatible: 2,
+    webScript: 0,
+    provider: 2,
+    automatedProvider: 2,
+    reviewRequired: 0,
+    manual: 0,
+    complete: true,
+  });
+  assert.deepEqual(
+    generated.manifest.mappings.map(mapping => mapping.providerRecipe.contract),
+    ['send-http-request-action-v1', 'send-http-request-function-v1'],
+  );
+  assert.deepEqual(
+    generated.manifest.mappings.map(mapping => mapping.operation),
+    [
+      'B2C1C477-85A4-4133-9D9C-0FD61CA10F1C',
+      'SendHttpRequestFunction',
+    ],
+  );
+  assert.match(generated.module, /Session\.SetExprVar\('request_result', ProviderResponse\)/);
+  assert.match(generated.module, /"Headers":\[/);
+  assert.match(
+    generated.module,
+    /ExtensionProviderCall\('legacy-http-request', 'B2C1C477-85A4-4133-9D9C-0FD61CA10F1C'/,
+  );
+  assert.match(
+    generated.module,
+    /Result := ExtensionProviderCallVariant\('legacy-http-request', 'SendHttpRequestFunction'/,
+  );
+  assert.doesNotMatch(generated.module, /THTTPClient/);
+});
+
 test('recognizes stateful DaData OLE recipes and preserves session updates', () => {
   const source = readFileSync(
     new URL('../test/fixtures/extensions/legacy-dadata.epas', import.meta.url),
