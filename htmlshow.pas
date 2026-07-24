@@ -68,6 +68,7 @@ type
     FTabOrderList: TList;
     FTopCtrl: TdxComponent;
     FRecordCopies: array of TdxMemDataSet;
+    function GetResultCode: Integer;
     function GetJsCode(IsEditForm: Boolean): String;
     function BuildHRef(Level: Integer): String;
     function GetHRef(FmId, RecId: Integer; TblId: Integer = 0; Row: Integer = 0): String;
@@ -237,7 +238,7 @@ type
     function ShowCompileError: String;
     function ShowExtensionCompatibility: String;
     property Session: TSession read FSs write FSs;
-    property ResultCode: Integer read FResultCode;
+    property ResultCode: Integer read GetResultCode;
   end;
 
 implementation
@@ -1953,6 +1954,12 @@ begin
   FSS.DebugText := '';
   FResultCode := rcAjaxOk;
   Result := '';
+end;
+
+function THtmlShow.GetResultCode: Integer;
+begin
+  if FResultCode < 100 then Result := rcServerError
+  else Result := FResultCode;
 end;
 
 constructor THtmlShow.Create;

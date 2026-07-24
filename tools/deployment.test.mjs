@@ -5,6 +5,7 @@ import { test } from 'node:test';
 const installer = readFileSync('deploy/install.sh', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
 const runtime = readFileSync('dxtypes.pas', 'utf8');
+const htmlRuntime = readFileSync('htmlshow.pas', 'utf8');
 
 test('one-line installer pins runtime downloads and runs services unprivileged', () => {
   assert.match(installer, /^set -euo pipefail$/m);
@@ -63,4 +64,9 @@ test('README attributes upstream projects and documents the public installer', (
   );
   assert.match(readme, /\/admin\//);
   assert.match(readme, /(?:HTTPS|TLS)/);
+});
+
+test('HTML responses never emit internal one- or two-digit result codes as HTTP status', () => {
+  assert.match(htmlRuntime, /if FResultCode < 100 then Result := rcServerError/);
+  assert.match(htmlRuntime, /property ResultCode: Integer read GetResultCode/);
 });
