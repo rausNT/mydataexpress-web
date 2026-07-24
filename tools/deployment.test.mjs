@@ -43,6 +43,7 @@ test('server selects pinned compatible shared .wepas modules without overriding 
   assert.match(runtime, /FindScriptByName\(ModuleName\) <> nil then Continue/);
   assert.match(runtime, /AllMappingsAvailable\(Candidate\.ActionIds, AvailableActions\)/);
   assert.match(runtime, /HasMappingOverlap\(Candidate\.FunctionNames, ClaimedFunctions\)/);
+  assert.match(runtime, /Disabled incompatible database web extension/);
   assert.match(runtime, /Script\.Kind := skWebExpr/);
   for (const id of [7867, 7991, 8376, 9551]) {
     assert.match(installer, new RegExp(`forum\\.mydataexpress\\.ru/download/file\\.php\\?id=${id}`));

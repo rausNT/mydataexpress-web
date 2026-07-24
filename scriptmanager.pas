@@ -840,7 +840,6 @@ begin
       Chk.Expr := XmlToStr(GetStr(Atts, 'expr'));
       if Chk.Expr = '' then raise Exception.Create('Attribute [expr] in tag [if] not defined.');
       Chk.Msg := XmlToStr(GetStr(Atts, 'msg'));
-      if Chk.Msg = '' then raise Exception.Create('Attribute [msg] in tag [if] not defined.');
       Chk.FocusControl := GetStr(Atts, 'focus');
       CheckActionFocusComponent(Chk.FocusControl);
     end

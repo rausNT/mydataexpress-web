@@ -968,9 +968,29 @@ begin
   begin
     Script := FScriptMan.Scripts[i];
     if Script.Kind = skExpr then
-      CollectModuleMappings(Script.Source, AvailableActions, AvailableFunctions)
-    else if Script.Kind = skWebExpr then
-      CollectModuleMappings(Script.Source, ClaimedActions, ClaimedFunctions);
+      CollectModuleMappings(Script.Source, AvailableActions, AvailableFunctions);
+  end;
+  for i := 0 to FScriptMan.ScriptCount - 1 do
+  begin
+    Script := FScriptMan.Scripts[i];
+    if Script.Kind <> skWebExpr then Continue;
+    Candidate := TSharedWebExtension.Create;
+    CollectModuleMappings(Script.Source, Candidate.ActionIds,
+      Candidate.FunctionNames);
+    if (Candidate.MappingCount = 0) or
+      (AllMappingsAvailable(Candidate.ActionIds, AvailableActions) and
+       AllMappingsAvailable(Candidate.FunctionNames, AvailableFunctions)) then
+    begin
+      AddMappings(Candidate.ActionIds, ClaimedActions);
+      AddMappings(Candidate.FunctionNames, ClaimedFunctions);
+    end
+    else
+    begin
+      LogString('Disabled incompatible database web extension: ' + Script.Name);
+      Script.Name := FScriptMan.MakeUniqueScriptName('__incompatible_' + Script.Name);
+      Script.Kind := skNone;
+    end;
+    Candidate.Free;
   end;
 
   ExtensionDir := IncludeTrailingPathDelimiter(AppPath + 'extensions');
