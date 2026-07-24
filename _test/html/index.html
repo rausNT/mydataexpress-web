@@ -1,15 +1,41 @@
 <!DOCTYPE html>
-<html>
+<html lang="[lng]">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="/html/index.css" rel="stylesheet" type="text/css">
 <link href="/html/modern.css" rel="stylesheet" type="text/css">
+<link href="/html/index.css" rel="stylesheet" type="text/css">
+<script type="text/javascript" src="/html/index.js" defer></script>
 <base target="_blank">
 <title>[title]</title>
 </head>
 <body class="landing-page">
-<div class=logo><img class=heart src="img/logo.png"></div>
-<div class=data>[content]</div>
+<main class="landing-shell">
+  <section class="landing-hero" aria-labelledby="landing-title">
+    <div class="logo"><img src="/img/logo.png" alt=""></div>
+    <div class="hero-copy">
+      <div class="server-status"><span aria-hidden="true"></span>[landing-status]</div>
+      <h1 id="landing-title">[landing-title]</h1>
+      <p>[landing-description]</p>
+    </div>
+  </section>
+
+  <section class="connection-panel" aria-label="[landing-title]">
+    <form id="connection-form" novalidate>
+      <label for="connection-name">[connection-name]</label>
+      <div class="connection-control">
+        <input id="connection-name" name="connection" type="text"
+          inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false"
+          pattern="[A-Za-z0-9_]+" placeholder="[connection-placeholder]"
+          data-invalid="[invalid-connection-name]" required>
+        <button type="submit"><span>[open-connection]</span><span aria-hidden="true">&#8594;</span></button>
+      </div>
+      <p id="connection-error" class="connection-error" role="alert" aria-live="polite"></p>
+    </form>
+    [connections]
+  </section>
+
+  <footer class="server-meta">[content]</footer>
+</main>
 </body>
 </html>

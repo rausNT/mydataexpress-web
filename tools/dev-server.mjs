@@ -43,6 +43,32 @@ async function renderLogin() {
 		.replaceAll('[content]', content);
 }
 
+async function renderLanding() {
+	const template = await readFile(resolve(staticRoot, 'html', 'index.html'), 'utf8');
+	const connections = '<section class="connection-section" aria-labelledby="connections-title">' +
+		'<h2 id="connections-title">Доступные подключения</h2>' +
+		'<div class="connection-grid"><a class="connection-card" href="/demodb/" target="_self">' +
+		'<span class="connection-icon" aria-hidden="true"><img src="/img/database.svg" alt=""></span>' +
+		'<span class="connection-name">DemoDB</span>' +
+		'<span class="connection-arrow" aria-hidden="true">&#8594;</span></a></div></section>';
+	const replacements = new Map([
+		['[lng]', 'ru'],
+		['[title]', 'DataExpress Web'],
+		['[landing-status]', 'Сервер готов'],
+		['[landing-title]', 'Открыть базу данных'],
+		['[landing-description]', 'Выберите доступное подключение или введите его имя.'],
+		['[connection-name]', 'Имя подключения'],
+		['[connection-placeholder]', 'Например: demodb'],
+		['[open-connection]', 'Открыть'],
+		['[invalid-connection-name]', 'Используйте латинские буквы, цифры и символ подчёркивания.'],
+		['[connections]', connections],
+		['[content]', 'Локальный preview &middot; DataExpress Web modernization'],
+	]);
+	let result = template;
+	for (const [placeholder, value] of replacements) result = result.replaceAll(placeholder, value);
+	return result;
+}
+
 async function serveStatic(pathname, response) {
 	let decodedPath;
 	try {
@@ -82,11 +108,17 @@ export function createPreviewServer() {
 			}
 
 			if (request.method === 'GET' && url.pathname === '/') {
+				send(response, 200, await renderLanding(), 'text/html; charset=utf-8');
+				return;
+			}
+
+			if (request.method === 'GET' && url.pathname === '/demodb/') {
 				send(response, 200, await renderLogin(), 'text/html; charset=utf-8');
 				return;
 			}
 
-			if (request.method === 'POST' && url.pathname === '/' && url.searchParams.has('login')) {
+			if (request.method === 'POST' && url.pathname === '/demodb/' &&
+					url.searchParams.has('login')) {
 				send(response, 223, JSON.stringify({
 					code: 0,
 					error: 'Preview работает. Вход станет доступен после сборки Pascal-бэкенда.'
@@ -108,7 +140,8 @@ export function createPreviewServer() {
 	});
 }
 
-const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+const isMain = typeof process !== 'undefined' && process.argv[1] &&
+	import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (isMain) {
 	const host = process.env.DX_HOST || '127.0.0.1';
 	const port = Number.parseInt(process.env.DX_PORT || '8080', 10);

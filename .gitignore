@@ -44,6 +44,8 @@ tools/*
 !tools/dev-server.test.mjs
 !tools/build-windows.ps1
 !tools/server-hardening.test.mjs
+!tools/landing-page.test.mjs
+/.tmp/
 /_dist
 
 

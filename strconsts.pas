@@ -238,6 +238,16 @@ resourcestring
   rsType = 'Type';
   rsWeb = 'Web';
   rsDesktop = 'Desktop';
+  rsLandingStatus = 'Server is ready';
+  rsLandingTitle = 'Open a database';
+  rsLandingDescription = 'Select an available connection or enter its name.';
+  rsConnectionName = 'Connection name';
+  rsConnectionPlaceholder = 'For example: demodb';
+  rsOpenConnection = 'Open';
+  rsInvalidConnectionAlias = 'Use Latin letters, digits, and underscore.';
+  rsConfiguredConnections = 'Available connections';
+  rsConnectionHint = 'Enter the connection name from dxwebsrv.cfg.';
+  rsLandingMeta = 'Version: %s &middot; Copyright &#169; 2016-2026 Pavel Duborkin<br><a href="https://mydataexpress.ru">Project Website</a> &middot; <a href="https://forum.mydataexpress.ru">Forum</a> &middot; <a href="https://wiki.mydataexpress.ru">Wiki</a>';
   rsAboutText = 'DataExpress Web Server<br>is working...<br><br>Version: %s<br><br>Copyright &#169; 2016-2026 Pavel Duborkin<br><br><a href="https://mydataexpress.ru">Project Website</a> | <a href="https://forum.mydataexpress.ru">Forum</a> | <a href="https://wiki.mydataexpress.ru">Wiki</a>';
   rsAboutTextConsole = 'DataExpress Web Server is working...' + LineEnding + 'Version: %s' + LineEnding + 'Copyright (c) 2016-2026 Pavel Duborkin';
   rsLoopDetectedCalc = 'A loop was detected while modifying the field or label [%s].';

@@ -2412,16 +2412,57 @@ end;
 
 function THtmlShow.ShowIndexPage: String;
 var
-  AppVer: String;
+  AppVer, ConnectionItems, Connections, ConnectionName, ConnectionUrl: String;
+  i: Integer;
+
+  function IsValidConnectionName(const Value: String): Boolean;
+  var
+    j: Integer;
+  begin
+    Result := Value <> '';
+    if not Result then Exit;
+    for j := 1 to Length(Value) do
+      if not (Value[j] in ['a'..'z', 'A'..'Z', '0'..'9', '_']) then
+        Exit(False);
+  end;
 begin
   {FS.DateSeparator := '/';
   FS.ShortDateFormat := 'y/m/d';
   AppVer := FormatDateTime('yy.m.d', StrToDate({$INCLUDE %DATE}, FS));}
   AppVer := FormatDateTime('yy.m.d', GetBuildDate);
 
+  ConnectionItems := '';
+  if AppSet.ShowConnections then
+    for i := 0 to AppSet.DBList.Count - 1 do
+    begin
+      ConnectionName := AppSet.DBList[i].Name;
+      if not IsValidConnectionName(ConnectionName) then Continue;
+      ConnectionUrl := '/' + LowerCase(ConnectionName) + '/';
+      ConnectionItems := ConnectionItems +
+        '<a class="connection-card" href="' + ConnectionUrl + '" target="_self">' +
+        '<span class="connection-icon" aria-hidden="true"><img src="/img/database.svg" alt=""></span>' +
+        '<span class="connection-name">' + StrToHtml(ConnectionName) + '</span>' +
+        '<span class="connection-arrow" aria-hidden="true">&#8594;</span></a>';
+    end;
+  if ConnectionItems <> '' then
+    Connections := '<section class="connection-section" aria-labelledby="connections-title">' +
+      '<h2 id="connections-title">' + StrToHtml(rsConfiguredConnections) + '</h2>' +
+      '<div class="connection-grid">' + ConnectionItems + '</div></section>'
+  else
+    Connections := '<p class="connection-hint">' + StrToHtml(rsConnectionHint) + '</p>';
+
   Result := LoadString(GetHtmlPath + 'index.html');
-  Result := StringReplace(Result, '[title]', rsServerItself, []);
-  Result := StringReplace(Result, '[content]', Format(rsAboutText, [AppVer]), []);
+  Result := StringReplace(Result, '[lng]', StrToHtml(AppSet.Language), [rfReplaceAll]);
+  Result := StringReplace(Result, '[title]', rsServerItself, [rfReplaceAll]);
+  Result := StringReplace(Result, '[landing-status]', StrToHtml(rsLandingStatus), [rfReplaceAll]);
+  Result := StringReplace(Result, '[landing-title]', StrToHtml(rsLandingTitle), [rfReplaceAll]);
+  Result := StringReplace(Result, '[landing-description]', StrToHtml(rsLandingDescription), [rfReplaceAll]);
+  Result := StringReplace(Result, '[connection-name]', StrToHtml(rsConnectionName), [rfReplaceAll]);
+  Result := StringReplace(Result, '[connection-placeholder]', StrToHtml(rsConnectionPlaceholder), [rfReplaceAll]);
+  Result := StringReplace(Result, '[open-connection]', StrToHtml(rsOpenConnection), [rfReplaceAll]);
+  Result := StringReplace(Result, '[invalid-connection-name]', StrToHtml(rsInvalidConnectionAlias), [rfReplaceAll]);
+  Result := StringReplace(Result, '[connections]', Connections, [rfReplaceAll]);
+  Result := StringReplace(Result, '[content]', Format(rsLandingMeta, [AppVer]), [rfReplaceAll]);
 end;
 
 function THtmlShow.FieldChange(AFields: TStrings): String;
