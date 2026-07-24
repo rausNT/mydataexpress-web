@@ -84,6 +84,37 @@ test('generates a ready handler for a recognized HTTP_GET recipe', () => {
   assert.match(environment, /DX_HTTP_ALLOW_HOSTS=example\.com/);
 });
 
+test('generates ready stateful handlers and environment for DaData recipes', () => {
+  const dadataManifest = {
+    schemaVersion: 1,
+    provider: 'DaData',
+    mappings: [{
+      kind: 'function',
+      operation: 'DA_FIRM_GET',
+      status: 'provider',
+      providerRecipe: {
+        kind: 'dadata-suggest',
+        suggestType: 'party',
+        apiKeyParameter: 'ApiKey',
+        queryParameter: 'SearhStr',
+        stateVariables: ['value', 'data.inn'],
+        resultVariable: 'DA_FIRM_FIELD',
+      },
+    }],
+  };
+  const source = generateProviderScaffold(dadataManifest);
+  assert.match(source, /createDadataSuggestHandler/);
+  assert.match(source, /suggestType: "party"/);
+  assert.match(source, /stateVariables: \["value","data\.inn"\]/);
+  assert.match(source, /resultVariable: "DA_FIRM_FIELD"/);
+  assert.doesNotMatch(source, /TODO: implement provider operation DA_FIRM_GET/);
+
+  const environment = generateProviderEnvironment(dadataManifest);
+  assert.match(environment, /DX_DADATA_API_KEY=/);
+  assert.match(environment, /DX_DADATA_BASE_URL=https:\/\/suggestions\.dadata\.ru/);
+  assert.match(environment, /DX_DADATA_ALLOW_INSECURE=false/);
+});
+
 test('CLI writes syntax-valid scaffold files', () => {
   const directory = mkdtempSync(join(tmpdir(), 'dataexpress-provider-'));
   try {

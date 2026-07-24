@@ -6,8 +6,10 @@ const DEFAULT_MAX_BODY = 8 * 1024 * 1024;
 const DEFAULT_HTTP_TIMEOUT = 15_000;
 const DEFAULT_HTTP_MAX_RESPONSE = 2 * 1024 * 1024;
 const DEFAULT_HTTP_MAX_REDIRECTS = 3;
+const DEFAULT_DADATA_BASE_URL =
+  'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/';
 
-const nonPublicAddresses = new BlockList();
+const nonPublicIPv4 = new BlockList();
 for (const [address, prefix] of [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
@@ -24,8 +26,9 @@ for (const [address, prefix] of [
   ['224.0.0.0', 4],
   ['240.0.0.0', 4],
 ]) {
-  nonPublicAddresses.addSubnet(address, prefix, 'ipv4');
+  nonPublicIPv4.addSubnet(address, prefix, 'ipv4');
 }
+const nonPublicIPv6 = new BlockList();
 for (const [address, prefix] of [
   ['::', 128],
   ['::1', 128],
@@ -35,7 +38,7 @@ for (const [address, prefix] of [
   ['ff00::', 8],
   ['2001:db8::', 32],
 ]) {
-  nonPublicAddresses.addSubnet(address, prefix, 'ipv6');
+  nonPublicIPv6.addSubnet(address, prefix, 'ipv6');
 }
 
 export class ProviderManifestError extends Error {
@@ -167,8 +170,9 @@ async function validateHttpUrl(value, policy) {
       throw new ProviderHttpError('HTTP target host did not resolve', 502);
     }
     if (!addresses.length) throw new ProviderHttpError('HTTP target host did not resolve', 502);
-    if (addresses.some(item =>
-      nonPublicAddresses.check(item.address, item.family === 6 ? 'ipv6' : 'ipv4'))) {
+    if (addresses.some(item => item.family === 6
+      ? nonPublicIPv6.check(item.address, 'ipv6')
+      : nonPublicIPv4.check(item.address, 'ipv4'))) {
       throw new ProviderHttpError('HTTP target resolves to a non-public address');
     }
   }
@@ -262,6 +266,236 @@ export function createHttpGetHandler({
   return handler;
 }
 
+function dadataPolicy(options = {}) {
+  const environment = options.environment || process.env;
+  let baseUrl;
+  try {
+    baseUrl = new URL(
+      options.baseUrl || environment.DX_DADATA_BASE_URL || DEFAULT_DADATA_BASE_URL,
+    );
+  } catch {
+    throw new ProviderHttpError('DaData provider base URL is invalid');
+  }
+  if (baseUrl.username || baseUrl.password || baseUrl.search || baseUrl.hash) {
+    throw new ProviderHttpError('DaData provider base URL must not contain credentials, query or fragment');
+  }
+  if (!baseUrl.pathname.endsWith('/')) baseUrl.pathname += '/';
+  return {
+    ...normalizeHttpPolicy({
+      allowHosts: [baseUrl.hostname],
+      allowPrivate: options.allowPrivate ?? enabled(environment.DX_DADATA_ALLOW_PRIVATE),
+      allowInsecure: options.allowInsecure ?? enabled(environment.DX_DADATA_ALLOW_INSECURE),
+      timeoutMs: options.timeoutMs ?? environment.DX_DADATA_TIMEOUT_MS,
+      maxResponseBytes: options.maxResponseBytes ?? environment.DX_DADATA_MAX_RESPONSE_BYTES,
+      maxRedirects: 0,
+      fetch: options.fetch,
+      lookup: options.lookup,
+      environment: {},
+    }),
+    baseUrl,
+    apiKey: options.apiKey ?? environment.DX_DADATA_API_KEY ?? '',
+  };
+}
+
+function xmlEscape(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+function xmlElement(name, value) {
+  if (Array.isArray(value)) return value.map(item => xmlElement(name, item)).join('');
+  if (value === null || value === undefined) return `<${name}/>`;
+  if (typeof value === 'object') {
+    return `<${name}>${Object.entries(value)
+      .map(([childName, childValue]) => xmlElement(childName, childValue))
+      .join('')}</${name}>`;
+  }
+  return `<${name}>${xmlEscape(value)}</${name}>`;
+}
+
+function legacyDadataXml(response) {
+  if (!Array.isArray(response?.suggestions) || response.suggestions.length === 0) {
+    return '<SuggestResponse/>';
+  }
+  return `<SuggestResponse>${response.suggestions
+    .map(suggestion => xmlElement('suggestions', suggestion))
+    .join('')}</SuggestResponse>`;
+}
+
+function flattenObject(value, prefix = '', result = new Map()) {
+  if (value === null || value === undefined || typeof value !== 'object') {
+    if (prefix) result.set(prefix, value);
+    return result;
+  }
+  if (Array.isArray(value)) {
+    if (prefix) result.set(prefix, JSON.stringify(value));
+    return result;
+  }
+  for (const [name, child] of Object.entries(value)) {
+    flattenObject(child, prefix ? `${prefix}.${name}` : name, result);
+  }
+  return result;
+}
+
+function dadataDate(value) {
+  const milliseconds = Number(value);
+  if (!Number.isFinite(milliseconds)) return value;
+  const date = new Date(milliseconds);
+  if (Number.isNaN(date.valueOf())) return value;
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  return `${day}.${month}.${date.getUTCFullYear()}`;
+}
+
+function legacyDadataValue(name, value) {
+  if (value === null || value === undefined) return null;
+  if ([
+    'ogrn_date',
+    'data.state.actuality_date',
+    'data.state.registration_date',
+    'data.state.liquidation_date',
+  ].includes(name)) return dadataDate(value);
+  const translations = {
+    'data.state.status': {
+      ACTIVE: 'Действующая',
+      LIQUIDATING: 'Ликвидируется',
+      LIQUIDATED: 'Ликвидирована',
+    },
+    'data.type': {
+      LEGAL: 'Юридическое лицо',
+      INDIVIDUAL: 'Индивидуальный предприниматель',
+    },
+    'data.branch_type': {
+      MAIN: 'Головная организация',
+      BRANCH: 'Филиал',
+    },
+    'data.opf.type': {
+      BANK: 'Банк',
+      BANK_BRANCH: 'Филиал банка',
+      NKO: 'Небанковская кредитная организация (НКО)',
+      NKO_BRANCH: 'Филиал НКО',
+      RKC: 'Расчетно-кассовый центр',
+      OTHER: 'Другой',
+    },
+  };
+  return translations[name]?.[String(value)] ?? value;
+}
+
+async function dadataSuggest(payload, recipe, policy) {
+  const queryValue = payload?.[recipe.queryParameter];
+  if (queryValue === null || queryValue === undefined) {
+    return {
+      value: '',
+      variables: recipe.stateVariables.map(name => ({ name, value: null })),
+    };
+  }
+  const query = String(queryValue);
+  if (query.length > 300) {
+    throw new ProviderHttpError('DaData query must not exceed 300 characters');
+  }
+  const apiKey = String(policy.apiKey || payload?.[recipe.apiKeyParameter] || '').trim();
+  if (!apiKey) throw new ProviderHttpError('DaData API key is required');
+  const url = new URL(recipe.suggestType, policy.baseUrl);
+  await validateHttpUrl(url, policy);
+  const signal = AbortSignal.timeout(policy.timeoutMs);
+  let response;
+  try {
+    response = await policy.fetch(url, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Token ${apiKey}`,
+        'content-type': 'application/json; charset=utf-8',
+        'user-agent': 'DataExpress-Web-Provider/1.0',
+      },
+      body: JSON.stringify({ query, count: 1 }),
+      redirect: 'manual',
+      signal,
+    });
+  } catch (error) {
+    if (signal.aborted || error?.name === 'TimeoutError') {
+      throw new ProviderHttpError('DaData request timed out', 504);
+    }
+    throw new ProviderHttpError('DaData request failed', 502);
+  }
+  const bytes = await responseBytes(response, policy.maxResponseBytes);
+  if (!response.ok) {
+    if ([401, 403].includes(response.status)) {
+      throw new ProviderHttpError('DaData authentication failed', response.status);
+    }
+    const status = response.status >= 500 ? 502 : 400;
+    throw new ProviderHttpError(`DaData request was rejected (HTTP ${response.status})`, status);
+  }
+  let data;
+  try {
+    data = JSON.parse(decodeResponse(bytes, response.headers.get('content-type')));
+  } catch {
+    throw new ProviderHttpError('DaData returned invalid JSON', 502);
+  }
+  if (!Array.isArray(data?.suggestions)) {
+    throw new ProviderHttpError('DaData response does not contain suggestions', 502);
+  }
+  const xml = legacyDadataXml(data);
+  const flattened = flattenObject(data.suggestions[0] || {});
+  const names = new Set([...recipe.stateVariables, ...flattened.keys()]);
+  const variables = [...names].map(name => ({
+    name,
+    value: legacyDadataValue(name, flattened.has(name) ? flattened.get(name) : null),
+  }));
+  if (recipe.resultVariable) variables.push({ name: recipe.resultVariable, value: xml });
+  return { value: xml, variables };
+}
+
+export function createDadataSuggestHandler({
+  suggestType,
+  apiKeyParameter = 'ApiKey',
+  queryParameter = 'SearhStr',
+  stateVariables = [],
+  resultVariable = '',
+  ...policyOptions
+} = {}) {
+  if (!['party', 'bank', 'address'].includes(suggestType)) {
+    throw new ProviderHttpError('DaData provider has an unsupported suggestion type');
+  }
+  if (!Array.isArray(stateVariables) ||
+      stateVariables.some(name => typeof name !== 'string' || !name.trim())) {
+    throw new ProviderHttpError('DaData provider state variables are invalid');
+  }
+  const policy = dadataPolicy(policyOptions);
+  const recipe = {
+    suggestType,
+    apiKeyParameter,
+    queryParameter,
+    stateVariables: [...new Set(stateVariables)],
+    resultVariable,
+  };
+  const handler = payload => dadataSuggest(payload, recipe, policy);
+  handler.dataExpressImplemented = true;
+  return handler;
+}
+
+function validProviderRecipe(recipe) {
+  if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) return false;
+  if (recipe.kind === 'http-get') {
+    return recipe.urlParameter === undefined ||
+      (typeof recipe.urlParameter === 'string' && Boolean(recipe.urlParameter.trim()));
+  }
+  if (recipe.kind === 'dadata-suggest') {
+    return ['party', 'bank', 'address'].includes(recipe.suggestType) &&
+      typeof recipe.apiKeyParameter === 'string' && Boolean(recipe.apiKeyParameter.trim()) &&
+      typeof recipe.queryParameter === 'string' && Boolean(recipe.queryParameter.trim()) &&
+      Array.isArray(recipe.stateVariables) &&
+      recipe.stateVariables.every(name => typeof name === 'string' && Boolean(name.trim())) &&
+      (recipe.resultVariable === undefined ||
+        (typeof recipe.resultVariable === 'string' && Boolean(recipe.resultVariable.trim())));
+  }
+  return false;
+}
+
 export function validateProviderManifest(manifest, handlers) {
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
     throw new ProviderManifestError('Provider manifest must be an object');
@@ -290,15 +524,7 @@ export function validateProviderManifest(manifest, handlers) {
   if (invalidRecipeStatuses.length) {
     throw new ProviderManifestError('Provider recipes are only allowed on provider mappings');
   }
-  const invalidRecipes = recipeMappings.filter(mapping =>
-    !mapping.providerRecipe ||
-    typeof mapping.providerRecipe !== 'object' ||
-    Array.isArray(mapping.providerRecipe) ||
-    mapping.providerRecipe.kind !== 'http-get' ||
-    (mapping.providerRecipe.urlParameter !== undefined &&
-      (typeof mapping.providerRecipe.urlParameter !== 'string' ||
-        !mapping.providerRecipe.urlParameter.trim()))
-  );
+  const invalidRecipes = recipeMappings.filter(mapping => !validProviderRecipe(mapping.providerRecipe));
   if (invalidRecipes.length) {
     throw new ProviderManifestError('Unsupported or invalid provider recipe');
   }

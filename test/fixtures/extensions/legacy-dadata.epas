@@ -1,0 +1,69 @@
+{@module
+Author=DataExpress migration fixture
+Version=1.0
+Description=Synthetic stateful DaData/OLE compatibility fixture.
+@}
+
+const
+  FirmParams = '"value", "data.inn", "data.state.status"';
+  BankParams = '"data.bic", "data.name.payment"';
+  AddressParams = '"data.postal_code", "data.region"';
+
+function GetXMLData(ApiKey, SearchText, SuggestType: string): string;
+var
+  Client: Variant;
+begin
+  Client := CreateOleObject('MSXML2.XMLHTTP');
+  Client.Open('POST',
+    'http://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/' + SuggestType,
+    False);
+  Client.Send('{"query":"' + SearchText + '"}');
+  Result := Client.ResponseText;
+end;
+
+{@function
+OrigName=DA_FIRM_GET
+Name=DA_FIRM_GET
+Args=vv
+Result=s
+@}
+
+function DA_FIRM_GET(ApiKey, SearhStr: Variant): String;
+begin
+  Result := GetXMLData(ApiKey, SearhStr, 'party');
+end;
+
+{@function
+OrigName=DA_FIRM_INN
+Name=DA_FIRM_INN
+Result=v
+@}
+
+function DA_FIRM_INN: Variant;
+begin
+  Result := Session.GetExprVar('data.inn');
+end;
+
+{@function
+OrigName=DA_BANK_GET
+Name=DA_BANK_GET
+Args=vv
+Result=s
+@}
+
+function DA_BANK_GET(ApiKey, SearhStr: Variant): String;
+begin
+  Result := GetXMLData(ApiKey, SearhStr, 'bank');
+end;
+
+{@function
+OrigName=DA_ADDR_GET
+Name=DA_ADDR_GET
+Args=vv
+Result=s
+@}
+
+function DA_ADDR_GET(ApiKey, SearhStr: Variant): String;
+begin
+  Result := GetXMLData(ApiKey, SearhStr, 'address');
+end;

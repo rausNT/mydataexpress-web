@@ -175,6 +175,44 @@ DX_HTTP_MAX_REDIRECTS=3
 явно доверенной локальной интеграции. Таймаут ограничен 120 секундами, размер
 ответа — 32 МБ, число redirects — десятью независимо от значений окружения.
 
+## Автоматический рецепт DaData
+
+Для проверенного форумного модуля мигратор распознаёт три точные сигнатуры:
+`DA_FIRM_GET`, `DA_BANK_GET` и `DA_ADDR_GET`. Каждая получает
+`providerRecipe.kind = "dadata-suggest"` и готовый handler для `party`, `bank`
+или `address`. Используется официальный endpoint
+`https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/` с JSON,
+`Authorization: Token …` и `count=1`.
+
+Старый модуль возвращал XML и одновременно записывал реквизиты в переменные
+выражений. Новый handler сохраняет обе части контракта:
+
+- JSON-ответ преобразуется в совместимый `<SuggestResponse>…</SuggestResponse>`;
+- реквизиты разворачиваются в state bundle с именами `data.inn`,
+  `data.address.value` и т. п.;
+- generated `.wepas` применяет bundle через `Session.SetExprVar`;
+- поля, которых нет в новом ответе, получают `Null`, поэтому старые значения
+  не остаются в сессии;
+- прежние переводы статуса, типа организации, типа филиала и дат сохраняются.
+
+Рекомендуется убрать API-ключ из пользовательских выражений и задать его в
+окружении provider. Для обратной совместимости параметр `ApiKey` по-прежнему
+принимается, если `DX_DADATA_API_KEY` пуст:
+
+```dotenv
+DX_DADATA_API_KEY=replace-with-dadata-api-key
+DX_DADATA_BASE_URL=https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/
+DX_DADATA_ALLOW_PRIVATE=false
+DX_DADATA_ALLOW_INSECURE=false
+DX_DADATA_TIMEOUT_MS=15000
+DX_DADATA_MAX_RESPONSE_BYTES=2097152
+```
+
+`DX_DADATA_BASE_URL` обычно менять не нужно. Разрешения private/plain HTTP
+предназначены только для локального тестового proxy; production endpoint должен
+оставаться HTTPS. Официальное описание формата запросов:
+[DaData — подсказки по организациям](https://dadata.ru/api/suggest/party/).
+
 Пример запуска:
 
 ```powershell

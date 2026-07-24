@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import test from 'node:test';
 import {
   closeProvider,
+  createDadataSuggestHandler,
   createHttpGetHandler,
   createProviderServer,
   listenProvider,
@@ -146,6 +147,85 @@ test('HTTP_GET recipe blocks private targets, plaintext and URL credentials by d
     () => secureOnly({ URL: 'https://user:password@example.com/secret' }),
     /Credentials .* not allowed/,
   );
+});
+
+test('HTTP_GET recipe allows a DNS hostname that resolves only to public IPv4', async () => {
+  const handler = createHttpGetHandler({
+    allowHosts: ['api.example'],
+    lookup: async () => [{ address: '8.8.8.8', family: 4 }],
+    fetch: async () => new Response('public-ok', {
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    }),
+  });
+  assert.equal(await handler({ URL: 'https://api.example/resource' }), 'public-ok');
+});
+
+test('DaData recipe preserves legacy XML and session field semantics', async () => {
+  let request;
+  const handler = createDadataSuggestHandler({
+    suggestType: 'party',
+    apiKeyParameter: 'ApiKey',
+    queryParameter: 'SearhStr',
+    stateVariables: [
+      'value',
+      'data.inn',
+      'data.state.status',
+      'data.state.actuality_date',
+      'data.kpp',
+    ],
+    resultVariable: 'DA_FIRM_FIELD',
+    lookup: async () => [{ address: '8.8.8.8', family: 4 }],
+    fetch: async (url, options) => {
+      request = { url: String(url), options };
+      return new Response(JSON.stringify({
+        suggestions: [{
+          value: 'ПАО ТЕСТ',
+          data: {
+            inn: '7700000000',
+            state: {
+              status: 'ACTIVE',
+              actuality_date: 1_700_000_000_000,
+            },
+          },
+        }],
+      }), { headers: { 'content-type': 'application/json; charset=utf-8' } });
+    },
+  });
+
+  const result = await handler({ ApiKey: 'api-secret', SearhStr: 'тест' });
+  assert.equal(
+    request.url,
+    'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/party',
+  );
+  assert.equal(request.options.headers.authorization, 'Token api-secret');
+  assert.deepEqual(JSON.parse(request.options.body), { query: 'тест', count: 1 });
+  assert.match(result.value, /^<SuggestResponse><suggestions>/);
+  assert.match(result.value, /<inn>7700000000<\/inn>/);
+  const variables = Object.fromEntries(result.variables.map(item => [item.name, item.value]));
+  assert.equal(variables.value, 'ПАО ТЕСТ');
+  assert.equal(variables['data.inn'], '7700000000');
+  assert.equal(variables['data.state.status'], 'Действующая');
+  assert.equal(variables['data.state.actuality_date'], '14.11.2023');
+  assert.equal(variables['data.kpp'], null);
+  assert.equal(variables.DA_FIRM_FIELD, result.value);
+  assert.equal(handler.dataExpressImplemented, true);
+});
+
+test('DaData recipe clears legacy state without making a request for null search text', async () => {
+  const handler = createDadataSuggestHandler({
+    suggestType: 'address',
+    stateVariables: ['value', 'data.region'],
+    fetch: async () => {
+      throw new Error('fetch must not run');
+    },
+  });
+  assert.deepEqual(await handler({ ApiKey: '', SearhStr: null }), {
+    value: '',
+    variables: [
+      { name: 'value', value: null },
+      { name: 'data.region', value: null },
+    ],
+  });
 });
 
 test('rejects invalid tokens and unknown operations', async () => {

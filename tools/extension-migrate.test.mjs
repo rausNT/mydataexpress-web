@@ -359,6 +359,36 @@ test('recognizes the legacy one-argument OLE HTTP_GET provider recipe', () => {
   });
 });
 
+test('recognizes stateful DaData OLE recipes and preserves session updates', () => {
+  const source = readFileSync(
+    new URL('../test/fixtures/extensions/legacy-dadata.epas', import.meta.url),
+    'utf8',
+  );
+  const generated = generateWebModule(source, 'legacy-dadata.epas');
+  assert.equal(generated.manifest.summary.provider, 3);
+  assert.equal(generated.manifest.summary.automatedProvider, 3);
+  assert.equal(generated.manifest.summary.webScript, 1);
+  const recipes = generated.manifest.mappings
+    .filter(mapping => mapping.providerRecipe)
+    .map(mapping => mapping.providerRecipe);
+  assert.deepEqual(recipes.map(recipe => recipe.suggestType), ['party', 'bank', 'address']);
+  assert.deepEqual(recipes[0].stateVariables, [
+    'value',
+    'data.inn',
+    'data.state.status',
+    'data.bic',
+    'data.name.payment',
+    'data.postal_code',
+    'data.region',
+  ]);
+  assert.equal(recipes[0].resultVariable, 'DA_FIRM_FIELD');
+  assert.equal(recipes[1].resultVariable, 'DA_BANK_GET');
+  assert.equal(recipes[2].resultVariable, 'DA_ADDR_FIELD');
+  assert.match(generated.module, /ProviderState := ReadJSONFromString\(ProviderResponse\)/);
+  assert.match(generated.module, /Session\.SetExprVar\(ProviderName\.AsString, ProviderValue\.Value\)/);
+  assert.match(generated.module, /Result := ProviderValue\.AsString/);
+});
+
 test('generates a mixed inline/provider module at routine granularity', () => {
   const source = readFileSync(new URL('../test/fixtures/extensions/mixed.epas', import.meta.url), 'utf8');
   const generated = generateWebModule(source, 'mixed.epas');

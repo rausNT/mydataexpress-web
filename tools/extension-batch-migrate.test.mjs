@@ -65,6 +65,13 @@ function legacyHttpGetDesktop() {
   );
 }
 
+function legacyDadataDesktop() {
+  return readFileSync(
+    new URL('../test/fixtures/extensions/legacy-dadata.epas', import.meta.url),
+    'utf8',
+  );
+}
+
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'dataexpress-batch-'));
   const input = join(root, 'extensions');
@@ -288,6 +295,117 @@ test('generated HTTP_GET provider passes live preflight and returns target conte
       await Promise.race([once(child, 'exit'), delay(1000)]);
     }
     await close(target);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generated DaData provider preserves XML results and session variables end to end', async () => {
+  const { root, input, output } = fixture();
+  const requests = [];
+  const dadata = createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    requests.push({
+      url: request.url,
+      authorization: request.headers.authorization,
+      body: JSON.parse(Buffer.concat(chunks).toString('utf8')),
+    });
+    response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({
+      suggestions: [{
+        value: 'ПАО ПРОВАЙДЕР',
+        data: {
+          inn: '7700000000',
+          state: { status: 'ACTIVE' },
+        },
+      }],
+    }));
+  });
+  let child;
+  try {
+    const dadataPort = await listen(dadata);
+    const providerPort = await freePort();
+    write(join(input, 'LegacyDadata.epas'), legacyDadataDesktop());
+    const migration = writeBatchMigration(input, output, { startPort: providerPort });
+    assert.equal(migration.index.summary.providerImplementationsRequired, 0);
+    assert.equal(migration.index.summary.complete, true);
+    assert.deepEqual(
+      migration.index.modules[0].generated.automatedProviderOperations,
+      ['DA_FIRM_GET', 'DA_BANK_GET', 'DA_ADDR_GET'],
+    );
+    const webModule = readFileSync(join(output, 'LegacyDadata.wepas'), 'utf8');
+    assert.match(webModule, /Session\.SetExprVar/);
+    assert.match(webModule, /ReadJSONFromString\(ProviderResponse\)/);
+
+    const diagnostics = [];
+    child = spawn(process.execPath, [join(output, 'LegacyDadata.provider.mjs')], {
+      cwd: output,
+      env: {
+        ...process.env,
+        DX_PROVIDER_TOKEN: 'live-secret',
+        DX_PROVIDER_PORT: String(providerPort),
+        DX_DADATA_BASE_URL: `http://127.0.0.1:${dadataPort}/suggest/`,
+        DX_DADATA_ALLOW_PRIVATE: 'true',
+        DX_DADATA_ALLOW_INSECURE: 'true',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    child.stdout.on('data', chunk => diagnostics.push(chunk.toString()));
+    child.stderr.on('data', chunk => diagnostics.push(chunk.toString()));
+    const providerUrl = `http://127.0.0.1:${providerPort}/`;
+    await waitForProvider(providerUrl, child, diagnostics);
+
+    const manifest = JSON.parse(readFileSync(join(output, 'LegacyDadata.manifest.json'), 'utf8'));
+    const configText = [
+      '[Provider:LegacyDadata]',
+      `Url=${providerUrl}`,
+      'Token=live-secret',
+      'TimeoutMs=3000',
+      'AllowInsecure=False',
+      '',
+    ].join('\n');
+    const preflight = await preflightProvider({ manifest, configText, timeoutMs: 3000 });
+    assert.equal(preflight.ok, true, JSON.stringify(preflight));
+    assert.deepEqual(preflight.requiredOperations, [
+      'DA_FIRM_GET',
+      'DA_BANK_GET',
+      'DA_ADDR_GET',
+    ]);
+
+    const response = await fetch(providerUrl, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer live-secret',
+        'content-type': 'application/json',
+        'x-dataexpress-provider': 'LegacyDadata',
+      },
+      body: JSON.stringify({
+        operation: 'DA_FIRM_GET',
+        payload: { ApiKey: 'test-api-key', SearhStr: 'провайдер' },
+      }),
+    });
+    assert.equal(response.status, 200);
+    const envelope = await response.json();
+    assert.equal(envelope.ok, true);
+    assert.match(envelope.result.value, /<value>ПАО ПРОВАЙДЕР<\/value>/);
+    const variables = Object.fromEntries(
+      envelope.result.variables.map(item => [item.name, item.value]),
+    );
+    assert.equal(variables['data.inn'], '7700000000');
+    assert.equal(variables['data.state.status'], 'Действующая');
+    assert.equal(variables.DA_FIRM_FIELD, envelope.result.value);
+    assert.deepEqual(requests, [{
+      url: '/suggest/party',
+      authorization: 'Token test-api-key',
+      body: { query: 'провайдер', count: 1 },
+    }]);
+  } finally {
+    if (child && child.exitCode === null) {
+      child.kill();
+      await Promise.race([once(child, 'exit'), delay(1000)]);
+    }
+    await close(dadata);
     rmSync(root, { recursive: true, force: true });
   }
 });

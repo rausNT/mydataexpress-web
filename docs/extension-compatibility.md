@@ -78,6 +78,14 @@ Windows/OLE/DLL/UI/file findings и неизвестных globals копиру�
 `providerImplementationsRequired`; обязательный allow-list и остальные
 параметры записываются в `.provider.env.example`.
 
+Для форумного модуля DaData мигратор распознаёт `DA_FIRM_GET`, `DA_BANK_GET` и
+`DA_ADDR_GET` и создаёт `dadata-suggest` recipe. Провайдер вызывает официальный
+HTTPS API с `count=1`, возвращает совместимый `SuggestResponse` XML и state bundle.
+Сгенерированный `.wepas` применяет bundle через `Session.SetExprVar`, поэтому
+старые функции `DA_FIRM_NAME`, `DA_BANK_FIELD`, `DA_ADDR_FIELD` и остальные
+читают те же значения, что после OLE-вызова. Отсутствующие поля предварительно
+сбрасываются в `Null`, чтобы результат прошлого запроса не протекал в новый.
+
 По умолчанию комплект записывается рядом с исходным `.epas`. Параметр `--output`
 может выбрать другой каталог, но имя web-модуля обязано оканчиваться на `.wepas`,
 чтобы файл можно было импортировать в DataExpress как web-реализацию.

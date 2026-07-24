@@ -45,7 +45,7 @@ export function generateProviderScaffold(manifest, {
   );
   const lines = [
     "import { readFileSync } from 'node:fs';",
-    `import { createHttpGetHandler, createProviderServer, listenProvider } from ${JSON.stringify(sdkImport)};`,
+    `import { createDadataSuggestHandler, createHttpGetHandler, createProviderServer, listenProvider } from ${JSON.stringify(sdkImport)};`,
     '',
     `const manifest = JSON.parse(readFileSync(new URL(${JSON.stringify(manifestImport)}, import.meta.url), 'utf8'));`,
     '',
@@ -63,6 +63,20 @@ export function generateProviderScaffold(manifest, {
       lines.push(
         `handlers[${JSON.stringify(operation)}] = createHttpGetHandler({`,
         `  urlParameter: ${JSON.stringify(mapping.providerRecipe.urlParameter || 'URL')},`,
+        '});',
+        `handlers[${JSON.stringify(operation)}].dataExpressImplemented = true;`,
+        '',
+      );
+      continue;
+    }
+    if (mapping.providerRecipe?.kind === 'dadata-suggest') {
+      lines.push(
+        `handlers[${JSON.stringify(operation)}] = createDadataSuggestHandler({`,
+        `  suggestType: ${JSON.stringify(mapping.providerRecipe.suggestType)},`,
+        `  apiKeyParameter: ${JSON.stringify(mapping.providerRecipe.apiKeyParameter)},`,
+        `  queryParameter: ${JSON.stringify(mapping.providerRecipe.queryParameter)},`,
+        `  stateVariables: ${JSON.stringify(mapping.providerRecipe.stateVariables)},`,
+        `  resultVariable: ${JSON.stringify(mapping.providerRecipe.resultVariable || '')},`,
         '});',
         `handlers[${JSON.stringify(operation)}].dataExpressImplemented = true;`,
         '',
@@ -116,6 +130,8 @@ export function generateProviderEnvironment(manifest, { port = 9081 } = {}) {
   );
   const hasHttpGet = operations.some(operation =>
     mappingByOperation.get(operation)?.providerRecipe?.kind === 'http-get');
+  const hasDadata = operations.some(operation =>
+    mappingByOperation.get(operation)?.providerRecipe?.kind === 'dadata-suggest');
   return [
     'DX_PROVIDER_TOKEN=replace-with-the-same-long-random-token-as-dxwebsrv.cfg',
     'DX_PROVIDER_HOST=127.0.0.1',
@@ -127,6 +143,15 @@ export function generateProviderEnvironment(manifest, { port = 9081 } = {}) {
       'DX_HTTP_TIMEOUT_MS=15000',
       'DX_HTTP_MAX_RESPONSE_BYTES=2097152',
       'DX_HTTP_MAX_REDIRECTS=3',
+    ] : []),
+    ...(hasDadata ? [
+      '# Prefer this environment secret; legacy calls may still pass ApiKey for compatibility.',
+      'DX_DADATA_API_KEY=',
+      'DX_DADATA_BASE_URL=https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/',
+      'DX_DADATA_ALLOW_PRIVATE=false',
+      'DX_DADATA_ALLOW_INSECURE=false',
+      'DX_DADATA_TIMEOUT_MS=15000',
+      'DX_DADATA_MAX_RESPONSE_BYTES=2097152',
     ] : []),
     '',
   ].join('\n');

@@ -455,7 +455,13 @@ function resultAdapter(type) {
   return '';
 }
 
-function providerRecipe({ spec, operation, params, type, inline, report }) {
+function dadataStateVariables(source) {
+  return [...new Set([...source.matchAll(
+    /"((?:data\.)[A-Za-z0-9_.]+|unrestricted_value|value)"/g,
+  )].map(match => match[1]))];
+}
+
+function providerRecipe({ spec, operation, params, type, inline, report, source }) {
   const supportedParameterType = params.length === 1 &&
     (normalizedType(params[0].type) === 'variant' ||
       stringTypes.has(normalizedType(params[0].type)));
@@ -468,6 +474,28 @@ function providerRecipe({ spec, operation, params, type, inline, report }) {
     return {
       kind: 'http-get',
       urlParameter: params[0].name,
+    };
+  }
+  const dadataTypes = {
+    DA_FIRM_GET: ['party', 'DA_FIRM_FIELD'],
+    DA_BANK_GET: ['bank', 'DA_BANK_GET'],
+    DA_ADDR_GET: ['address', 'DA_ADDR_FIELD'],
+  };
+  const dadata = dadataTypes[operation.toUpperCase()];
+  const supportedDadataParameters = params.length === 2 && params.every(parameter =>
+    normalizedType(parameter.type) === 'variant' ||
+    stringTypes.has(normalizedType(parameter.type)));
+  if (dadata && spec.kind === 'function' && stringTypes.has(normalizedType(type)) &&
+      supportedDadataParameters && replacesOle &&
+      /suggestions\.dadata\.ru/i.test(source) &&
+      /\bGetXMLData\s*\(/i.test(source)) {
+    return {
+      kind: 'dadata-suggest',
+      suggestType: dadata[0],
+      apiKeyParameter: params[0].name,
+      queryParameter: params[1].name,
+      stateVariables: dadataStateVariables(source),
+      resultVariable: dadata[1],
     };
   }
   return null;
@@ -570,18 +598,50 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
     const issues = [...signatureIssues];
     const automatic = issues.length === 0;
     const recipe = automatic
-      ? providerRecipe({ spec, operation, params, type, inline, report })
+      ? providerRecipe({ spec, operation, params, type, inline, report, source })
       : null;
 
     lines.push(...mappingHeader);
     lines.push(decl);
     if (automatic) {
-      lines.push('var', routineKind === 'procedure'
-        ? '  ProviderPayload, ProviderResponse: String;'
-        : '  ProviderPayload: String;', 'begin');
+      if (recipe?.kind === 'dadata-suggest') {
+        lines.push(
+          'var',
+          '  ProviderPayload, ProviderResponse: String;',
+          '  ProviderState, ProviderVariables, ProviderEntry, ProviderName, ProviderValue: TJSONData;',
+          '  ProviderIndex: Integer;',
+          'begin',
+        );
+      } else {
+        lines.push('var', routineKind === 'procedure'
+          ? '  ProviderPayload, ProviderResponse: String;'
+          : '  ProviderPayload: String;', 'begin');
+      }
       lines.push(...payloadLines(params));
       const call = `${adapter}(${pascalString(moduleName)}, ${pascalString(operation)}, ProviderPayload)`;
-      if (routineKind === 'function') lines.push(`  Result := ${call};`);
+      if (recipe?.kind === 'dadata-suggest') {
+        lines.push(
+          `  ProviderResponse := ${call};`,
+          '  ProviderState := ReadJSONFromString(ProviderResponse);',
+          '  try',
+          "    ProviderVariables := ProviderState.FindPath('variables');",
+          '    if ProviderVariables <> nil then',
+          '      for ProviderIndex := 0 to ProviderVariables.Count - 1 do',
+          '      begin',
+          '        ProviderEntry := ProviderVariables.Items[ProviderIndex];',
+          "        ProviderName := ProviderEntry.FindPath('name');",
+          "        ProviderValue := ProviderEntry.FindPath('value');",
+          '        if (ProviderName <> nil) and (ProviderValue <> nil) then',
+          '          Session.SetExprVar(ProviderName.AsString, ProviderValue.Value);',
+          '      end;',
+          "    ProviderValue := ProviderState.FindPath('value');",
+          "    if ProviderValue = nil then Result := ''",
+          '    else Result := ProviderValue.AsString;',
+          '  finally',
+          '    ProviderState.Free;',
+          '  end;',
+        );
+      } else if (routineKind === 'function') lines.push(`  Result := ${call};`);
       else lines.push(`  ProviderResponse := ${call};`);
     } else {
       lines.push('begin', `  { TODO: manual provider adapter required: ${issues.join(', ')}. }`);
@@ -604,7 +664,7 @@ export function generateWebModule(source, filename = 'Extension.epas', { forcePr
         ? [...identifierDiagnostics, ...inline.issues, ...inline.reviews, ...inlineSignatureIssues]
         : [...identifierDiagnostics, ...inline.issues, ...inline.reviews, ...inlineSignatureIssues, ...issues],
       reviewRequired: false,
-      wireFormat: 'json-v1',
+      wireFormat: recipe?.kind === 'dadata-suggest' ? 'json-state-v1' : 'json-v1',
       ...(recipe ? { providerRecipe: recipe } : {}),
     });
   }
