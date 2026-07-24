@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 const installer = readFileSync('deploy/install.sh', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
+const runtime = readFileSync('dxtypes.pas', 'utf8');
 
 test('one-line installer pins runtime downloads and runs services unprivileged', () => {
   assert.match(installer, /^set -euo pipefail$/m);
@@ -14,6 +15,14 @@ test('one-line installer pins runtime downloads and runs services unprivileged',
   assert.match(installer, /ProtectSystem=(?:full|strict)/);
   assert.match(installer, /DX_ADMIN_TOKEN/);
   assert.match(installer, /client_max_body_size 256m/);
+  assert.match(installer, /limit_req_zone \$binary_remote_addr/);
+  assert.match(installer, /limit_conn dx_connections/);
+  assert.match(installer, /bantime = 24h/);
+  assert.match(installer, /ufw limit OpenSSH/);
+  assert.match(installer, /unattended-upgrades/);
+  assert.match(installer, /MaxAuthTries 3/);
+  assert.match(installer, /StartLimitIntervalSec=0/);
+  assert.match(installer, /ExecStart=\/usr\/bin\/sleep 1/);
 });
 
 test('installer keeps persistent state outside an atomic release', () => {
@@ -26,6 +35,17 @@ test('installer keeps persistent state outside an atomic release', () => {
   assert.match(installer, /firebird5/);
   assert.match(installer, /BUILD_TOOLCHAIN_PREEXISTED/);
   assert.match(installer, /rm -rf -- "\$BUILD_ROOT"/);
+});
+
+test('server loads pinned shared .wepas modules without overriding database modules', () => {
+  assert.match(runtime, /AppPath \+ 'extensions'/);
+  assert.match(runtime, /FindFirst\(Utf8ToSys\(ExtensionDir \+ '\*\.wepas'\)/);
+  assert.match(runtime, /FindScriptByName\(ModuleName\) <> nil then Continue/);
+  assert.match(runtime, /Script\.Kind := skWebExpr/);
+  assert.match(installer, /forum\.mydataexpress\.ru\/download\/file\.php\?id=9551/);
+  assert.match(installer, /DX_PLUS_WEB_ARCHIVE_SHA256=[a-f0-9]{64}/);
+  assert.match(installer, /DX_PLUS_WEB_SOURCE_SHA256=[a-f0-9]{64}/);
+  assert.match(installer, /\$STATE_ROOT\/extensions\/DX_PLUS_WEB\.wepas/);
 });
 
 test('README attributes upstream projects and documents the public installer', () => {

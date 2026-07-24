@@ -43,10 +43,16 @@ curl -fsSL https://raw.githubusercontent.com/rausNT/mydataexpress-web/main/deplo
 - Linux x86-64 сборка без графического интерфейса Lazarus;
 - Nginx как единая публичная точка входа, backend-процессы доступны только локально;
 - запуск от непривилегированного пользователя `dataexpress` и systemd hardening;
+- UFW, усиленный SSH/fail2ban, автоматические security updates и ограничения
+  частоты HTTP-запросов и соединений;
 - browser uploader с bearer-аутентификацией, лимитами размера, защитой ZIP path
   traversal/symlink и атомарной регистрацией подключения;
 - определение Firebird ODS 11/12/13 и автоматическая миграция старых баз через
   backup/restore в Firebird 5 ODS 13;
+- общесерверный каталог переносимых `.wepas`: модуль из самой базы имеет приоритет,
+  а отсутствующий стандартный web-модуль подхватывается без изменения `.DXDB`;
+- проверенная по хешу официальная web-версия `DX_PLUS 1.8.1` из
+  [темы форума DataExpress](https://forum.mydataexpress.ru/viewtopic.php?f=16&t=3295);
 - адаптивная стартовая страница и безопасное отображение подключений;
 - анализ, пакетная миграция и проверка `.epas/.wepas`;
 - portable providers для HTTP, DaData и преобразования Word/Excel через LibreOffice.
@@ -83,6 +89,7 @@ npm run verify:extension-bundle -- C:\path\to\extensions-web --offline
 - [корпус расширений форума](docs/forum-extension-corpus.md);
 - [provider API](docs/provider-api.md);
 - [стартовая страница](docs/landing-page.md);
+- [защита production-сервера](docs/server-security.md);
 - [сборка Windows](docs/building-windows.md).
 
 ## Разработка и тесты

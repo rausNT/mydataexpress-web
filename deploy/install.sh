@@ -20,6 +20,9 @@ NCURSES5_URL=https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libncurse
 NCURSES5_SHA256=91d18fcc4165a40d27e8181eb282bcaf89c2a5e6c6dc182b37df33827407361c
 TINFO5_URL=https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.2_amd64.deb
 TINFO5_SHA256=b9bb64e716a7d9de05b1b33992763142ca81bcae3a7f8ce7e29fa3c6fd32f1e8
+DX_PLUS_WEB_URL=https://forum.mydataexpress.ru/download/file.php?id=9551
+DX_PLUS_WEB_ARCHIVE_SHA256=61e6b8c9ba30f937e6dec0911759de4b9d881617c9737c01385b51af004b549f
+DX_PLUS_WEB_SOURCE_SHA256=70004f5705946548b736116874a3e0714b85508ff257e94a63edb4b91d412c23
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run as root: curl ... | sudo bash" >&2
@@ -39,7 +42,7 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-  ca-certificates curl git nginx openssl python3 unzip \
+  ca-certificates curl fail2ban git nginx openssl python3 ufw unattended-upgrades unzip \
   firebird3.0-server-core firebird3.0-utils libfbclient2 \
   fp-compiler fp-units-base fp-units-db fp-units-fcl fp-units-misc \
   lazarus-src lcl-nogui lcl-units
@@ -134,7 +137,19 @@ chown -R dataexpress:dataexpress "$RELEASE_DIR"
 install -d -m 0770 -o root -g dataexpress "$CONFIG_ROOT"
 install -d -m 0755 -o root -g root "$STATE_ROOT"
 install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT/databases"
+install -d -m 0755 -o root -g dataexpress "$STATE_ROOT/extensions"
 install -m 0660 -o dataexpress -g dataexpress /dev/null "$STATE_ROOT/config.lock"
+download_checked \
+  "$DX_PLUS_WEB_URL" \
+  "$DX_PLUS_WEB_ARCHIVE_SHA256" \
+  "$BUILD_ROOT/runtime-downloads/dx-plus-web.zip"
+unzip -p "$BUILD_ROOT/runtime-downloads/dx-plus-web.zip" DX_PLUS_WEB.wepas \
+  >"$BUILD_ROOT/DX_PLUS_WEB.wepas"
+echo "$DX_PLUS_WEB_SOURCE_SHA256  $BUILD_ROOT/DX_PLUS_WEB.wepas" | sha256sum --check -
+install -m 0644 -o root -g dataexpress \
+  "$BUILD_ROOT/DX_PLUS_WEB.wepas" "$STATE_ROOT/extensions/DX_PLUS_WEB.wepas"
+ln -sfn "$STATE_ROOT/extensions" "$RELEASE_DIR/extensions"
+chown -h dataexpress:dataexpress "$RELEASE_DIR/extensions"
 
 CONFIG="$CONFIG_ROOT/dxwebsrv.cfg"
 if [ ! -f "$CONFIG" ]; then
@@ -230,9 +245,11 @@ UNIT
 cat >/etc/systemd/system/dataexpress-config-reload.service <<'UNIT'
 [Unit]
 Description=Reload DataExpress after configuration change
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
+ExecStart=/usr/bin/sleep 1
 ExecStart=/usr/bin/systemctl try-restart dataexpress-web.service
 UNIT
 
@@ -248,15 +265,40 @@ Unit=dataexpress-config-reload.service
 WantedBy=multi-user.target
 UNIT
 
+cat >/etc/nginx/conf.d/dataexpress-security.conf <<'NGINX'
+server_tokens off;
+limit_req_status 429;
+limit_conn_status 429;
+limit_req_zone $binary_remote_addr zone=dx_requests:10m rate=20r/s;
+limit_conn_zone $binary_remote_addr zone=dx_connections:10m;
+map $args $dx_login_key {
+    default "";
+    ~^login(?:&|$) $binary_remote_addr;
+}
+limit_req_zone $dx_login_key zone=dx_logins:10m rate=10r/m;
+NGINX
+
 cat >/etc/nginx/sites-available/dataexpress <<'NGINX'
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
     server_name _;
     client_max_body_size 256m;
+    client_header_timeout 15s;
+    client_body_timeout 60s;
+    keepalive_timeout 20s;
+    send_timeout 60s;
+    reset_timedout_connection on;
+    limit_conn dx_connections 30;
+    limit_req zone=dx_requests burst=80 nodelay;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "same-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
     location = /admin { return 301 /admin/; }
     location /admin/ {
+        limit_conn dx_connections 3;
         proxy_pass http://127.0.0.1:8090;
         proxy_http_version 1.1;
         proxy_request_buffering off;
@@ -266,6 +308,8 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
     location / {
+        limit_req zone=dx_requests burst=80 nodelay;
+        limit_req zone=dx_logins burst=10 nodelay;
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -278,8 +322,42 @@ rm -f /etc/nginx/sites-enabled/default
 ln -sfn /etc/nginx/sites-available/dataexpress /etc/nginx/sites-enabled/dataexpress
 nginx -t
 
+cat >/etc/fail2ban/jail.d/dataexpress.local <<'JAIL'
+[sshd]
+enabled = true
+backend = systemd
+mode = aggressive
+maxretry = 4
+findtime = 10m
+bantime = 24h
+bantime.increment = true
+bantime.factor = 2
+bantime.maxtime = 1w
+JAIL
+
+install -d -m 0755 /etc/ssh/sshd_config.d
+cat >/etc/ssh/sshd_config.d/90-dataexpress-hardening.conf <<'SSHD'
+MaxAuthTries 3
+LoginGraceTime 30
+X11Forwarding no
+AllowTcpForwarding no
+PermitTunnel no
+GatewayPorts no
+ClientAliveInterval 300
+ClientAliveCountMax 2
+MaxStartups 10:30:30
+SSHD
+sshd -t
+
+printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' \
+  >/etc/apt/apt.conf.d/20auto-upgrades
+
 systemctl daemon-reload
-systemctl enable --now dataexpress-web.service dataexpress-admin.service dataexpress-config-reload.path nginx.service
+systemctl enable --now \
+  dataexpress-web.service dataexpress-admin.service dataexpress-config-reload.path \
+  fail2ban.service nginx.service unattended-upgrades.service
+systemctl reload ssh.service
+systemctl reset-failed dataexpress-config-reload.service
 systemctl restart dataexpress-web.service dataexpress-admin.service nginx.service
 
 for attempt in $(seq 1 30); do
@@ -314,9 +392,13 @@ if ! awk '
   systemctl restart dataexpress-web.service
 fi
 
-if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
-  ufw allow 80/tcp
-fi
+ufw --force delete allow OpenSSH >/dev/null 2>&1 || true
+ufw limit OpenSSH
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw default deny incoming
+ufw default allow outgoing
+ufw --force enable
 
 test "$BUILD_ROOT" = /opt/dataexpress-build
 rm -rf -- "$BUILD_ROOT"

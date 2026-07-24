@@ -801,6 +801,10 @@ begin
 end;
 
 procedure TMetaData.LoadScripts(DBase: TDBEngine);
+var
+  ExtensionDir, FileName, ModuleName: String;
+  SearchRec: TSearchRec;
+  Script: TScriptData;
 begin
   with DBase.OpenDataSet(Format('select id, fmid, name, script, kind from dx_scripts ' +
     'where kind<>%0:d and kind<>%1:d', [Ord(skMain), Ord(skForm)])) do
@@ -820,6 +824,25 @@ begin
     Free;
   end;
   // Главный модуль
+  // Portable web extensions may be installed once for the whole server.
+  // A module stored in the database always wins over the shared fallback.
+  ExtensionDir := IncludeTrailingPathDelimiter(AppPath + 'extensions');
+  if FindFirst(Utf8ToSys(ExtensionDir + '*.wepas'), faAnyFile, SearchRec) = 0 then
+  try
+    repeat
+      if (SearchRec.Attr and faDirectory) <> 0 then Continue;
+      FileName := ExtensionDir + SysToUtf8(SearchRec.Name);
+      ModuleName := ChangeFileExt(ExtractFileName(FileName), '');
+      if FScriptMan.FindScriptByName(ModuleName) <> nil then Continue;
+
+      Script := FScriptMan.AddScript(0, ModuleName, LoadString(FileName));
+      Script.Kind := skWebExpr;
+      LogString('Loaded shared web extension: ' + ModuleName);
+    until FindNext(SearchRec) <> 0;
+  finally
+    FindClose(SearchRec);
+  end;
+
   if FScriptMan.FindScriptByName('WebMain') = nil then
     FScriptMan.AddScript(0, 'WebMain', '').Kind:=skWebMain;
 end;
