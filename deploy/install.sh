@@ -20,9 +20,18 @@ NCURSES5_URL=https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libncurse
 NCURSES5_SHA256=91d18fcc4165a40d27e8181eb282bcaf89c2a5e6c6dc182b37df33827407361c
 TINFO5_URL=https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.2_amd64.deb
 TINFO5_SHA256=b9bb64e716a7d9de05b1b33992763142ca81bcae3a7f8ce7e29fa3c6fd32f1e8
-DX_PLUS_WEB_URL=https://forum.mydataexpress.ru/download/file.php?id=9551
-DX_PLUS_WEB_ARCHIVE_SHA256=61e6b8c9ba30f937e6dec0911759de4b9d881617c9737c01385b51af004b549f
-DX_PLUS_WEB_SOURCE_SHA256=70004f5705946548b736116874a3e0714b85508ff257e94a63edb4b91d412c23
+DX_PLUS_WEB_171_URL=https://forum.mydataexpress.ru/download/file.php?id=7867
+DX_PLUS_WEB_171_ARCHIVE_SHA256=9a4a023b6beace941dfd9fd450b2f8e97f953c6a05f30b1e9b67c04e833a254b
+DX_PLUS_WEB_171_SOURCE_SHA256=cd6e773185b9663f15a47bf11019ce91d027fcdf9b105ea07f61535e16009811
+DX_PLUS_WEB_172_URL=https://forum.mydataexpress.ru/download/file.php?id=7991
+DX_PLUS_WEB_172_ARCHIVE_SHA256=93e228f0ef71a753d4f743a85cc40ac71ec38169bdea8e027e831837cba86879
+DX_PLUS_WEB_172_SOURCE_SHA256=b2da1a2f5de6859eb6d3d91b0ab6696fba5232d02770a017e2d047d4b49d7dbf
+DX_PLUS_WEB_173_URL=https://forum.mydataexpress.ru/download/file.php?id=8376
+DX_PLUS_WEB_173_ARCHIVE_SHA256=065a4c0a688163eaeac403fbcafbc499fb65d6f8b30d7e29c8b950c62039c003
+DX_PLUS_WEB_173_SOURCE_SHA256=ec8424f82ff918cd51bd87c2efc8150b6fb8f3a9c721d39a1f18977d94077442
+DX_PLUS_WEB_181_URL=https://forum.mydataexpress.ru/download/file.php?id=9551
+DX_PLUS_WEB_181_ARCHIVE_SHA256=61e6b8c9ba30f937e6dec0911759de4b9d881617c9737c01385b51af004b549f
+DX_PLUS_WEB_181_SOURCE_SHA256=70004f5705946548b736116874a3e0714b85508ff257e94a63edb4b91d412c23
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run as root: curl ... | sudo bash" >&2
@@ -139,15 +148,28 @@ install -d -m 0755 -o root -g root "$STATE_ROOT"
 install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT/databases"
 install -d -m 0755 -o root -g dataexpress "$STATE_ROOT/extensions"
 install -m 0660 -o dataexpress -g dataexpress /dev/null "$STATE_ROOT/config.lock"
-download_checked \
-  "$DX_PLUS_WEB_URL" \
-  "$DX_PLUS_WEB_ARCHIVE_SHA256" \
-  "$BUILD_ROOT/runtime-downloads/dx-plus-web.zip"
-unzip -p "$BUILD_ROOT/runtime-downloads/dx-plus-web.zip" DX_PLUS_WEB.wepas \
-  >"$BUILD_ROOT/DX_PLUS_WEB.wepas"
-echo "$DX_PLUS_WEB_SOURCE_SHA256  $BUILD_ROOT/DX_PLUS_WEB.wepas" | sha256sum --check -
-install -m 0644 -o root -g dataexpress \
-  "$BUILD_ROOT/DX_PLUS_WEB.wepas" "$STATE_ROOT/extensions/DX_PLUS_WEB.wepas"
+install_dx_plus_web() {
+  local version="$1"
+  local url="$2"
+  local archive_checksum="$3"
+  local source_checksum="$4"
+  local archive="$BUILD_ROOT/runtime-downloads/dx-plus-web-$version.zip"
+  local source="$BUILD_ROOT/DX_PLUS_WEB-$version.wepas"
+  download_checked "$url" "$archive_checksum" "$archive"
+  unzip -p "$archive" DX_PLUS_WEB.wepas >"$source"
+  echo "$source_checksum  $source" | sha256sum --check -
+  install -m 0644 -o root -g dataexpress \
+    "$source" "$STATE_ROOT/extensions/DX_PLUS_WEB-$version.wepas"
+}
+rm -f "$STATE_ROOT/extensions"/DX_PLUS_WEB*.wepas
+install_dx_plus_web 1.71 "$DX_PLUS_WEB_171_URL" \
+  "$DX_PLUS_WEB_171_ARCHIVE_SHA256" "$DX_PLUS_WEB_171_SOURCE_SHA256"
+install_dx_plus_web 1.72 "$DX_PLUS_WEB_172_URL" \
+  "$DX_PLUS_WEB_172_ARCHIVE_SHA256" "$DX_PLUS_WEB_172_SOURCE_SHA256"
+install_dx_plus_web 1.73 "$DX_PLUS_WEB_173_URL" \
+  "$DX_PLUS_WEB_173_ARCHIVE_SHA256" "$DX_PLUS_WEB_173_SOURCE_SHA256"
+install_dx_plus_web 1.8.1 "$DX_PLUS_WEB_181_URL" \
+  "$DX_PLUS_WEB_181_ARCHIVE_SHA256" "$DX_PLUS_WEB_181_SOURCE_SHA256"
 ln -sfn "$STATE_ROOT/extensions" "$RELEASE_DIR/extensions"
 chown -h dataexpress:dataexpress "$RELEASE_DIR/extensions"
 

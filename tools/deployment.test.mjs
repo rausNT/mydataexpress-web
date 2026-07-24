@@ -37,15 +37,19 @@ test('installer keeps persistent state outside an atomic release', () => {
   assert.match(installer, /rm -rf -- "\$BUILD_ROOT"/);
 });
 
-test('server loads pinned shared .wepas modules without overriding database modules', () => {
+test('server selects pinned compatible shared .wepas modules without overriding database modules', () => {
   assert.match(runtime, /AppPath \+ 'extensions'/);
   assert.match(runtime, /FindFirst\(Utf8ToSys\(ExtensionDir \+ '\*\.wepas'\)/);
   assert.match(runtime, /FindScriptByName\(ModuleName\) <> nil then Continue/);
+  assert.match(runtime, /AllMappingsAvailable\(Candidate\.ActionIds, AvailableActions\)/);
+  assert.match(runtime, /HasMappingOverlap\(Candidate\.FunctionNames, ClaimedFunctions\)/);
   assert.match(runtime, /Script\.Kind := skWebExpr/);
-  assert.match(installer, /forum\.mydataexpress\.ru\/download\/file\.php\?id=9551/);
-  assert.match(installer, /DX_PLUS_WEB_ARCHIVE_SHA256=[a-f0-9]{64}/);
-  assert.match(installer, /DX_PLUS_WEB_SOURCE_SHA256=[a-f0-9]{64}/);
-  assert.match(installer, /\$STATE_ROOT\/extensions\/DX_PLUS_WEB\.wepas/);
+  for (const id of [7867, 7991, 8376, 9551]) {
+    assert.match(installer, new RegExp(`forum\\.mydataexpress\\.ru/download/file\\.php\\?id=${id}`));
+  }
+  assert.match(installer, /DX_PLUS_WEB_181_ARCHIVE_SHA256=[a-f0-9]{64}/);
+  assert.match(installer, /DX_PLUS_WEB_181_SOURCE_SHA256=[a-f0-9]{64}/);
+  assert.match(installer, /\$STATE_ROOT\/extensions\/DX_PLUS_WEB-\$version\.wepas/);
 });
 
 test('README attributes upstream projects and documents the public installer', () => {

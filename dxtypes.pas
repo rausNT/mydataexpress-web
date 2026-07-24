@@ -517,7 +517,123 @@ implementation
 
 uses
   LazUtf8, FileUtil, sqlgen, apputils, expressions, lfmparser, dxactions,
-  BGRABitmapTypes, exprfuncs;
+  BGRABitmapTypes, exprfuncs, StrUtils;
+
+type
+  TSharedWebExtension = class
+  public
+    ModuleName, Source: String;
+    ActionIds, FunctionNames: TStringList;
+    constructor Create;
+    destructor Destroy; override;
+    function MappingCount: Integer;
+  end;
+
+constructor TSharedWebExtension.Create;
+begin
+  ActionIds := TStringList.Create;
+  ActionIds.CaseSensitive := False;
+  ActionIds.Sorted := True;
+  ActionIds.Duplicates := dupIgnore;
+  FunctionNames := TStringList.Create;
+  FunctionNames.CaseSensitive := False;
+  FunctionNames.Sorted := True;
+  FunctionNames.Duplicates := dupIgnore;
+end;
+
+destructor TSharedWebExtension.Destroy;
+begin
+  FunctionNames.Free;
+  ActionIds.Free;
+  inherited Destroy;
+end;
+
+function TSharedWebExtension.MappingCount: Integer;
+begin
+  Result := ActionIds.Count + FunctionNames.Count;
+end;
+
+procedure CollectModuleMappings(const Source: String; ActionIds,
+  FunctionNames: TStrings);
+
+  procedure CollectTagValues(const TagName, FieldName: String; Values: TStrings);
+  var
+    Block, LowerBlock, LowerSource, Value: String;
+    P, BlockEnd, FieldPos, ValueStart, ValueEnd: Integer;
+    Quote: Char;
+  begin
+    LowerSource := LowerCase(Source);
+    P := PosEx('{@' + TagName, LowerSource, 1);
+    while P > 0 do
+    begin
+      BlockEnd := PosEx('@}', LowerSource, P + Length(TagName) + 2);
+      if BlockEnd = 0 then Exit;
+      Block := Copy(Source, P, BlockEnd + 1 - P);
+      LowerBlock := LowerCase(Block);
+      FieldPos := Pos(FieldName + '=', LowerBlock);
+      if FieldPos > 0 then
+      begin
+        ValueStart := FieldPos + Length(FieldName) + 1;
+        while (ValueStart <= Length(Block)) and
+          (Block[ValueStart] in [' ', #9, #10, #13]) do Inc(ValueStart);
+        Quote := #0;
+        if (ValueStart <= Length(Block)) and
+          (Block[ValueStart] in ['"', '''']) then
+        begin
+          Quote := Block[ValueStart];
+          Inc(ValueStart);
+        end;
+        ValueEnd := ValueStart;
+        if Quote <> #0 then
+          while (ValueEnd <= Length(Block)) and (Block[ValueEnd] <> Quote) do
+            Inc(ValueEnd)
+        else
+          while (ValueEnd <= Length(Block)) and
+            not (Block[ValueEnd] in [' ', #9, #10, #13, '@']) do Inc(ValueEnd);
+        Value := Trim(Copy(Block, ValueStart, ValueEnd - ValueStart));
+        if Value <> '' then Values.Add(Value);
+      end;
+      P := PosEx('{@' + TagName, LowerSource, BlockEnd + 2);
+    end;
+  end;
+
+begin
+  CollectTagValues('action', 'id', ActionIds);
+  CollectTagValues('function', 'name', FunctionNames);
+end;
+
+function AllMappingsAvailable(Required, Available: TStrings): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 0 to Required.Count - 1 do
+    if Available.IndexOf(Required[i]) < 0 then Exit;
+  Result := True;
+end;
+
+function HasMappingOverlap(Candidate, Claimed: TStrings): Boolean;
+var
+  i: Integer;
+begin
+  Result := True;
+  for i := 0 to Candidate.Count - 1 do
+    if Claimed.IndexOf(Candidate[i]) >= 0 then Exit;
+  Result := False;
+end;
+
+procedure AddMappings(Source, Destination: TStrings);
+var
+  i: Integer;
+begin
+  for i := 0 to Source.Count - 1 do Destination.Add(Source[i]);
+end;
+
+function CompareSharedWebExtensions(Item1, Item2: Pointer): Integer;
+begin
+  Result := TSharedWebExtension(Item2).MappingCount -
+    TSharedWebExtension(Item1).MappingCount;
+end;
 
 function MsgDlgTypeToStr(T: TMsgDlgType): String;
 begin
@@ -802,7 +918,11 @@ end;
 
 procedure TMetaData.LoadScripts(DBase: TDBEngine);
 var
-  ExtensionDir, FileName, ModuleName: String;
+  AvailableActions, AvailableFunctions, ClaimedActions, ClaimedFunctions: TStringList;
+  Candidate: TSharedWebExtension;
+  Candidates: TList;
+  ExtensionDir, FileName, ModuleName, Source: String;
+  i: Integer;
   SearchRec: TSearchRec;
   Script: TScriptData;
 begin
@@ -825,7 +945,34 @@ begin
   end;
   // Главный модуль
   // Portable web extensions may be installed once for the whole server.
-  // A module stored in the database always wins over the shared fallback.
+  // Stable action IDs and function names select a compatible version for each
+  // database. A module stored in the database always wins.
+  AvailableActions := TStringList.Create;
+  AvailableActions.CaseSensitive := False;
+  AvailableActions.Sorted := True;
+  AvailableActions.Duplicates := dupIgnore;
+  AvailableFunctions := TStringList.Create;
+  AvailableFunctions.CaseSensitive := False;
+  AvailableFunctions.Sorted := True;
+  AvailableFunctions.Duplicates := dupIgnore;
+  ClaimedActions := TStringList.Create;
+  ClaimedActions.CaseSensitive := False;
+  ClaimedActions.Sorted := True;
+  ClaimedActions.Duplicates := dupIgnore;
+  ClaimedFunctions := TStringList.Create;
+  ClaimedFunctions.CaseSensitive := False;
+  ClaimedFunctions.Sorted := True;
+  ClaimedFunctions.Duplicates := dupIgnore;
+  Candidates := TList.Create;
+  for i := 0 to FScriptMan.ScriptCount - 1 do
+  begin
+    Script := FScriptMan.Scripts[i];
+    if Script.Kind = skExpr then
+      CollectModuleMappings(Script.Source, AvailableActions, AvailableFunctions)
+    else if Script.Kind = skWebExpr then
+      CollectModuleMappings(Script.Source, ClaimedActions, ClaimedFunctions);
+  end;
+
   ExtensionDir := IncludeTrailingPathDelimiter(AppPath + 'extensions');
   if FindFirst(Utf8ToSys(ExtensionDir + '*.wepas'), faAnyFile, SearchRec) = 0 then
   try
@@ -834,14 +981,47 @@ begin
       FileName := ExtensionDir + SysToUtf8(SearchRec.Name);
       ModuleName := ChangeFileExt(ExtractFileName(FileName), '');
       if FScriptMan.FindScriptByName(ModuleName) <> nil then Continue;
-
-      Script := FScriptMan.AddScript(0, ModuleName, LoadString(FileName));
-      Script.Kind := skWebExpr;
-      LogString('Loaded shared web extension: ' + ModuleName);
+      Source := LoadString(FileName);
+      Candidate := TSharedWebExtension.Create;
+      Candidate.ModuleName := ModuleName;
+      Candidate.Source := Source;
+      CollectModuleMappings(Source, Candidate.ActionIds, Candidate.FunctionNames);
+      if (Candidate.MappingCount > 0) and
+        (not AllMappingsAvailable(Candidate.ActionIds, AvailableActions) or
+         not AllMappingsAvailable(Candidate.FunctionNames, AvailableFunctions)) then
+      begin
+        LogString('Skipped incompatible shared web extension: ' + ModuleName);
+        Candidate.Free;
+        Continue;
+      end;
+      Candidates.Add(Candidate);
     until FindNext(SearchRec) <> 0;
   finally
     FindClose(SearchRec);
   end;
+  Candidates.Sort(@CompareSharedWebExtensions);
+  for i := 0 to Candidates.Count - 1 do
+  begin
+    Candidate := TSharedWebExtension(Candidates[i]);
+    if HasMappingOverlap(Candidate.ActionIds, ClaimedActions) or
+      HasMappingOverlap(Candidate.FunctionNames, ClaimedFunctions) then
+    begin
+      LogString('Skipped overlapping shared web extension: ' + Candidate.ModuleName);
+      Continue;
+    end;
+    Script := FScriptMan.AddScript(0, Candidate.ModuleName, Candidate.Source);
+    Script.Kind := skWebExpr;
+    AddMappings(Candidate.ActionIds, ClaimedActions);
+    AddMappings(Candidate.FunctionNames, ClaimedFunctions);
+    LogString('Loaded compatible shared web extension: ' + Candidate.ModuleName);
+  end;
+  for i := 0 to Candidates.Count - 1 do
+    TSharedWebExtension(Candidates[i]).Free;
+  Candidates.Free;
+  ClaimedFunctions.Free;
+  ClaimedActions.Free;
+  AvailableFunctions.Free;
+  AvailableActions.Free;
 
   if FScriptMan.FindScriptByName('WebMain') = nil then
     FScriptMan.AddScript(0, 'WebMain', '').Kind:=skWebMain;
