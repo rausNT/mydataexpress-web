@@ -242,7 +242,79 @@ jobs:
           finally {
             if (-not $provider.HasExited) { Stop-Process -Id $provider.Id }
           }
+      - name: Smoke-test Win32 server process
+        shell: pwsh
+        run: |
+          $config = Join-Path $PWD '_test/dxwebsrv.cfg'
+          @'
+          [Server]
+          Language=ru
+          Address=127.0.0.1
+          Port=19082
+          UseSSL=False
+          Firebird=5
+          DebugMode=False
+          ShowConnections=False
+          WindowsWorkerMode=True
+          '@ | Set-Content -LiteralPath $config -Encoding UTF8
+
+          $stdout = Join-Path $env:RUNNER_TEMP 'dxwebsrv.stdout.log'
+          $stderr = Join-Path $env:RUNNER_TEMP 'dxwebsrv.stderr.log'
+          $server = Start-Process -FilePath (Join-Path $PWD '_test/dxwebsrv.exe') `
+            -WorkingDirectory (Join-Path $PWD '_test') -WindowStyle Hidden -PassThru `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          try {
+            $deadline = (Get-Date).AddSeconds(20)
+            do {
+              if ($server.HasExited) {
+                Get-Content -LiteralPath $stdout, $stderr -ErrorAction SilentlyContinue
+                throw "Win32 server exited early with code $($server.ExitCode)"
+              }
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:19082/health' `
+                  -TimeoutSec 2
+              }
+              catch {
+                $health = $null
+                Start-Sleep -Milliseconds 250
+              }
+            } while (($null -eq $health) -and ((Get-Date) -lt $deadline))
+            if (($null -eq $health) -or ($health.status -ne 'ok')) {
+              Get-Content -LiteralPath $stdout, $stderr -ErrorAction SilentlyContinue
+              throw 'Win32 server health check failed'
+            }
+          }
+          finally {
+            if (-not $server.HasExited) { Stop-Process -Id $server.Id -Force }
+          }
+      - name: Package Wine compatibility worker
+        shell: pwsh
+        run: |
+          $packageRoot = Join-Path $PWD '_dist/wine-worker'
+          New-Item -ItemType Directory -Path $packageRoot | Out-Null
+          Copy-Item -LiteralPath (Join-Path $PWD '_test/dxwebsrv.exe') -Destination $packageRoot
+          foreach ($directory in @('html', 'img', 'languages', 'templates', 'fb5')) {
+            Copy-Item -Recurse -LiteralPath (Join-Path $PWD "_test/$directory") `
+              -Destination (Join-Path $packageRoot $directory)
+          }
+          foreach ($file in @(
+            'Except.dic',
+            'favicon.ico',
+            'firebird.msg',
+            'ib_util.dll',
+            'LICENSE.txt',
+            'NOTICE.txt',
+            'PadegUC.dll',
+            'msvcp140.dll',
+            'vcruntime140.dll'
+          )) {
+            Copy-Item -LiteralPath (Join-Path $PWD "_test/$file") -Destination $packageRoot
+          }
+          Compress-Archive -Path (Join-Path $packageRoot '*') `
+            -DestinationPath (Join-Path $PWD '_dist/dxwebsrv-wine-worker.zip')
       - uses: actions/upload-artifact@v4
         with:
           name: dxwebsrv-win32
-          path: _test/dxwebsrv.exe
+          path: |
+            _test/dxwebsrv.exe
+            _dist/dxwebsrv-wine-worker.zip

@@ -885,8 +885,8 @@ msgstr "Источник: форум DataExpress"
 
 #: strconsts.rslandingmeta
 #, object-pascal-format
-msgid "Version: %s &middot; Copyright &#169; 2016-2026 Pavel Duborkin<br><a href=\"https://mydataexpress.ru\">Project Website</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Forum</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Wiki</a>"
-msgstr "Версия: %s &middot; Copyright &#169; 2016-2026 Павел Дуборкин<br><a href=\"https://mydataexpress.ru\">Сайт проекта</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Форум</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Вики</a>"
+msgid "Version: %s &middot; Based on DataExpress Web Server by Pavel Duborkin.<br>Pavel is not responsible for this build &mdash; and may be blushing a little.<br><a href=\"https://mydataexpress.ru\">Original project</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Forum</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Wiki</a> &middot; <a href=\"https://github.com/rausNT/mydataexpress-web\">Modernization on GitHub</a>"
+msgstr "Версия: %s &middot; Основано на DataExpress Web Server Павла Дуборкина.<br>Павел за эту сборку не отвечает &mdash; и, возможно, немного краснеет.<br><a href=\"https://mydataexpress.ru\">Оригинальный проект</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Форум</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Вики</a> &middot; <a href=\"https://github.com/rausNT/mydataexpress-web\">Модернизация на GitHub</a>"
 
 #: strconsts.rsserveritself
 msgid "Server itself"

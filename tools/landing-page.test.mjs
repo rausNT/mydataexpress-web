@@ -98,6 +98,8 @@ test('connection form builds only routable DataExpress aliases', () => {
 });
 
 test('new landing strings have Russian translations', () => {
+  assert.match(russian, /Павел за эту сборку не отвечает/);
+  assert.match(russian, /github\.com\/rausNT\/mydataexpress-web/);
   for (const translation of [
     'Сервер готов',
     'Открыть базу данных',

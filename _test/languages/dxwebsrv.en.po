@@ -877,7 +877,7 @@ msgstr ""
 
 #: strconsts.rslandingmeta
 #, object-pascal-format
-msgid "Version: %s &middot; Copyright &#169; 2016-2026 Pavel Duborkin<br><a href=\"https://mydataexpress.ru\">Project Website</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Forum</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Wiki</a>"
+msgid "Version: %s &middot; Based on DataExpress Web Server by Pavel Duborkin.<br>Pavel is not responsible for this build &mdash; and may be blushing a little.<br><a href=\"https://mydataexpress.ru\">Original project</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Forum</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Wiki</a> &middot; <a href=\"https://github.com/rausNT/mydataexpress-web\">Modernization on GitHub</a>"
 msgstr ""
 
 #: strconsts.rsserveritself
