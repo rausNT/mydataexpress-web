@@ -979,7 +979,12 @@ begin
     SIRegister_All(Sender);
     {$IFDEF WINDOWS}
     if Assigned(AppSet) and AppSet.WindowsWorkerMode then
+    begin
+      // Delphi extensions commonly use OleVariant while PascalScript exposes
+      // automation values through its built-in Variant type.
+      Sender.AddTypeS('OleVariant', 'Variant');
       SIRegister_ComObj(Sender);
+    end;
     {$ENDIF}
     CompilerBindVars(TScriptCompiler(Sender));
   end;

@@ -37,7 +37,8 @@ test('Windows-only APIs are enabled only in the explicit isolated worker mode', 
     /FWindowsWorkerMode := ReadBool\('Server', 'WindowsWorkerMode', False\)/);
   assert.match(scripts, /\{\$IFDEF WINDOWS\}, uPSC_ComObj, uPSR_ComObj\{\$ENDIF\}/);
   assert.match(scripts,
-    /AppSet\.WindowsWorkerMode then\s+SIRegister_ComObj\(Sender\)/);
+    /AppSet\.WindowsWorkerMode then[\s\S]{0,250}SIRegister_ComObj\(Sender\)/);
+  assert.match(scripts, /AddTypeS\('OleVariant', 'Variant'\)/);
   assert.match(scripts,
     /AppSet\.WindowsWorkerMode then\s+RIRegister_ComObj\(FExec\)/);
   assert.match(runtimeTypes,
