@@ -28,7 +28,7 @@ test('provider configuration is separated from database sections', () => {
   assert.match(settings, /Provider\.TimeoutMs := ReadInteger/);
 });
 
-test('runtime exposes extension mapping status and rejects silent fallbacks', () => {
+test('runtime exposes extension mapping status without breaking legacy forms', () => {
   const scripts = source('scriptmanager.pas');
   assert.match(scripts, /DesktopSDi, WebSDi: Integer/);
   assert.match(scripts, /function TScriptManager\.ExtensionCompatibilityAsJson/);
@@ -43,6 +43,6 @@ test('runtime exposes extension mapping status and rejects silent fallbacks', ()
   assert.match(scripts, /providerConfigured/);
 
   assert.match(source('mainserver.pas'), /LPm = 'extensioncompat'/);
-  assert.match(source('expressions.pas'), /rsExtWebFunctionMissing/);
-  assert.match(source('dxactions.pas'), /rsExtWebActionMissing/);
+  assert.match(source('expressions.pas'), /if not F\.WebExists then Exit\(Null\)/);
+  assert.match(source('dxactions.pas'), /not EAction\.WebExists then Exit/);
 });

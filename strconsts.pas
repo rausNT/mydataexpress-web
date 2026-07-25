@@ -240,8 +240,10 @@ resourcestring
   rsDesktop = 'Desktop';
   rsLandingStatus = 'Server is ready';
   rsLandingTitle = 'Open a database';
-  rsLandingDescription = 'Select an available connection or enter its name.';
-  rsConnectionName = 'Connection name';
+  rsLandingDescription = 'Select an existing connection or upload a new database.';
+  rsUploadDatabase = 'Upload a new database';
+  rsOpenExistingConnection = 'Or open an existing connection';
+  rsConnectionName = 'Existing connection name';
   rsConnectionPlaceholder = 'For example: demodb';
   rsOpenConnection = 'Open';
   rsInvalidConnectionAlias = 'Use Latin letters, digits, and underscore.';

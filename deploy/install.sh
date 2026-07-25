@@ -210,6 +210,15 @@ fi
 chown root:dataexpress "$CONFIG_ROOT/admin.env"
 chmod 0640 "$CONFIG_ROOT/admin.env"
 
+install -d -m 0755 /etc/systemd/journald.conf.d
+cat >/etc/systemd/journald.conf.d/dataexpress-retention.conf <<'JOURNAL'
+[Journal]
+SystemMaxUse=256M
+RuntimeMaxUse=128M
+MaxRetentionSec=14day
+Compress=yes
+JOURNAL
+
 cat >/etc/systemd/system/dataexpress-web.service <<'UNIT'
 [Unit]
 Description=DataExpress Web Server
@@ -434,6 +443,7 @@ printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgr
   >/etc/apt/apt.conf.d/20auto-upgrades
 
 systemctl daemon-reload
+systemctl restart systemd-journald.service
 systemctl enable --now \
   dataexpress-web.service dataexpress-admin.service dataexpress-config-reload.path \
   fail2ban.service nginx.service unattended-upgrades.service

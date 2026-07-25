@@ -1,8 +1,11 @@
 import importlib.util
 import os
+import json
+import io
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stdout
 from pathlib import Path
 
 
@@ -23,6 +26,22 @@ class AdminImportTests(unittest.TestCase):
         self.assertTrue(ADMIN.is_authorized("Bearer a-secret-value", "a-secret-value"))
         self.assertFalse(ADMIN.is_authorized("Bearer different", "a-secret-value"))
         self.assertFalse(ADMIN.is_authorized(None, "a-secret-value"))
+
+    def test_audit_event_is_structured_and_does_not_invent_secret_fields(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            ADMIN.audit_event(
+                "database_import_succeeded",
+                alias="Demo",
+                bytes=4096,
+                ods="13.1",
+            )
+        line = output.getvalue().strip()
+        self.assertTrue(line.startswith("AUDIT "))
+        payload = json.loads(line.removeprefix("AUDIT "))
+        self.assertEqual(payload["event"], "database_import_succeeded")
+        self.assertEqual(payload["alias"], "Demo")
+        self.assertNotIn("token", payload)
 
     def test_extracts_exactly_one_database(self):
         with tempfile.TemporaryDirectory() as directory:

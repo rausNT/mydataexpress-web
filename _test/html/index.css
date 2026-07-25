@@ -76,6 +76,62 @@
     backdrop-filter: blur(20px);
 }
 
+.upload-database {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    min-height: 62px;
+    padding: 10px 15px;
+    border: 1px solid #bcd0f5;
+    border-radius: 14px;
+    background: var(--dx-primary-soft);
+    color: var(--dx-primary);
+    font-weight: 750;
+    text-decoration: none;
+    transition: border-color .15s, background-color .15s, transform .15s, box-shadow .15s;
+}
+
+.upload-database:hover {
+    border-color: #8cafe9;
+    background: #e8f0ff;
+    box-shadow: 0 9px 24px rgba(37, 99, 235, .1);
+    transform: translateY(-1px);
+}
+
+.upload-database:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .22);
+    outline-offset: 2px;
+}
+
+.upload-database-icon {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 11px;
+    background: #fff;
+    font-size: 21px;
+}
+
+.connection-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0 16px;
+    color: var(--dx-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.connection-divider::before,
+.connection-divider::after {
+    height: 1px;
+    background: var(--dx-border);
+    content: "";
+    flex: 1;
+}
+
 #connection-form label,
 .connection-section h2 {
     display: block;

@@ -922,9 +922,11 @@ var
 begin
   Result := inherited InnerExecute;
   EAction := FRS.Session.ScriptMan.Actions.FindAction(FActionId);
-  if EAction = nil then Exit;
-  if not EAction.WebExists then
-    raise ECalcError.CreateFmt(rsExtWebActionMissing, [EAction.Name]);
+  // A desktop-only action may be one item in a longer form-initialisation
+  // sequence.  Failing the whole sequence here leaves queries and calculated
+  // fields half initialised.  Compatibility remains visible through
+  // ?extensioncompat, while the form can continue with the portable actions.
+  if (EAction = nil) or not EAction.WebExists then Exit;
 
   Params := TIfList.Create;
 

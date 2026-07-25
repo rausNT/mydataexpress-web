@@ -43,6 +43,8 @@ test('landing template is keyboard-friendly and responsive', () => {
   assert.match(template, /pattern="\[A-Za-z0-9_\]\+"/);
   assert.match(template, /role="alert" aria-live="polite"/);
   assert.match(template, /src="\/html\/index\.js" defer/);
+  assert.match(template, /class="upload-database" href="\/admin\/" target="_self"/);
+  assert.match(template, /\[open-existing-connection\]/);
   assert.match(styles, /@media \(max-width: 640px\)/);
   assert.match(styles, /\.connection-grid/);
   assert.match(styles, /:focus-visible/);
@@ -65,7 +67,9 @@ test('new landing strings have Russian translations', () => {
   for (const translation of [
     'Сервер готов',
     'Открыть базу данных',
-    'Имя подключения',
+    'Загрузить новую базу',
+    'Или открыть существующее подключение',
+    'Имя существующего подключения',
     'Доступные подключения',
   ]) {
     assert.match(russian, new RegExp(`msgstr "${translation}"`));

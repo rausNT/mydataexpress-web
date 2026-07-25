@@ -32,6 +32,14 @@ class ImportErrorResponse(Exception):
         self.status = status
 
 
+def audit_event(event: str, **fields: object) -> None:
+    """Write one journal-friendly JSON event without credentials or database content."""
+    print(
+        "AUDIT " + json.dumps({"event": event, **fields}, ensure_ascii=False, separators=(",", ":")),
+        flush=True,
+    )
+
+
 def validate_alias(value: str) -> str:
     alias = value.strip()
     if not ALIAS_PATTERN.fullmatch(alias):
@@ -305,6 +313,10 @@ class AdminHandler(BaseHTTPRequestHandler):
     def log_message(self, format_string: str, *args) -> None:
         print(f"{self.client_address[0]} - {format_string % args}", flush=True)
 
+    def client_ip(self) -> str:
+        # The service listens on loopback only, so X-Real-IP can only be supplied by Nginx.
+        return (self.headers.get("X-Real-IP") or self.client_address[0]).strip()[:64]
+
     def send_json(self, status: int, payload: dict | list) -> None:
         encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -320,6 +332,12 @@ class AdminHandler(BaseHTTPRequestHandler):
     def require_auth(self) -> bool:
         if is_authorized(self.headers.get("Authorization"), self.settings["token"]):
             return True
+        audit_event(
+            "admin_authentication_failed",
+            client=self.client_ip(),
+            method=self.command,
+            path=self.path[:160],
+        )
         self.send_json(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "Неверный ключ администратора."})
         return False
 
@@ -350,9 +368,11 @@ class AdminHandler(BaseHTTPRequestHandler):
         if not self.require_auth():
             return
 
+        raw_alias = self.headers.get("X-Database-Alias", "").strip()[:64]
+        original_name = unquote(self.headers.get("X-Filename", ""))
+        content_length = 0
         try:
-            alias = validate_alias(self.headers.get("X-Database-Alias", ""))
-            original_name = unquote(self.headers.get("X-Filename", ""))
+            alias = validate_alias(raw_alias)
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
             except ValueError as exc:
@@ -417,9 +437,35 @@ class AdminHandler(BaseHTTPRequestHandler):
                     "message": "База зарегистрирована; сервер применяет конфигурацию.",
                 },
             )
+            audit_event(
+                "database_import_succeeded",
+                client=self.client_ip(),
+                alias=alias,
+                filename=Path(original_name).name[:160],
+                bytes=content_length,
+                ods=ods,
+            )
         except ImportErrorResponse as error:
+            audit_event(
+                "database_import_failed",
+                client=self.client_ip(),
+                alias=raw_alias,
+                filename=Path(original_name).name[:160],
+                bytes=content_length,
+                status=int(error.status),
+                reason=str(error)[:240],
+            )
             self.send_error_json(error)
         except (OSError, subprocess.SubprocessError) as error:
+            audit_event(
+                "database_import_failed",
+                client=self.client_ip(),
+                alias=raw_alias,
+                filename=Path(original_name).name[:160],
+                bytes=content_length,
+                status=int(HTTPStatus.INTERNAL_SERVER_ERROR),
+                reason=type(error).__name__,
+            )
             self.send_error_json(
                 ImportErrorResponse(HTTPStatus.INTERNAL_SERVER_ERROR, f"Ошибка импорта: {error}")
             )

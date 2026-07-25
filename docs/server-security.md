@@ -17,6 +17,8 @@ SSH, HTTP и HTTPS. Firebird, DataExpress и панель импорта слу�
 - непривилегированные systemd-службы с изолированным `/tmp` и ограниченной записью
   в файловую систему;
 - backend-порты 8080/8090 доступны только на `127.0.0.1`.
+- systemd journal ограничен 256 МБ и 14 днями; импорт базы пишет audit-событие
+  с результатом, псевдонимом, размером, ODS и IP без ключа администратора.
 
 Парольный вход root намеренно не отключается автоматически: универсальный
 установщик не должен лишать владельца единственного административного доступа.
@@ -32,6 +34,7 @@ sudo sshd -T | grep -E 'maxauthtries|x11forwarding|allowtcpforwarding'
 sudo nginx -t
 systemctl --failed
 curl -fsS http://127.0.0.1/health
+journalctl -u dataexpress-admin -g 'AUDIT ' --since today
 ```
 
 Каталог `/var/www/letsencrypt` опубликован только для ACME HTTP-01. Если для

@@ -2464,6 +2464,8 @@ begin
   Result := StringReplace(Result, '[landing-status]', StrToHtml(rsLandingStatus), [rfReplaceAll]);
   Result := StringReplace(Result, '[landing-title]', StrToHtml(rsLandingTitle), [rfReplaceAll]);
   Result := StringReplace(Result, '[landing-description]', StrToHtml(rsLandingDescription), [rfReplaceAll]);
+  Result := StringReplace(Result, '[upload-database]', StrToHtml(rsUploadDatabase), [rfReplaceAll]);
+  Result := StringReplace(Result, '[open-existing-connection]', StrToHtml(rsOpenExistingConnection), [rfReplaceAll]);
   Result := StringReplace(Result, '[connection-name]', StrToHtml(rsConnectionName), [rfReplaceAll]);
   Result := StringReplace(Result, '[connection-placeholder]', StrToHtml(rsConnectionPlaceholder), [rfReplaceAll]);
   Result := StringReplace(Result, '[open-connection]', StrToHtml(rsOpenConnection), [rfReplaceAll]);

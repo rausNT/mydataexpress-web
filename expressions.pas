@@ -776,11 +776,11 @@ var
   Exec: TPSDebugExec;
 begin
   F := FRS.Session.ScriptMan.Funcs[FExprIdx];
-  if not F.WebExists then
-    raise ECalcError.Create(rsExtWebFunctionMissing, [F.Name], FPos);
+  // Keep legacy databases usable when an optional desktop-only function is
+  // encountered.  The missing mapping is reported by ?extensioncompat.
+  if not F.WebExists then Exit(Null);
   SD := FRS.Session.ScriptMan.Scripts[F.SDi];
-  if SD.Kind <> skWebExpr then
-    raise ECalcError.Create(rsExtWebFunctionMissing, [F.Name], FPos);
+  if SD.Kind <> skWebExpr then Exit(Null);
   Exec := FRS.Session.ExtRunMan.GetExec(SD);
 
   pV := Exec.GetVar2('Self');

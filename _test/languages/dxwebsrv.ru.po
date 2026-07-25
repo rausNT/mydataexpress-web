@@ -841,11 +841,19 @@ msgstr "Открыть базу данных"
 
 #: strconsts.rslandingdescription
 msgid "Select an available connection or enter its name."
-msgstr "Выберите доступное подключение или введите его имя."
+msgstr "Выберите существующее подключение или загрузите новую базу."
+
+#: strconsts.rsuploaddatabase
+msgid "Upload a new database"
+msgstr "Загрузить новую базу"
+
+#: strconsts.rsopenexistingconnection
+msgid "Or open an existing connection"
+msgstr "Или открыть существующее подключение"
 
 #: strconsts.rsconnectionname
-msgid "Connection name"
-msgstr "Имя подключения"
+msgid "Existing connection name"
+msgstr "Имя существующего подключения"
 
 #: strconsts.rsconnectionplaceholder
 msgid "For example: demodb"
