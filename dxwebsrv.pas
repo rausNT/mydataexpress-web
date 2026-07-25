@@ -22,7 +22,7 @@ program dxwebsrv;
 
 uses
   {$IFDEF UNIX}
-  {cmem, }cthreads, cwstring, clocale,
+  {cmem, }cthreads, cwstring, clocale, Interfaces,
   {$ENDIF}
   Classes, SysUtils, XmlReport, ToWordsFuncs, StrConsts, SqlGen, SAXBaseReader,
   ReportManager, padeg, MainServer, LfmParser, HtmlShow, FormManager,

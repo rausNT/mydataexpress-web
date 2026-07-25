@@ -79,8 +79,8 @@ install -d "$SOURCE/_linux-bin" "$SOURCE/lib/x86_64-linux"
   fpc -B -MObjFPC -Scghi -CX -O1 -g -gl -vewnhibq \
     -dUseCThreads -dBGRABITMAP_DONT_USE_LCL \
     -Fu. \
-    -Fu"$LAZARUS_DIR/lcl/units/x86_64-linux" \
     -Fu"$LAZARUS_DIR/lcl/units/x86_64-linux/nogui" \
+    -Fu"$LAZARUS_DIR/lcl/units/x86_64-linux" \
     -Fu"$LAZARUS_DIR/components/lazutils" \
     -Fu"$LAZARUS_DIR/components/freetype" \
     -Fu"$DEPENDENCIES/PascalScript/Source" \

@@ -6,6 +6,7 @@ const installer = readFileSync('deploy/install.sh', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
 const runtime = readFileSync('dxtypes.pas', 'utf8');
 const htmlRuntime = readFileSync('htmlshow.pas', 'utf8');
+const program = readFileSync('dxwebsrv.pas', 'utf8');
 
 test('one-line installer pins runtime downloads and runs services unprivileged', () => {
   assert.match(installer, /^set -euo pipefail$/m);
@@ -38,6 +39,13 @@ test('installer keeps persistent state outside an atomic release', () => {
   assert.match(installer, /firebird5/);
   assert.match(installer, /BUILD_TOOLCHAIN_PREEXISTED/);
   assert.match(installer, /rm -rf -- "\$BUILD_ROOT"/);
+});
+
+test('Linux build selects and registers the headless LCL widgetset', () => {
+  const noGuiPath = installer.indexOf('lcl/units/x86_64-linux/nogui');
+  const genericPath = installer.indexOf('lcl/units/x86_64-linux"', noGuiPath + 1);
+  assert.ok(noGuiPath >= 0 && genericPath > noGuiPath);
+  assert.match(program, /clocale,\s*Interfaces,/);
 });
 
 test('server selects pinned compatible shared .wepas modules without overriding database modules', () => {
