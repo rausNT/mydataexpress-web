@@ -31,8 +31,9 @@
 }
 
 .landing-page .logo img {
-    width: 88px !important;
-    height: auto;
+    width: 118px !important;
+    height: 118px;
+    object-fit: contain;
 }
 
 .hero-copy h1 {
@@ -354,9 +355,134 @@
     font-weight: 700;
 }
 
+.connection-compat {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.connection-compat > span,
+.connection-compat-pending {
+    width: fit-content;
+    padding: 3px 7px;
+    border: 1px solid #cbd8ec;
+    border-radius: 999px;
+    background: #f7faff;
+    color: #435672;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.connection-compat-ready > span {
+    border-color: #b7ddc2;
+    background: #effaf2;
+    color: #24613a;
+}
+
+.connection-compat-warning > span {
+    border-color: #ead6a5;
+    background: #fff9e9;
+    color: #805b12;
+}
+
+.connection-compat-pending {
+    display: inline-block;
+    margin-top: 4px;
+    border-style: dashed;
+    color: var(--dx-muted);
+}
+
 .connection-arrow {
     color: var(--dx-primary);
     font-size: 19px;
+}
+
+html[data-theme="dark"] .landing-page .logo {
+    border-color: rgba(100, 127, 164, .38);
+    background: rgba(17, 28, 47, .78);
+    box-shadow: 0 22px 56px rgba(0, 0, 0, .32);
+}
+
+html[data-theme="dark"] .dev-joke {
+    border-color: rgba(129, 140, 248, .3);
+    background: rgba(30, 41, 79, .72);
+    color: #d6dcf5;
+}
+
+html[data-theme="dark"] .dev-joke code {
+    color: #aeb8ff;
+}
+
+html[data-theme="dark"] .demo-disclaimer {
+    border-color: #7b5a18;
+    background: #2b2415;
+    color: #f2d58c;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .2);
+}
+
+html[data-theme="dark"] .demo-disclaimer a {
+    color: #ffc96c;
+}
+
+html[data-theme="dark"] .connection-panel {
+    border-color: rgba(100, 127, 164, .38);
+    background: rgba(17, 28, 47, .92);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .34);
+}
+
+html[data-theme="dark"] .upload-database-icon,
+html[data-theme="dark"] .connection-icon {
+    background: #21304a;
+}
+
+html[data-theme="dark"] .upload-database:hover {
+    background: #1c3761;
+}
+
+html[data-theme="dark"] #connection-form label,
+html[data-theme="dark"] .connection-section h2 {
+    color: #c7d4e8;
+}
+
+html[data-theme="dark"] .connection-card {
+    border-color: var(--dx-border);
+    background: var(--dx-surface-soft);
+    color: var(--dx-text);
+}
+
+html[data-theme="dark"] .connection-card:hover {
+    border-color: #58739a;
+    background: #1a2b45;
+}
+
+html[data-theme="dark"] .connection-description {
+    color: #a9b8ce;
+}
+
+html[data-theme="dark"] .connection-credentials {
+    background: #1c3761;
+    color: #c3d6ff;
+}
+
+html[data-theme="dark"] .connection-compat > span,
+html[data-theme="dark"] .connection-compat-pending {
+    border-color: #405370;
+    background: #18263d;
+    color: #bdcbe0;
+}
+
+html[data-theme="dark"] .connection-compat-ready > span {
+    border-color: #2f6948;
+    background: #142d22;
+    color: #87e2a9;
+}
+
+html[data-theme="dark"] .connection-compat-warning > span {
+    border-color: #745b28;
+    background: #2c2516;
+    color: #f0cd7f;
 }
 
 .server-meta {
@@ -478,7 +604,8 @@
     }
 
     .landing-page .logo img {
-        width: 51px !important;
+        width: 68px !important;
+        height: 68px;
     }
 
     .hero-copy h1 {

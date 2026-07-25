@@ -2437,6 +2437,54 @@ var
       if not (Value[j] in ['a'..'z', 'A'..'Z', '0'..'9', '_']) then
         Exit(False);
   end;
+
+  function BuildCompatibilityMeta(const Json: String): String;
+  var
+    Data: TJSONData;
+    Root, Summary: TJSONObject;
+    CompatibleHandlers, ExtensionModules, Problems, TotalHandlers: Integer;
+    StateClass: String;
+  begin
+    if Trim(Json) = '' then
+      Exit('<span class="connection-compat connection-compat-pending">' +
+        StrToHtml(rsCompatibilityPending) + '</span>');
+    Data := nil;
+    try
+      Data := GetJSON(Json);
+      if Data.JSONType <> jtObject then
+        raise Exception.Create('Compatibility report root is not an object');
+      Root := TJSONObject(Data);
+      Summary := TJSONObject(Root.Find('summary'));
+      if Summary = nil then
+        raise Exception.Create('Compatibility report has no summary');
+      ExtensionModules := Summary.Get('extensionModules', 0);
+      TotalHandlers := Summary.Get('functionsTotal', 0) +
+        Summary.Get('actionsTotal', 0);
+      CompatibleHandlers := Summary.Get('functionsCompatible', 0) +
+        Summary.Get('actionsCompatible', 0);
+      Problems := Summary.Get('windowsWorkerRequired', 0) +
+        Summary.Get('automaticCompileFailed', 0) +
+        Summary.Get('providerUnconfigured', 0) +
+        Summary.Get('providerUnresolved', 0);
+      if Summary.Get('complete', False) then
+        StateClass := ' connection-compat-ready'
+      else
+        StateClass := ' connection-compat-warning';
+      Result := '<span class="connection-compat' + StateClass + '">' +
+        '<span>' + StrToHtml(Format(rsExtensionsCount,
+          [ExtensionModules])) + '</span>' +
+        '<span>' + StrToHtml(Format(rsWorkingHandlers,
+          [CompatibleHandlers, TotalHandlers])) + '</span>';
+      if Problems > 0 then
+        Result := Result + '<span>' +
+          StrToHtml(Format(rsCompatibilityProblems, [Problems])) + '</span>';
+      Result := Result + '</span>';
+    except
+      Result := '<span class="connection-compat connection-compat-pending">' +
+        StrToHtml(rsCompatibilityPending) + '</span>';
+    end;
+    Data.Free;
+  end;
 begin
   {FS.DateSeparator := '/';
   FS.ShortDateFormat := 'y/m/d';
@@ -2467,6 +2515,8 @@ begin
       if Pos('https://forum.mydataexpress.ru/', LowerCase(ConnectionSource)) = 1 then
         ConnectionMeta := ConnectionMeta + '<span class="connection-source">' +
           StrToHtml(rsForumSource) + '</span>';
+      ConnectionMeta := ConnectionMeta +
+        BuildCompatibilityMeta(DBItem.CompatibilitySummary);
       ConnectionItems := ConnectionItems +
         '<a class="connection-card" href="' + ConnectionUrl + '" target="_self">' +
         '<span class="connection-icon" aria-hidden="true"><img src="/img/database.svg" alt=""></span>' +

@@ -2168,6 +2168,8 @@ begin
     RegisterMethod(@TdxForm.GetRecordsCaption, 'GetRecordsCaption');
     RegisterMethod(@TdxForm.GetRecordCaption, 'GetRecordCaption');
     RegisterMethod(@TdxForm.WhoEdit, 'WhoEdit');
+    RegisterMethod(@TdxForm.GotoFormLegacy, 'GotoForm');
+    RegisterMethod(@TdxForm.GotoFormBoolean, 'GotoForm');
     RegisterMethod(@TdxForm.GotoForm, 'GotoForm');
     RegisterMethod(@TdxForm.GotoReport, 'GotoReport');
     RegisterMethod(@TdxForm.GotoUrl, 'GotoUrl');

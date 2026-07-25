@@ -7,6 +7,7 @@ const serverView = readFileSync(new URL('../htmlshow.pas', import.meta.url), 'ut
 const template = readFileSync(new URL('../_test/html/index.html', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../_test/html/index.css', import.meta.url), 'utf8');
 const script = readFileSync(new URL('../_test/html/index.js', import.meta.url), 'utf8');
+const themeScript = readFileSync(new URL('../_test/html/theme.js', import.meta.url), 'utf8');
 const demoTerms = readFileSync(new URL('../_test/html/demo-terms.html', import.meta.url), 'utf8');
 const russian = readFileSync(new URL('../_test/languages/dxwebsrv.ru.po', import.meta.url), 'utf8');
 
@@ -28,6 +29,9 @@ test('connection discovery is explicit and does not expose database paths by def
   assert.match(serverView, /StrToHtml\(ConnectionDescription\)/);
   assert.match(serverView, /StrToHtml\(ConnectionCredentials\)/);
   assert.match(serverView, /class="connection-details"/);
+  assert.match(serverView, /BuildCompatibilityMeta\(DBItem\.CompatibilitySummary\)/);
+  assert.match(serverView, /connection-compat-ready/);
+  assert.match(serverView, /connection-compat-warning/);
   assert.match(
     serverView,
     /StringReplace\(Result, '\[landing-title\]', StrToHtml\(rsLandingTitle\), \[rfReplaceAll\]\)/,
@@ -53,14 +57,18 @@ test('landing template is keyboard-friendly and responsive', () => {
   assert.match(template, /class="dev-joke"/);
   assert.match(template, /EPAS<\/code> к Linux/);
   assert.match(template, /href="\/html\/demo-terms\.html" target="_self"/);
-  assert.match(template, /index\.css\?v=20260725-5/);
-  assert.match(demoTerms, /index\.css\?v=20260725-5/);
+  assert.match(template, /favicon\.ico\?v=20260725-penguin/);
+  assert.match(template, /logo\.png\?v=20260725-penguin/);
+  assert.match(template, /alt="DataExpress Linux"/);
+  assert.match(template, /index\.css\?v=20260725-6/);
+  assert.match(demoTerms, /index\.css\?v=20260725-6/);
   assert.match(template, /\[open-existing-connection\]/);
   assert.match(styles, /@media \(max-width: 640px\)/);
   assert.match(styles, /\.demo-disclaimer/);
   assert.match(styles, /\.dev-joke/);
   assert.match(styles, /\.connection-grid/);
   assert.match(styles, /\.connection-credentials/);
+  assert.match(styles, /\.connection-compat/);
   assert.match(styles, /:focus-visible/);
 });
 
@@ -95,6 +103,17 @@ test('connection form builds only routable DataExpress aliases', () => {
   assert.equal(getConnectionPath('../admin'), '');
   assert.equal(getConnectionPath('база'), '');
   assert.equal(getConnectionPath('name with spaces'), '');
+});
+
+test('dark mode follows the system and persists an explicit user choice', () => {
+  assert.match(template, /theme\.js\?v=20260725-1/);
+  assert.match(template, /modern\.css\?v=20260725-4/);
+  assert.match(themeScript, /prefers-color-scheme: dark/);
+  assert.match(themeScript, /dataexpress-theme/);
+  assert.match(themeScript, /localStorage\.setItem\(storageKey, value\)/);
+  assert.match(themeScript, /id = 'theme-toggle'/);
+  assert.match(styles, /html\[data-theme="dark"\]/);
+  assert.match(styles, /\.connection-compat-ready/);
 });
 
 test('new landing strings have Russian translations', () => {

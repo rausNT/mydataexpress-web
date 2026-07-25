@@ -698,6 +698,33 @@ var
     if Result = '' then Result := '-';
   end;
 
+  procedure LogExtensionCompileErrors(Manager: TScriptManager);
+  var
+    ErrorText: String;
+    MessageItem: TCompilerMsg;
+    ModuleItem: TScriptData;
+    MessageIndex, ModuleIndex: Integer;
+  begin
+    for ModuleIndex := 0 to Manager.ScriptCount - 1 do
+    begin
+      ModuleItem := Manager.Scripts[ModuleIndex];
+      for MessageIndex := 0 to ModuleItem.MsgCount - 1 do
+      begin
+        MessageItem := ModuleItem.Msgs[MessageIndex];
+        if MessageItem.ErrorType <> 'Error' then Continue;
+        ErrorText := StringReplace(MessageItem.Msg, #13, ' ',
+          [rfReplaceAll]);
+        ErrorText := StringReplace(ErrorText, #10, ' ', [rfReplaceAll]);
+        ErrorText := Copy(ErrorText, 1, 500);
+        LogString('AUDIT extension_compile_error connection=' +
+          SafeAuditToken(ConnectName) + ' module=' +
+          SafeAuditToken(ModuleItem.Name) + ' row=' +
+          IntToStr(MessageItem.Row) + ' col=' +
+          IntToStr(MessageItem.Col) + ' error=' + ErrorText);
+      end;
+    end;
+  end;
+
   function SafeIntegerQueryParam(const Name: String): Integer;
   begin
     Result := 0;
@@ -1071,6 +1098,7 @@ begin
               MD.LoadImages(SS.DBase);
               MD.LoadScripts(SS.DBase);
               MD.ScriptMan.CompileAll;
+              LogExtensionCompileErrors(MD.ScriptMan);
               ConvertToDXMainVersion2(SS);
               MD.LoadComplete := True;
             end;
@@ -1079,6 +1107,8 @@ begin
             MD.Unlock;
           end;
 
+          SS.DBItem.CompatibilitySummary :=
+            MD.ScriptMan.ExtensionCompatibilityAsJson;
           SS.IP := GetRealIP;
           SS.LastTime := Now;
 

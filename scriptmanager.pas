@@ -2382,7 +2382,8 @@ var
   A: TExprAction;
   i, FuncCompatible, ActionCompatible, AutomaticCompileFailed,
     ProviderBacked, ProviderReady, ProviderUnconfigured, ProviderUnresolved,
-    WindowsWorkerRequired: Integer;
+    WindowsWorkerRequired, DesktopModules, WebModules,
+    AutomaticModules: Integer;
   BlockReason, Status: String;
 
   function ModuleName(Index: Integer): String;
@@ -2522,6 +2523,20 @@ begin
     ProviderUnresolved := 0;
     WindowsWorkerRequired := 0;
     AutomaticCompileFailed := 0;
+    DesktopModules := 0;
+    WebModules := 0;
+    AutomaticModules := 0;
+
+    for i := 0 to ScriptCount - 1 do
+      if Scripts[i].Kind = skExpr then
+        Inc(DesktopModules)
+      else if Scripts[i].Kind = skWebExpr then
+      begin
+        if StartsText('__auto_web_', Scripts[i].Name) then
+          Inc(AutomaticModules)
+        else
+          Inc(WebModules);
+      end;
 
     for i := 0 to FFuncs.Count - 1 do
     begin
@@ -2608,6 +2623,10 @@ begin
     Summary.Add('functionsCompatible', FuncCompatible);
     Summary.Add('actionsTotal', FActions.Count);
     Summary.Add('actionsCompatible', ActionCompatible);
+    Summary.Add('desktopModules', DesktopModules);
+    Summary.Add('webModules', WebModules);
+    Summary.Add('automaticModules', AutomaticModules);
+    Summary.Add('extensionModules', DesktopModules + WebModules);
     Summary.Add('providerBacked', ProviderBacked);
     Summary.Add('providerReady', ProviderReady);
     Summary.Add('providerUnconfigured', ProviderUnconfigured);

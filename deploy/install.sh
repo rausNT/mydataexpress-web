@@ -374,6 +374,10 @@ server {
         default_type text/plain;
         try_files $uri =404;
     }
+    location ~ /\.(?!well-known(?:/|$)) {
+        access_log off;
+        return 404;
+    }
     location = /admin { return 301 /admin/; }
     location /admin/ {
         limit_conn dx_connections 3;
@@ -430,6 +434,10 @@ server {
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     add_header X-Request-ID \$request_id always;
 
+    location ~ /\.(?!well-known(?:/|$)) {
+        access_log off;
+        return 404;
+    }
     location = /admin { return 301 /admin/; }
     location /admin/ {
         limit_conn dx_connections 3;

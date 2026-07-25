@@ -883,6 +883,25 @@ msgstr "Демо-доступ"
 msgid "Source: DataExpress forum"
 msgstr "Источник: форум DataExpress"
 
+#: strconsts.rscompatibilitypending
+msgid "Compatibility audit: pending first launch"
+msgstr "Аудит совместимости: ожидает первого запуска"
+
+#: strconsts.rsextensionscount
+#, object-pascal-format
+msgid "EPAS/WEPAS: %d"
+msgstr "EPAS/WEPAS: %d"
+
+#: strconsts.rsworkinghandlers
+#, object-pascal-format
+msgid "Working: %d/%d"
+msgstr "Работает: %d/%d"
+
+#: strconsts.rscompatibilityproblems
+#, object-pascal-format
+msgid "Need compatibility layer: %d"
+msgstr "Нужна прослойка: %d"
+
 #: strconsts.rslandingmeta
 #, object-pascal-format
 msgid "Version: %s &middot; Based on DataExpress Web Server by Pavel Duborkin.<br>Pavel is not responsible for this build &mdash; and may be blushing a little.<br><a href=\"https://mydataexpress.ru\">Original project</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Forum</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Wiki</a> &middot; <a href=\"https://github.com/rausNT/mydataexpress-web\">Modernization on GitHub</a>"

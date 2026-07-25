@@ -156,6 +156,12 @@ begin
     DesktopSource.LoadFromFile(ParamStr(1));
     WebSource.LoadFromFile(ParamStr(2));
     WebSource.Add('{ ExtensionProviderCall(''Ghost'', ''ignored'', ''payload''); }');
+    WebSource.Add('procedure LegacyGotoFormCompatibilitySmoke;');
+    WebSource.Add('begin');
+    WebSource.Add('  Self.GotoForm(''Compatibility'', 1);');
+    WebSource.Add('  Self.GotoForm(''Compatibility'', 1, False);');
+    WebSource.Add('  Self.GotoForm(''Compatibility'', 1, gtoDefault);');
+    WebSource.Add('end;');
     Compiler.BooleanShortCircuit := True;
     Compiler.AllowNoBegin := True;
     Compiler.AllowNoEnd := True;

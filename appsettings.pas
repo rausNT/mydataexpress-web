@@ -50,6 +50,7 @@ type
   public
     Name, DatabasePath, TemplatesPath, DBPwd, ServiceId: String;
     Title, Description, DemoCredentials, SourceUrl: String;
+    CompatibilitySummary: String;
     SessionTime: Integer;
     KeepMetaData: Boolean;
   end;

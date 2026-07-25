@@ -62,6 +62,10 @@ test('runtime exposes extension mapping status without breaking legacy forms', (
   assert.match(scripts, /'automatic-compile-failed'/);
   assert.match(scripts, /Summary\.Add\('windowsWorkerRequired'/);
   assert.match(scripts, /Summary\.Add\('automaticCompileFailed'/);
+  assert.match(scripts, /Summary\.Add\('desktopModules'/);
+  assert.match(scripts, /Summary\.Add\('webModules'/);
+  assert.match(scripts, /Summary\.Add\('automaticModules'/);
+  assert.match(scripts, /Summary\.Add\('extensionModules'/);
   assert.match(scripts, /AppSet\.ProviderList\.FindItem/);
   assert.match(scripts, /providerConfigured/);
   assert.match(scripts, /Disabled automatic web extension/);
@@ -82,7 +86,29 @@ test('runtime exposes extension mapping status without breaking legacy forms', (
     assert.match(runtimeTypes, new RegExp(`'${blocked}'`));
   }
 
-  assert.match(source('mainserver.pas'), /LPm = 'extensioncompat'/);
+  const mainServer = source('mainserver.pas');
+  assert.match(mainServer, /LPm = 'extensioncompat'/);
+  assert.match(mainServer,
+    /SS\.DBItem\.CompatibilitySummary :=\s+MD\.ScriptMan\.ExtensionCompatibilityAsJson/);
   assert.match(source('expressions.pas'), /if not F\.WebExists then Exit\(Null\)/);
   assert.match(source('dxactions.pas'), /not EAction\.WebExists then Exit/);
+});
+
+test('legacy DX_PLUS web modules keep every historical GotoForm signature', () => {
+  const compiler = source('compilerdecls.pas');
+  const runtime = source('rundecls.pas');
+  const controls = source('dxctrls.pas');
+  const smoke = source('tools/wepas-compile-smoke.pas');
+
+  assert.match(compiler,
+    /GotoForm\(const AFormName: String; ARecId: Integer\)'\)/);
+  assert.match(compiler,
+    /GotoForm\(const AFormName: String; ARecId: Integer; ANewTab: Boolean\)'\)/);
+  assert.match(compiler,
+    /GotoForm\(const AFormName: String; ARecId: Integer; AGotoOption: TGotoOption\)'\)/);
+  assert.match(runtime, /@TdxForm\.GotoFormLegacy, 'GotoForm'/);
+  assert.match(runtime, /@TdxForm\.GotoFormBoolean, 'GotoForm'/);
+  assert.match(controls, /if ANewTab then\s+GotoForm\(AFormName, ARecId, gtoNewTab\)/);
+  assert.match(smoke, /Self\.GotoForm\(''Compatibility'', 1\)/);
+  assert.match(smoke, /Self\.GotoForm\(''Compatibility'', 1, False\)/);
 });
