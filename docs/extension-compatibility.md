@@ -81,8 +81,15 @@ DataExpress не требуются.
 
 [Wine 11](https://list.winehq.org/hyperkitty/list/wine-announce%40list.winehq.org/2026/1/)
 объявляет новый WoW64 полностью поддержанным и отказывается от чистых 32-битных
-prefix. Поэтому POC должен использовать 64-битный prefix с `WINEARCH=wow64`, а
-не старую схему `WINEARCH=win32`. Идея контейнерного воспроизводимого окружения
+prefix. Целевой runtime поэтому использует 64-битный prefix с
+`WINEARCH=wow64`, а не старую схему `WINEARCH=win32`.
+
+Это не означает, что любой пакет Wine 11 уже не требует 32-битных Linux-пакетов:
+по [официальной таблице WineHQ](https://gitlab.winehq.org/wine/wine/-/wikis/Debian-Ubuntu)
+чистая WoW64-упаковка начинается с Ubuntu 25.10, тогда как production-хост
+Ubuntu 24.04 ещё требует архитектуру `i386`. До установки сравниваются два POC:
+пакет WineHQ для Noble с проверенным размером зависимостей и собранный в CI
+изолированный WoW64 runtime. Идея контейнерного воспроизводимого окружения
 берётся из [Steam Runtime](https://github.com/ValveSoftware/steam-runtime), но
 сам игровой runtime на сервер не устанавливается.
 
