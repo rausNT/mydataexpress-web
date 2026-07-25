@@ -39,6 +39,12 @@ test('installer keeps persistent state outside an atomic release', () => {
   assert.match(installer, /firebird5/);
   assert.match(installer, /BUILD_TOOLCHAIN_PREEXISTED/);
   assert.match(installer, /rm -rf -- "\$BUILD_ROOT"/);
+  assert.match(installer, /restore_services_on_exit/);
+  assert.match(installer, /preserving installed copy/);
+  assert.ok(
+    installer.indexOf('STAGED_EXTENSIONS=') <
+      installer.indexOf('systemctl stop dataexpress-config-reload.path'),
+  );
 });
 
 test('Linux build selects and registers the headless LCL widgetset', () => {

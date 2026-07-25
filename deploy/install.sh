@@ -11,6 +11,16 @@ RUNTIME_ROOT="$APP_ROOT/runtime"
 ADMIN_ROOT="$APP_ROOT/admin"
 RELEASE_ID="$(date -u +%Y%m%d%H%M%S)"
 RELEASE_DIR="$APP_ROOT/releases/$RELEASE_ID"
+SERVICES_STOPPED=0
+
+restore_services_on_exit() {
+  local status=$?
+  if [ "$status" -ne 0 ] && [ "$SERVICES_STOPPED" -eq 1 ]; then
+    systemctl start dataexpress-web.service dataexpress-admin.service \
+      dataexpress-config-reload.path nginx.service >/dev/null 2>&1 || true
+  fi
+}
+trap restore_services_on_exit EXIT
 
 FB25_URL=https://github.com/FirebirdSQL/firebird/releases/download/R2_5_9/FirebirdCS-2.5.9.27139-0.amd64.tar.gz
 FB25_SHA256=59b1f64db56f50c94ee47babd1bf551cacebd0bdf7f668d6250d18a621390b4e
@@ -120,8 +130,40 @@ install -d "$BUILD_ROOT/runtime-downloads/ncurses"
 dpkg-deb -x "$BUILD_ROOT/runtime-downloads/libncurses5.deb" "$BUILD_ROOT/runtime-downloads/ncurses"
 dpkg-deb -x "$BUILD_ROOT/runtime-downloads/libtinfo5.deb" "$BUILD_ROOT/runtime-downloads/ncurses"
 
+STAGED_EXTENSIONS="$BUILD_ROOT/extensions-stage"
+install -d "$STAGED_EXTENSIONS"
+install_dx_plus_web() {
+  local version="$1"
+  local url="$2"
+  local archive_checksum="$3"
+  local source_checksum="$4"
+  local archive="$BUILD_ROOT/runtime-downloads/dx-plus-web-$version.zip"
+  local source="$BUILD_ROOT/DX_PLUS_WEB-$version.wepas"
+  local destination="$STAGED_EXTENSIONS/DX_PLUS_WEB-$version.wepas"
+  local existing="$STATE_ROOT/extensions/DX_PLUS_WEB-$version.wepas"
+  if download_checked "$url" "$archive_checksum" "$archive" &&
+     unzip -p "$archive" DX_PLUS_WEB.wepas >"$source" &&
+     echo "$source_checksum  $source" | sha256sum --check -; then
+    install -m 0644 "$source" "$destination"
+  elif [ -s "$existing" ]; then
+    echo "Warning: could not refresh DX_PLUS_WEB $version; preserving installed copy." >&2
+    cp -a "$existing" "$destination"
+  else
+    echo "Warning: DX_PLUS_WEB $version is currently unavailable; continuing without it." >&2
+  fi
+}
+install_dx_plus_web 1.71 "$DX_PLUS_WEB_171_URL" \
+  "$DX_PLUS_WEB_171_ARCHIVE_SHA256" "$DX_PLUS_WEB_171_SOURCE_SHA256"
+install_dx_plus_web 1.72 "$DX_PLUS_WEB_172_URL" \
+  "$DX_PLUS_WEB_172_ARCHIVE_SHA256" "$DX_PLUS_WEB_172_SOURCE_SHA256"
+install_dx_plus_web 1.73 "$DX_PLUS_WEB_173_URL" \
+  "$DX_PLUS_WEB_173_ARCHIVE_SHA256" "$DX_PLUS_WEB_173_SOURCE_SHA256"
+install_dx_plus_web 1.8.1 "$DX_PLUS_WEB_181_URL" \
+  "$DX_PLUS_WEB_181_ARCHIVE_SHA256" "$DX_PLUS_WEB_181_SOURCE_SHA256"
+
 systemctl stop dataexpress-config-reload.path dataexpress-admin.service dataexpress-web.service \
   >/dev/null 2>&1 || true
+SERVICES_STOPPED=1
 cp -a "$BUILD_ROOT/runtime-downloads/ncurses/lib/x86_64-linux-gnu"/libncurses.so.5* "$STAGED_RUNTIME/compat/"
 cp -a "$BUILD_ROOT/runtime-downloads/ncurses/lib/x86_64-linux-gnu"/libtinfo.so.5* "$STAGED_RUNTIME/compat/"
 rm -rf "$RUNTIME_ROOT/firebird25" "$RUNTIME_ROOT/firebird5" "$RUNTIME_ROOT/compat"
@@ -148,28 +190,11 @@ install -d -m 0755 -o root -g root "$STATE_ROOT"
 install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT/databases"
 install -d -m 0755 -o root -g dataexpress "$STATE_ROOT/extensions"
 install -m 0660 -o dataexpress -g dataexpress /dev/null "$STATE_ROOT/config.lock"
-install_dx_plus_web() {
-  local version="$1"
-  local url="$2"
-  local archive_checksum="$3"
-  local source_checksum="$4"
-  local archive="$BUILD_ROOT/runtime-downloads/dx-plus-web-$version.zip"
-  local source="$BUILD_ROOT/DX_PLUS_WEB-$version.wepas"
-  download_checked "$url" "$archive_checksum" "$archive"
-  unzip -p "$archive" DX_PLUS_WEB.wepas >"$source"
-  echo "$source_checksum  $source" | sha256sum --check -
+find "$STATE_ROOT/extensions" -maxdepth 1 -type f -name 'DX_PLUS_WEB-*.wepas' -delete
+if compgen -G "$STAGED_EXTENSIONS/DX_PLUS_WEB-*.wepas" >/dev/null; then
   install -m 0644 -o root -g dataexpress \
-    "$source" "$STATE_ROOT/extensions/DX_PLUS_WEB-$version.wepas"
-}
-rm -f "$STATE_ROOT/extensions"/DX_PLUS_WEB*.wepas
-install_dx_plus_web 1.71 "$DX_PLUS_WEB_171_URL" \
-  "$DX_PLUS_WEB_171_ARCHIVE_SHA256" "$DX_PLUS_WEB_171_SOURCE_SHA256"
-install_dx_plus_web 1.72 "$DX_PLUS_WEB_172_URL" \
-  "$DX_PLUS_WEB_172_ARCHIVE_SHA256" "$DX_PLUS_WEB_172_SOURCE_SHA256"
-install_dx_plus_web 1.73 "$DX_PLUS_WEB_173_URL" \
-  "$DX_PLUS_WEB_173_ARCHIVE_SHA256" "$DX_PLUS_WEB_173_SOURCE_SHA256"
-install_dx_plus_web 1.8.1 "$DX_PLUS_WEB_181_URL" \
-  "$DX_PLUS_WEB_181_ARCHIVE_SHA256" "$DX_PLUS_WEB_181_SOURCE_SHA256"
+    "$STAGED_EXTENSIONS"/DX_PLUS_WEB-*.wepas "$STATE_ROOT/extensions/"
+fi
 ln -sfn "$STATE_ROOT/extensions" "$RELEASE_DIR/extensions"
 chown -h dataexpress:dataexpress "$RELEASE_DIR/extensions"
 
@@ -447,6 +472,7 @@ systemctl restart systemd-journald.service
 systemctl enable --now \
   dataexpress-web.service dataexpress-admin.service dataexpress-config-reload.path \
   fail2ban.service nginx.service unattended-upgrades.service
+SERVICES_STOPPED=0
 systemctl reload ssh.service
 systemctl reset-failed dataexpress-config-reload.service
 systemctl restart dataexpress-web.service dataexpress-admin.service nginx.service
