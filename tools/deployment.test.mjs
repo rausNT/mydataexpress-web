@@ -12,6 +12,7 @@ const appUtils = readFileSync('apputils.pas', 'utf8');
 const modernCss = readFileSync('_test/html/modern.css', 'utf8');
 const gitAttributes = readFileSync('.gitattributes', 'utf8');
 const mainServer = readFileSync('mainserver.pas', 'utf8');
+const sqlGenerator = readFileSync('sqlgen.pas', 'utf8');
 
 test('one-line installer pins runtime downloads and runs services unprivileged', () => {
   assert.match(gitAttributes, /^\*\.sh text eol=lf$/m);
@@ -74,6 +75,22 @@ test('server reports unexpected renderer failures and audits form navigation', (
   assert.match(mainServer, /outcome=/);
   assert.match(mainServer, /AResponse\.Code := rcServerError/);
   assert.match(mainServer, /LogFormRequestAudit;/);
+});
+
+test('form filters register object-field joins before resolving their aliases', () => {
+  const formFilterStart = sqlGenerator.indexOf('function SqlFormFilter');
+  const formFilter = sqlGenerator.slice(
+    formFilterStart,
+    sqlGenerator.indexOf('function SqlSelectStatement', formFilterStart),
+  );
+  const objectFieldBranch = formFilter.slice(
+    formFilter.indexOf('if C is TdxObjectField then'),
+    formFilter.indexOf('else if C is TdxFile then'),
+  );
+  assert.ok(
+    objectFieldBranch.indexOf('ProcessObjectField') <
+      objectFieldBranch.indexOf('AliasStr(AliasSL, AliasName)'),
+  );
 });
 
 test('Linux build selects and registers the headless LCL widgetset', () => {

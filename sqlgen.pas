@@ -519,8 +519,12 @@ begin
       GetObjectFieldComponent(SS, C, AliasName, FlNm);
       if C = nil then Continue;
       // ObjId > 0 и FieldId > 0, потому что C <> nil
+      // Register the JOIN before resolving its alias. A filtered object field
+      // does not have to be present in the SELECT list.
+      if not ProcessObjectField(SS,
+        TdxLookupComboBox(Fm.FindField(ObjF.ObjId)), ObjF, Tmp, Jn, AliasSL) then
+        Continue;
       FlNm := AliasStr(AliasSL, AliasName) + '.' + FlNm;
-      ProcessObjectField(SS, TdxLookupcomboBox(Fm.FindField(ObjF.ObjId)), ObjF, Tmp, Jn, AliasSL);
     end
     else if C is TdxFile then
       FlNm := FlNm + 'd'
