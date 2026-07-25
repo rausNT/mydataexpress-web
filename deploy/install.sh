@@ -468,6 +468,9 @@ cat >/etc/logrotate.d/dataexpress-nginx <<'LOGROTATE'
     endscript
 }
 LOGROTATE
+touch /var/log/nginx/dataexpress-access.log /var/log/nginx/dataexpress-error.log
+chown www-data:adm /var/log/nginx/dataexpress-access.log /var/log/nginx/dataexpress-error.log
+chmod 0640 /var/log/nginx/dataexpress-access.log /var/log/nginx/dataexpress-error.log
 rm -f /etc/nginx/sites-enabled/default
 ln -sfn /etc/nginx/sites-available/dataexpress /etc/nginx/sites-enabled/dataexpress
 nginx -t

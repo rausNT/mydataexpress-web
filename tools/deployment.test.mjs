@@ -31,6 +31,8 @@ test('one-line installer pins runtime downloads and runs services unprivileged',
   assert.match(installer, /\/etc\/logrotate\.d\/dataexpress-nginx/);
   assert.match(installer, /rotate 30/);
   assert.match(installer, /maxage 30/);
+  assert.match(installer, /chown www-data:adm \/var\/log\/nginx\/dataexpress-access\.log/);
+  assert.match(installer, /chmod 0640 \/var\/log\/nginx\/dataexpress-access\.log/);
   assert.doesNotMatch(installer, /dataexpress_json[\s\S]{0,500}\$request_uri/);
   assert.match(installer, /bantime = 24h/);
   assert.match(installer, /ufw limit OpenSSH/);
