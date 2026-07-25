@@ -2366,9 +2366,10 @@ var
   FunctionsJson, ActionsJson, ProvidersJson: TJSONArray;
   F: TExprFunc;
   A: TExprAction;
-  i, FuncCompatible, ActionCompatible, ProviderBacked, ProviderReady,
-    ProviderUnconfigured, ProviderUnresolved: Integer;
-  Status: String;
+  i, FuncCompatible, ActionCompatible, AutomaticCompileFailed,
+    ProviderBacked, ProviderReady, ProviderUnconfigured, ProviderUnresolved,
+    WindowsWorkerRequired: Integer;
+  BlockReason, Status: String;
 
   function ModuleName(Index: Integer): String;
   begin
@@ -2407,7 +2408,12 @@ var
         Scripts[WebIndex].Source, MappingKind, MappingValue), Names,
         Calls, LiteralCalls);
       for n := 0 to Names.Count - 1 do Providers.Add(Names[n]);
-      if Calls = 0 then Exit('web-script');
+      if Calls = 0 then
+      begin
+        if StartsText('__auto_web_', ModuleName(WebIndex)) then
+          Exit('auto-web-script');
+        Exit('web-script');
+      end;
       if LiteralCalls <> Calls then Exit('provider-unresolved');
 
       AllConfigured := True;
@@ -2433,7 +2439,45 @@ var
 
   function IsCompatibleStatus(const Value: String): Boolean;
   begin
-    Result := (Value = 'provider') or (Value = 'web-script');
+    Result := (Value = 'provider') or (Value = 'web-script') or
+      (Value = 'auto-web-script');
+  end;
+
+  function DesktopBlockReason(DesktopIndex: Integer): String;
+  begin
+    Result := '';
+    if (DesktopIndex >= 0) and (DesktopIndex < ScriptCount) then
+      Result := AutomaticWebBlockReason(Scripts[DesktopIndex].Source);
+  end;
+
+  function AutomaticFailureReason(const MappingKind,
+    MappingValue: String): String;
+  var
+    ExactLine, Line: String;
+    Lines: TStringList;
+    ScriptIndex, LineIndex: Integer;
+    SD: TScriptData;
+  begin
+    Result := '';
+    if SameText(MappingKind, 'function') then ExactLine := 'Name=' + MappingValue
+    else ExactLine := 'Id=' + MappingValue;
+    Lines := TStringList.Create;
+    try
+      for ScriptIndex := 0 to ScriptCount - 1 do
+      begin
+        SD := Scripts[ScriptIndex];
+        if (SD.Kind <> skNone) or
+          not StartsText('__auto_web_', SD.Name) then Continue;
+        Lines.Text := SD.Source;
+        for LineIndex := 0 to Lines.Count - 1 do
+        begin
+          Line := Trim(Lines[LineIndex]);
+          if SameText(Line, ExactLine) then Exit(SD.Description);
+        end;
+      end;
+    finally
+      Lines.Free;
+    end;
   end;
 
   procedure CountProviderStatus(const Value: String);
@@ -2462,6 +2506,8 @@ begin
     ProviderReady := 0;
     ProviderUnconfigured := 0;
     ProviderUnresolved := 0;
+    WindowsWorkerRequired := 0;
+    AutomaticCompileFailed := 0;
 
     for i := 0 to FFuncs.Count - 1 do
     begin
@@ -2470,6 +2516,25 @@ begin
       ProvidersJson := TJSONArray.Create;
       Status := ImplementationStatus(F.WebExists, F.WebSDi, 'function',
         F.Name, ProvidersJson);
+      BlockReason := '';
+      if Status = 'missing' then
+      begin
+        BlockReason := DesktopBlockReason(F.DesktopSDi);
+        if BlockReason <> '' then
+        begin
+          Status := 'windows-worker-required';
+          Inc(WindowsWorkerRequired);
+        end;
+        if BlockReason = '' then
+        begin
+          BlockReason := AutomaticFailureReason('function', F.Name);
+          if BlockReason <> '' then
+          begin
+            Status := 'automatic-compile-failed';
+            Inc(AutomaticCompileFailed);
+          end;
+        end;
+      end;
       if IsCompatibleStatus(Status) then Inc(FuncCompatible);
       CountProviderStatus(Status);
       Item.Add('name', F.Name);
@@ -2477,6 +2542,7 @@ begin
       Item.Add('desktopModule', ModuleName(F.DesktopSDi));
       Item.Add('webModule', ModuleName(F.WebSDi));
       Item.Add('status', Status);
+      if BlockReason <> '' then Item.Add('blockReason', BlockReason);
       Item.Add('providers', ProvidersJson);
       if IsProviderStatus(Status) then
         Item.Add('providerConfigured', Status = 'provider');
@@ -2490,6 +2556,25 @@ begin
       ProvidersJson := TJSONArray.Create;
       Status := ImplementationStatus(A.WebExists, A.WebSDi, 'action',
         A.Id, ProvidersJson);
+      BlockReason := '';
+      if Status = 'missing' then
+      begin
+        BlockReason := DesktopBlockReason(A.DesktopSDi);
+        if BlockReason <> '' then
+        begin
+          Status := 'windows-worker-required';
+          Inc(WindowsWorkerRequired);
+        end;
+        if BlockReason = '' then
+        begin
+          BlockReason := AutomaticFailureReason('action', A.Id);
+          if BlockReason <> '' then
+          begin
+            Status := 'automatic-compile-failed';
+            Inc(AutomaticCompileFailed);
+          end;
+        end;
+      end;
       if IsCompatibleStatus(Status) then Inc(ActionCompatible);
       CountProviderStatus(Status);
       Item.Add('id', A.Id);
@@ -2498,6 +2583,7 @@ begin
       Item.Add('desktopModule', ModuleName(A.DesktopSDi));
       Item.Add('webModule', ModuleName(A.WebSDi));
       Item.Add('status', Status);
+      if BlockReason <> '' then Item.Add('blockReason', BlockReason);
       Item.Add('providers', ProvidersJson);
       if IsProviderStatus(Status) then
         Item.Add('providerConfigured', Status = 'provider');
@@ -2512,6 +2598,8 @@ begin
     Summary.Add('providerReady', ProviderReady);
     Summary.Add('providerUnconfigured', ProviderUnconfigured);
     Summary.Add('providerUnresolved', ProviderUnresolved);
+    Summary.Add('windowsWorkerRequired', WindowsWorkerRequired);
+    Summary.Add('automaticCompileFailed', AutomaticCompileFailed);
     Summary.Add('complete', (FuncCompatible = FFuncs.Count) and
       (ActionCompatible = FActions.Count));
     Result := Root.AsJSON;
@@ -2610,12 +2698,31 @@ end;    }
 procedure TScriptManager.CompileExpr;
 var
   i: Integer;
+  FailureReason: String;
   SD: TScriptData;
 begin
   for i := 0 to FScripts.Count - 1 do
   begin
     SD := GetScripts(i);
-    if SD.Kind = skWebExpr then CompileModule(SD);
+    if SD.Kind = skWebExpr then
+    begin
+      CompileModule(SD);
+      if StartsText('__auto_web_', SD.Name) and HasErrorsInModule(SD) then
+      begin
+        FailureReason := 'Compilation failed';
+        if SD.MsgCount > 0 then
+        begin
+          FailureReason := SD.Msgs[0].Msg;
+          LogString('Disabled automatic web extension ' + SD.Name + ': ' +
+            SD.Msgs[0].Msg)
+        end
+        else
+          LogString('Disabled automatic web extension ' + SD.Name);
+        SD.FDescription := FailureReason;
+        SD.Kind := skNone;
+        SD.Clear;
+      end;
+    end;
   end;
   ParseExprModules;
   //FNeedUpdateFuncs:=True;

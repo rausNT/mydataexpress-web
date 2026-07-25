@@ -3,8 +3,9 @@ program WepasCompileSmoke;
 {$mode objfpc}{$H+}
 
 uses
+  {$ifdef unix}Interfaces,{$endif}
   Classes, SysUtils, fpjson, jsonparser, uPSCompiler, uPSUtils, CompilerDecls,
-  AppSettings, ScriptManager;
+  AppSettings, ScriptManager, DxTypes;
 
 function RegisterSystemDeclarations(Sender: TPSPascalCompiler;
   const Name: tbtString): Boolean;
@@ -47,10 +48,12 @@ end;
 
 var
   Compiler: TPSPascalCompiler;
-  DesktopSource, WebSource: TStringList;
-  Output, FirstStatus, SecondStatus, ExpectedMode: String;
+  AddedActions, AddedFunctions, ClaimedActions, ClaimedFunctions,
+    CompileErrors, DesktopSource, WebSource: TStringList;
+  AutoSource, Output, FirstStatus, SecondStatus, ExpectedMode: String;
   i: Integer;
   Manager: TScriptManager;
+  MetaData: TMetaData;
   DesktopScript, WebScript: TScriptData;
   Provider: TProviderItem;
   Complete: Boolean;
@@ -147,8 +150,71 @@ begin
       end;
     finally
       Manager.Free;
-      AppSet.Free;
-      AppSet := nil;
+    end;
+
+    if ExpectedMode = 'web-script' then
+    begin
+      AddedActions := TStringList.Create;
+      AddedFunctions := TStringList.Create;
+      ClaimedActions := TStringList.Create;
+      ClaimedFunctions := TStringList.Create;
+      try
+        AutoSource := BuildAutomaticWebExtensionSource(DesktopSource.Text,
+          ClaimedActions, ClaimedFunctions, AddedActions, AddedFunctions);
+        Require(AutoSource <> '', 'Portable desktop extension was not promoted');
+        Require(AddedFunctions.IndexOf('NORMALIZE_PHONE') >= 0,
+          'Name metadata was confused with OrigName');
+        Require(Pos('OrigName=', AutoSource) = 0,
+          'Desktop function metadata leaked into automatic web metadata');
+        Require(AutomaticWebBlockReason(
+          'begin SaveToFile(''outside.txt''); end;') = 'SaveToFile',
+          'Direct filesystem access was not isolated');
+        Require(AutomaticWebBlockReason(
+          '// SaveToFile must not count inside a comment' + LineEnding +
+          'begin Result := ''ShellExecute is only text''; end;') = '',
+          'Comments or strings incorrectly blocked a portable extension');
+
+        MetaData := TMetaData.Create;
+        try
+          Manager := MetaData.ScriptMan;
+          DesktopScript := Manager.AddScript(0, 'portable.epas',
+            DesktopSource.Text);
+          DesktopScript.Kind := skExpr;
+          WebScript := Manager.AddScript(0, '__auto_web_portable',
+            AutoSource);
+          WebScript.Kind := skWebExpr;
+          Manager.CompileModule(WebScript);
+          if Manager.HasErrorsInModule(WebScript) then
+          begin
+            CompileErrors := TStringList.Create;
+            try
+              Manager.ModuleMessagesToList(WebScript, CompileErrors, True);
+              Require(False, 'Automatic source compile failed: ' +
+                CompileErrors.Text);
+            finally
+              CompileErrors.Free;
+            end;
+          end;
+          Manager.CompileExpr;
+          Require(not Manager.HasErrors,
+            'Automatic portable extension failed compilation');
+          CompatibilityStatuses(Manager.ExtensionCompatibilityAsJson,
+            FirstStatus, SecondStatus, Complete);
+          Require((FirstStatus = 'auto-web-script') and
+            (SecondStatus = 'auto-web-script'),
+            'Automatic fallback status is incorrect: ' +
+            FirstStatus + ', ' + SecondStatus);
+          Require(Complete, 'Automatic portable extension must be complete');
+        finally
+          MetaData.Free;
+        end;
+      finally
+        ClaimedFunctions.Free;
+        ClaimedActions.Free;
+        AddedFunctions.Free;
+        AddedActions.Free;
+      end;
+      WriteLn('automatic-epas-fallback-ok');
     end;
 
     WriteLn('wepas-compile-ok ' + ExtractFileName(ParamStr(2)));
@@ -156,6 +222,8 @@ begin
     if ExpectedMode <> 'web-script' then
       WriteLn('provider-config-diagnostics-ok');
   finally
+    AppSet.Free;
+    AppSet := nil;
     Compiler.Free;
     WebSource.Free;
     DesktopSource.Free;

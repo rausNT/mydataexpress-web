@@ -512,6 +512,10 @@ type
 
 function MsgDlgTypeToStr(T: TMsgDlgType): String;
 function MsgDlgBtnToStr(T: TMsgDlgBtn): String;
+function AutomaticWebBlockReason(const Source: String): String;
+function BuildAutomaticWebExtensionSource(const Source: String;
+  ClaimedActions, ClaimedFunctions, AddedActions,
+  AddedFunctions: TStrings): String;
 
 implementation
 
@@ -553,27 +557,28 @@ begin
   Result := ActionIds.Count + FunctionNames.Count;
 end;
 
-procedure CollectModuleMappings(const Source: String; ActionIds,
-  FunctionNames: TStrings);
-
-  procedure CollectTagValues(const TagName, FieldName: String; Values: TStrings);
-  var
-    Block, LowerBlock, LowerSource, Value: String;
-    P, BlockEnd, FieldPos, ValueStart, ValueEnd: Integer;
-    Quote: Char;
+function ExtractMetadataField(const Block, FieldName: String;
+  out Value: String): Boolean;
+var
+  Key, LowerBlock: String;
+  P, ValueStart, ValueEnd: Integer;
+  Quote: Char;
+begin
+  Result := False;
+  Value := '';
+  Key := LowerCase(FieldName);
+  LowerBlock := LowerCase(Block);
+  P := PosEx(Key, LowerBlock, 1);
+  while P > 0 do
   begin
-    LowerSource := LowerCase(Source);
-    P := PosEx('{@' + TagName, LowerSource, 1);
-    while P > 0 do
+    if ((P = 1) or (Block[P - 1] in [' ', #9, #10, #13, '{'])) then
     begin
-      BlockEnd := PosEx('@}', LowerSource, P + Length(TagName) + 2);
-      if BlockEnd = 0 then Exit;
-      Block := Copy(Source, P, BlockEnd + 1 - P);
-      LowerBlock := LowerCase(Block);
-      FieldPos := Pos(FieldName + '=', LowerBlock);
-      if FieldPos > 0 then
+      ValueStart := P + Length(Key);
+      while (ValueStart <= Length(Block)) and
+        (Block[ValueStart] in [' ', #9]) do Inc(ValueStart);
+      if (ValueStart <= Length(Block)) and (Block[ValueStart] = '=') then
       begin
-        ValueStart := FieldPos + Length(FieldName) + 1;
+        Inc(ValueStart);
         while (ValueStart <= Length(Block)) and
           (Block[ValueStart] in [' ', #9, #10, #13]) do Inc(ValueStart);
         Quote := #0;
@@ -585,14 +590,36 @@ procedure CollectModuleMappings(const Source: String; ActionIds,
         end;
         ValueEnd := ValueStart;
         if Quote <> #0 then
-          while (ValueEnd <= Length(Block)) and (Block[ValueEnd] <> Quote) do
-            Inc(ValueEnd)
+          while (ValueEnd <= Length(Block)) and
+            (Block[ValueEnd] <> Quote) do Inc(ValueEnd)
         else
           while (ValueEnd <= Length(Block)) and
-            not (Block[ValueEnd] in [' ', #9, #10, #13, '@']) do Inc(ValueEnd);
+            not (Block[ValueEnd] in [' ', #9, #10, #13, '@']) do
+              Inc(ValueEnd);
         Value := Trim(Copy(Block, ValueStart, ValueEnd - ValueStart));
-        if Value <> '' then Values.Add(Value);
+        Exit(Value <> '');
       end;
+    end;
+    P := PosEx(Key, LowerBlock, P + Length(Key));
+  end;
+end;
+
+procedure CollectModuleMappings(const Source: String; ActionIds,
+  FunctionNames: TStrings);
+
+  procedure CollectTagValues(const TagName, FieldName: String; Values: TStrings);
+  var
+    Block, LowerSource, Value: String;
+    P, BlockEnd: Integer;
+  begin
+    LowerSource := LowerCase(Source);
+    P := PosEx('{@' + TagName, LowerSource, 1);
+    while P > 0 do
+    begin
+      BlockEnd := PosEx('@}', LowerSource, P + Length(TagName) + 2);
+      if BlockEnd = 0 then Exit;
+      Block := Copy(Source, P, BlockEnd + 1 - P);
+      if ExtractMetadataField(Block, FieldName, Value) then Values.Add(Value);
       P := PosEx('{@' + TagName, LowerSource, BlockEnd + 2);
     end;
   end;
@@ -600,6 +627,160 @@ procedure CollectModuleMappings(const Source: String; ActionIds,
 begin
   CollectTagValues('action', 'id', ActionIds);
   CollectTagValues('function', 'name', FunctionNames);
+end;
+
+function SourceCodeContainsIdentifier(const Source, Identifier: String): Boolean;
+var
+  C: Char;
+  i, L, StartPos: Integer;
+  Token: String;
+begin
+  Result := False;
+  L := Length(Source);
+  i := 1;
+  while i <= L do
+  begin
+    C := Source[i];
+    if C = '''' then
+    begin
+      Inc(i);
+      while i <= L do
+      begin
+        if Source[i] = '''' then
+        begin
+          if (i < L) and (Source[i + 1] = '''') then Inc(i, 2)
+          else
+          begin
+            Inc(i);
+            Break;
+          end;
+        end
+        else
+          Inc(i);
+      end;
+      Continue;
+    end;
+    if C = '{' then
+    begin
+      Inc(i);
+      while (i <= L) and (Source[i] <> '}') do Inc(i);
+      Inc(i);
+      Continue;
+    end;
+    if (C = '(') and (i < L) and (Source[i + 1] = '*') then
+    begin
+      Inc(i, 2);
+      while (i < L) and
+        not ((Source[i] = '*') and (Source[i + 1] = ')')) do Inc(i);
+      Inc(i, 2);
+      Continue;
+    end;
+    if (C = '/') and (i < L) and (Source[i + 1] = '/') then
+    begin
+      Inc(i, 2);
+      while (i <= L) and not (Source[i] in [#10, #13]) do Inc(i);
+      Continue;
+    end;
+    if C in ['A'..'Z', 'a'..'z', '_'] then
+    begin
+      StartPos := i;
+      Inc(i);
+      while (i <= L) and
+        (Source[i] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Inc(i);
+      Token := Copy(Source, StartPos, i - StartPos);
+      if SameText(Token, Identifier) then Exit(True);
+      Continue;
+    end;
+    Inc(i);
+  end;
+end;
+
+function AutomaticWebBlockReason(const Source: String): String;
+const
+  BlockedIdentifiers: array[0..38] of String = (
+    'external', 'CreateOleObject', 'GetActiveOleObject', 'OleVariant',
+    'ShellExecute', 'LoadLibrary', 'GetProcAddress', 'FreeLibrary', 'WinExec',
+    'THttpClient', 'TFPHTTPClient', 'HTTP_GET', 'ExtensionProviderCall',
+    'TFileStream', 'TIniFile', 'FileExists', 'FileAge', 'DirectoryExists',
+    'ExpandFileName', 'FileSetDate', 'FileGetAttr', 'FileSetAttr', 'DeleteFile',
+    'RenameFile', 'GetCurrentDir', 'CreateDir', 'RemoveDir',
+    'ForceDirectories', 'CopyFile', 'FindAllFiles', 'FindAllDirectories',
+    'GetTempFileName', 'GetTempDir', 'FileSize', 'LoadFromFile', 'SaveToFile',
+    'LoadFromStream', 'SaveToStream', 'StreamFormPost'
+  );
+var
+  i: Integer;
+begin
+  Result := '';
+  for i := Low(BlockedIdentifiers) to High(BlockedIdentifiers) do
+    if SourceCodeContainsIdentifier(Source, BlockedIdentifiers[i]) then
+      Exit(BlockedIdentifiers[i]);
+end;
+
+function BuildAutomaticWebExtensionSource(const Source: String;
+  ClaimedActions, ClaimedFunctions, AddedActions,
+  AddedFunctions: TStrings): String;
+var
+  Block, LowerSource, MappingValue, Replacement, TagName: String;
+  ActionPos, BlockEnd, Cursor, FunctionPos, P, SearchPos: Integer;
+  IsAction: Boolean;
+begin
+  Result := '';
+  AddedActions.Clear;
+  AddedFunctions.Clear;
+  if AutomaticWebBlockReason(Source) <> '' then Exit;
+
+  LowerSource := LowerCase(Source);
+  Cursor := 1;
+  SearchPos := 1;
+  while SearchPos <= Length(Source) do
+  begin
+    ActionPos := PosEx('{@action', LowerSource, SearchPos);
+    FunctionPos := PosEx('{@function', LowerSource, SearchPos);
+    if ActionPos = 0 then P := FunctionPos
+    else if FunctionPos = 0 then P := ActionPos
+    else if ActionPos < FunctionPos then P := ActionPos
+    else P := FunctionPos;
+    if P = 0 then Break;
+
+    IsAction := P = ActionPos;
+    if IsAction then TagName := 'action'
+    else TagName := 'function';
+    BlockEnd := PosEx('@}', LowerSource, P + Length(TagName) + 2);
+    if BlockEnd = 0 then Exit('');
+    Block := Copy(Source, P, BlockEnd + 1 - P);
+    MappingValue := '';
+    if IsAction then
+      ExtractMetadataField(Block, 'id', MappingValue)
+    else
+      ExtractMetadataField(Block, 'name', MappingValue);
+
+    Result := Result + Copy(Source, Cursor, P - Cursor);
+    Replacement := '{ automatic web mapping omitted }';
+    if MappingValue <> '' then
+    begin
+      if IsAction and (ClaimedActions.IndexOf(MappingValue) < 0) and
+        (AddedActions.IndexOf(MappingValue) < 0) then
+      begin
+        Replacement := '{@action' + LineEnding + 'Id=' + MappingValue +
+          LineEnding + '@}';
+        AddedActions.Add(MappingValue);
+      end
+      else if (not IsAction) and
+        (ClaimedFunctions.IndexOf(MappingValue) < 0) and
+        (AddedFunctions.IndexOf(MappingValue) < 0) then
+      begin
+        Replacement := '{@function' + LineEnding + 'Name=' + MappingValue +
+          LineEnding + '@}';
+        AddedFunctions.Add(MappingValue);
+      end;
+    end;
+    Result := Result + Replacement;
+    Cursor := BlockEnd + 2;
+    SearchPos := Cursor;
+  end;
+  Result := Result + Copy(Source, Cursor, MaxInt);
+  if (AddedActions.Count = 0) and (AddedFunctions.Count = 0) then Result := '';
 end;
 
 function AllMappingsAvailable(Required, Available: TStrings): Boolean;
@@ -922,7 +1103,7 @@ var
   Candidate: TSharedWebExtension;
   Candidates: TList;
   ExtensionDir, FileName, ModuleName, Source: String;
-  i: Integer;
+  i, OriginalScriptCount: Integer;
   SearchRec: TSearchRec;
   Script: TScriptData;
 begin
@@ -1038,6 +1219,38 @@ begin
   for i := 0 to Candidates.Count - 1 do
     TSharedWebExtension(Candidates[i]).Free;
   Candidates.Free;
+
+  // If an extension has no authored .wepas pair, conservatively try its
+  // desktop Pascal Script against the web runtime. Metadata is reduced to the
+  // official Name/Id mapping contract; native, process, network and direct
+  // file APIs are left for an isolated provider/Windows worker.
+  OriginalScriptCount := FScriptMan.ScriptCount;
+  for i := 0 to OriginalScriptCount - 1 do
+  begin
+    Script := FScriptMan.Scripts[i];
+    if Script.Kind <> skExpr then Continue;
+    Candidate := TSharedWebExtension.Create;
+    try
+      Source := BuildAutomaticWebExtensionSource(Script.Source,
+        ClaimedActions, ClaimedFunctions, Candidate.ActionIds,
+        Candidate.FunctionNames);
+      if Source = '' then
+      begin
+        if AutomaticWebBlockReason(Script.Source) <> '' then
+          LogString('Extension requires isolated worker: ' + Script.Name +
+            ' (' + AutomaticWebBlockReason(Script.Source) + ')');
+        Continue;
+      end;
+      ModuleName := FScriptMan.MakeUniqueScriptName('__auto_web_' + Script.Name);
+      with FScriptMan.AddScript(0, ModuleName, Source) do Kind := skWebExpr;
+      AddMappings(Candidate.ActionIds, ClaimedActions);
+      AddMappings(Candidate.FunctionNames, ClaimedFunctions);
+      LogString('Prepared automatic web extension candidate: ' + ModuleName);
+    finally
+      Candidate.Free;
+    end;
+  end;
+
   ClaimedFunctions.Free;
   ClaimedActions.Free;
   AvailableFunctions.Free;
