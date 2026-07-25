@@ -30,9 +30,20 @@
         button.setAttribute('aria-pressed', String(dark));
     }
 
+    function classifyLegacyShapes() {
+        document.querySelectorAll('img.shape').forEach(function (shape) {
+            const width = Number.parseFloat(shape.style.width) || shape.width;
+            const height = Number.parseFloat(shape.style.height) || shape.height;
+            if (width >= 300 && height >= 60) {
+                shape.classList.add('theme-panel-shape');
+            }
+        });
+    }
+
     applyTheme(storedTheme() || systemTheme());
 
     window.addEventListener('DOMContentLoaded', function () {
+        classifyLegacyShapes();
         if (document.getElementById('theme-toggle')) return;
         const button = document.createElement('button');
         button.type = 'button';

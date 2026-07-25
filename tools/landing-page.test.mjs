@@ -106,12 +106,13 @@ test('connection form builds only routable DataExpress aliases', () => {
 });
 
 test('dark mode follows the system and persists an explicit user choice', () => {
-  assert.match(template, /theme\.js\?v=20260725-1/);
-  assert.match(template, /modern\.css\?v=20260725-4/);
+  assert.match(template, /theme\.js\?v=20260725-2/);
+  assert.match(template, /modern\.css\?v=20260725-5/);
   assert.match(themeScript, /prefers-color-scheme: dark/);
   assert.match(themeScript, /dataexpress-theme/);
   assert.match(themeScript, /localStorage\.setItem\(storageKey, value\)/);
   assert.match(themeScript, /id = 'theme-toggle'/);
+  assert.match(themeScript, /width >= 300 && height >= 60/);
   assert.match(styles, /html\[data-theme="dark"\]/);
   assert.match(styles, /\.connection-compat-ready/);
 });

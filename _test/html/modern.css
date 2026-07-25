@@ -319,6 +319,16 @@ html[data-theme="dark"] .data legend {
     background-color: var(--dx-surface) !important;
 }
 
+html[data-theme="dark"] .data .groupcap {
+    background-color: var(--dx-surface) !important;
+    color: var(--dx-text) !important;
+}
+
+html[data-theme="dark"] .data .theme-panel-shape {
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
 html[data-theme="dark"] .data input,
 html[data-theme="dark"] .data select,
 html[data-theme="dark"] .data textarea {
