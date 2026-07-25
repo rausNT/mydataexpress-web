@@ -181,13 +181,14 @@ for asset in html img languages templates favicon.ico Except.dic LICENSE.txt NOT
     cp -a "$SOURCE/_test/$asset" "$RELEASE_DIR/"
   fi
 done
-install -d -m 0750 -o dataexpress -g dataexpress "$RELEASE_DIR/cache" "$RELEASE_DIR/logs" "$RELEASE_DIR/fb5"
+install -d -m 0750 -o dataexpress -g dataexpress "$RELEASE_DIR/cache" "$RELEASE_DIR/fb5"
 ln -s "$RUNTIME_ROOT/firebird5/lib/libfbclient.so.5.0.4" "$RELEASE_DIR/fb5/libfbclient.so"
 chown -R dataexpress:dataexpress "$RELEASE_DIR"
 
 install -d -m 0770 -o root -g dataexpress "$CONFIG_ROOT"
 install -d -m 0755 -o root -g root "$STATE_ROOT"
 install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT/databases"
+install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT/logs"
 install -d -m 0755 -o root -g dataexpress "$STATE_ROOT/extensions"
 install -m 0660 -o dataexpress -g dataexpress /dev/null "$STATE_ROOT/config.lock"
 find "$STATE_ROOT/extensions" -maxdepth 1 -type f -name 'DX_PLUS_WEB-*.wepas' -delete
@@ -197,6 +198,8 @@ if compgen -G "$STAGED_EXTENSIONS/DX_PLUS_WEB-*.wepas" >/dev/null; then
 fi
 ln -sfn "$STATE_ROOT/extensions" "$RELEASE_DIR/extensions"
 chown -h dataexpress:dataexpress "$RELEASE_DIR/extensions"
+ln -sfn "$STATE_ROOT/logs" "$RELEASE_DIR/logs"
+chown -h dataexpress:dataexpress "$RELEASE_DIR/logs"
 
 CONFIG="$CONFIG_ROOT/dxwebsrv.cfg"
 if [ ! -f "$CONFIG" ]; then
@@ -466,6 +469,17 @@ cat >/etc/logrotate.d/dataexpress-nginx <<'LOGROTATE'
             kill -USR1 "$(cat /run/nginx.pid)"
         fi
     endscript
+}
+/var/lib/dataexpress/logs/dxwebsrv.log {
+    daily
+    rotate 30
+    maxage 30
+    maxsize 50M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 dataexpress dataexpress
 }
 LOGROTATE
 touch /var/log/nginx/dataexpress-access.log /var/log/nginx/dataexpress-error.log

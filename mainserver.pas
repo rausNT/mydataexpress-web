@@ -681,6 +681,64 @@ var
     end;
   end;
 
+  function SafeAuditToken(const Value: String): String;
+  var
+    C: Char;
+    i: Integer;
+  begin
+    Result := '';
+    for i := 1 to Min(Length(Value), 80) do
+    begin
+      C := Value[i];
+      if C in ['a'..'z', 'A'..'Z', '0'..'9', '_', '-', '.', ':'] then
+        Result := Result + C
+      else
+        Result := Result + '_';
+    end;
+    if Result = '' then Result := '-';
+  end;
+
+  procedure LogFormRequestAudit;
+  var
+    FormId, PageNo, RecordId, RowId, TableId: Integer;
+    Operation, Outcome, RequestId: String;
+
+    function SafeIntegerParam(const Name: String): Integer;
+    begin
+      Result := 0;
+      TryStrToInt(ARequest.QueryFields.Values[Name], Result);
+    end;
+
+  begin
+    FormId := SafeIntegerParam('fm');
+    if FormId <= 0 then Exit;
+
+    PageNo := SafeIntegerParam('pg');
+    RecordId := SafeIntegerParam('rec');
+    TableId := SafeIntegerParam('tbl');
+    RowId := SafeIntegerParam('row');
+    Operation := LPm;
+    if Operation = '' then Operation := 'fm';
+    RequestId := ARequest.CustomHeaders.Values['X-REQUEST-ID'];
+    if AResponse.Content = '' then
+      Outcome := 'empty'
+    else
+      Outcome := 'content';
+
+    LogString('AUDIT form_request ip=' + SafeAuditToken(GetRealIP) +
+      ' request_id=' + SafeAuditToken(RequestId) +
+      ' connection=' + SafeAuditToken(ConnectName) +
+      ' operation=' + SafeAuditToken(Operation) +
+      ' form_id=' + IntToStr(FormId) +
+      ' page=' + IntToStr(PageNo) +
+      ' record_id=' + IntToStr(RecordId) +
+      ' table_id=' + IntToStr(TableId) +
+      ' row_id=' + IntToStr(RowId) +
+      ' response_code=' + IntToStr(AResponse.Code) +
+      ' response_bytes=' + IntToStr(Length(AResponse.Content)) +
+      ' outcome=' + Outcome);
+  end;
+
 begin
   {$ifdef windows}
   SetPrecisionMode(pmExtended);
@@ -1444,9 +1502,23 @@ begin
 
   except
     on E: Exception do
-      LogString('HandleRequest exception. ' + E.ClassName + ': ' + E.Message);  // LogError
+    begin
+      LogString('HandleRequest exception. ' + E.ClassName + ': ' + E.Message);
+      if ARequest.Method = 'GET' then
+      begin
+        AResponse.ContentType := GetMimeType('.html');
+        AResponse.Content := HS.ShowErrorPage(rsError, ExceptionToHtml(E));
+      end
+      else
+      begin
+        AResponse.ContentType := GetMimeType('.json');
+        AResponse.Content := MakeJsonErrString(rcAnyError, E.Message);
+      end;
+      AResponse.Code := rcServerError;
+    end;
   end;
   finally
+    LogFormRequestAudit;
     if HS.ResultCode = rcAjaxError then
       AResponse.ContentType := GetMimeType('.json');
 

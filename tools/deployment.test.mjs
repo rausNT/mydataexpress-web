@@ -11,6 +11,7 @@ const saxReader = readFileSync('saxbasereader.pas', 'utf8');
 const appUtils = readFileSync('apputils.pas', 'utf8');
 const modernCss = readFileSync('_test/html/modern.css', 'utf8');
 const gitAttributes = readFileSync('.gitattributes', 'utf8');
+const mainServer = readFileSync('mainserver.pas', 'utf8');
 
 test('one-line installer pins runtime downloads and runs services unprivileged', () => {
   assert.match(gitAttributes, /^\*\.sh text eol=lf$/m);
@@ -29,6 +30,8 @@ test('one-line installer pins runtime downloads and runs services unprivileged',
   assert.match(installer, /"path":"\$uri"/);
   assert.match(installer, /access_log \/var\/log\/nginx\/dataexpress-access\.log dataexpress_json/);
   assert.match(installer, /\/etc\/logrotate\.d\/dataexpress-nginx/);
+  assert.match(installer, /\/var\/lib\/dataexpress\/logs\/dxwebsrv\.log/);
+  assert.match(installer, /create 0640 dataexpress dataexpress/);
   assert.match(installer, /rotate 30/);
   assert.match(installer, /maxage 30/);
   assert.match(installer, /chown www-data:adm \/var\/log\/nginx\/dataexpress-access\.log/);
@@ -49,6 +52,8 @@ test('installer keeps persistent state outside an atomic release', () => {
   assert.match(installer, /CONFIG_ROOT=\/etc\/dataexpress/);
   assert.match(installer, /STATE_ROOT=\/var\/lib\/dataexpress/);
   assert.match(installer, /ln -sfn "\$RELEASE_DIR" "\$APP_ROOT\/current"/);
+  assert.match(installer, /install -d -m 0750 -o dataexpress -g dataexpress "\$STATE_ROOT\/logs"/);
+  assert.match(installer, /ln -sfn "\$STATE_ROOT\/logs" "\$RELEASE_DIR\/logs"/);
   assert.match(installer, /Firebird=5/);
   assert.match(installer, /firebird25/);
   assert.match(installer, /firebird5/);
@@ -60,6 +65,15 @@ test('installer keeps persistent state outside an atomic release', () => {
     installer.indexOf('STAGED_EXTENSIONS=') <
       installer.indexOf('systemctl stop dataexpress-config-reload.path'),
   );
+});
+
+test('server reports unexpected renderer failures and audits form navigation', () => {
+  assert.match(mainServer, /AUDIT form_request/);
+  assert.match(mainServer, /SafeIntegerParam\('fm'\)/);
+  assert.match(mainServer, /response_bytes=/);
+  assert.match(mainServer, /outcome=/);
+  assert.match(mainServer, /AResponse\.Code := rcServerError/);
+  assert.match(mainServer, /LogFormRequestAudit;/);
 });
 
 test('Linux build selects and registers the headless LCL widgetset', () => {

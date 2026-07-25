@@ -75,7 +75,9 @@ test('demo terms clearly prohibit real data and preserve mandatory liability', (
   assert.match(demoTerms, /IP-адрес пользователя/i);
   assert.match(demoTerms, /путь без строки параметров/i);
   assert.match(demoTerms, /обычный срок хранения — до 30 суток/i);
-  assert.match(demoTerms, /не записывает[\s\S]+тела POST-запросов/i);
+  assert.match(demoTerms, /не записыва(?:ет|ют)[\s\S]+тела POST-запросов/i);
+  assert.match(demoTerms, /идентификаторы формы, записи и вложенной таблицы/i);
+  assert.match(demoTerms, /не записывают содержимое полей и записей базы/i);
   assert.match(demoTerms, /href="\/" target="_self"/);
 });
 

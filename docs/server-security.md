@@ -24,6 +24,11 @@ SSH, HTTP и HTTPS. Firebird, DataExpress и панель импорта слу�
   длительность и User-Agent. Тела запросов, пароли и admin-токен в access-log не
   записываются. Logrotate выполняется ежедневно, хранит до 30 ротаций/суток и
   сжимает старые файлы; один файл ограничен 50 МБ.
+- постоянный журнал приложения `/var/lib/dataexpress/logs/dxwebsrv.log` переживает
+  атомарные обновления. Для запросов форм он фиксирует IP, request ID, подключение,
+  операцию, числовые идентификаторы формы/записи/вложенной таблицы, код и размер
+  ответа. Содержимое полей, POST-тела, пароли и ключ администратора не журналируются.
+  Файл ежедневно ротируется, хранится до 30 суток и ограничен 50 МБ.
 
 Парольный вход root намеренно не отключается автоматически: универсальный
 установщик не должен лишать владельца единственного административного доступа.
@@ -41,6 +46,7 @@ systemctl --failed
 curl -fsS http://127.0.0.1/health
 journalctl -u dataexpress-admin -g 'AUDIT ' --since today
 sudo tail -f /var/log/nginx/dataexpress-access.log
+sudo tail -f /var/lib/dataexpress/logs/dxwebsrv.log
 sudo logrotate --debug /etc/logrotate.d/dataexpress-nginx
 ```
 
