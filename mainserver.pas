@@ -698,25 +698,24 @@ var
     if Result = '' then Result := '-';
   end;
 
+  function SafeIntegerQueryParam(const Name: String): Integer;
+  begin
+    Result := 0;
+    TryStrToInt(ARequest.QueryFields.Values[Name], Result);
+  end;
+
   procedure LogFormRequestAudit;
   var
     FormId, PageNo, RecordId, RowId, TableId: Integer;
     Operation, Outcome, RequestId: String;
-
-    function SafeIntegerParam(const Name: String): Integer;
-    begin
-      Result := 0;
-      TryStrToInt(ARequest.QueryFields.Values[Name], Result);
-    end;
-
   begin
-    FormId := SafeIntegerParam('fm');
+    FormId := SafeIntegerQueryParam('fm');
     if FormId <= 0 then Exit;
 
-    PageNo := SafeIntegerParam('pg');
-    RecordId := SafeIntegerParam('rec');
-    TableId := SafeIntegerParam('tbl');
-    RowId := SafeIntegerParam('row');
+    PageNo := SafeIntegerQueryParam('pg');
+    RecordId := SafeIntegerQueryParam('rec');
+    TableId := SafeIntegerQueryParam('tbl');
+    RowId := SafeIntegerQueryParam('row');
     Operation := LPm;
     if Operation = '' then Operation := 'fm';
     RequestId := ARequest.CustomHeaders.Values['X-REQUEST-ID'];
@@ -734,6 +733,50 @@ var
       ' record_id=' + IntToStr(RecordId) +
       ' table_id=' + IntToStr(TableId) +
       ' row_id=' + IntToStr(RowId) +
+      ' response_code=' + IntToStr(AResponse.Code) +
+      ' response_bytes=' + IntToStr(Length(AResponse.Content)) +
+      ' outcome=' + Outcome);
+  end;
+
+  procedure LogNavigationRequestAudit;
+  var
+    Operation, Outcome, RequestId, ResourceType: String;
+    ReportId: Integer;
+  begin
+    if (ARequest.Method <> 'GET') or (ConnectName = '') or
+      (SafeIntegerQueryParam('fm') > 0) then Exit;
+
+    ReportId := SafeIntegerQueryParam('rp');
+    Operation := LPm;
+    if Operation = '' then
+    begin
+      if ARequest.QueryFields.Count > 0 then
+      begin
+        Operation := ARequest.QueryFields.Names[0];
+        if Operation = '' then Operation := ARequest.QueryFields[0];
+      end;
+      if Operation = '' then Operation := 'connection';
+    end;
+    if ReportId > 0 then
+      ResourceType := 'report'
+    else if ARequest.Query = 'logout' then
+      ResourceType := 'logout'
+    else if ARequest.Query = '' then
+      ResourceType := 'connection'
+    else
+      ResourceType := 'request';
+    RequestId := ARequest.CustomHeaders.Values['X-REQUEST-ID'];
+    if AResponse.Content = '' then
+      Outcome := 'empty'
+    else
+      Outcome := 'content';
+
+    LogString('AUDIT navigation_request ip=' + SafeAuditToken(GetRealIP) +
+      ' request_id=' + SafeAuditToken(RequestId) +
+      ' connection=' + SafeAuditToken(ConnectName) +
+      ' resource=' + ResourceType +
+      ' operation=' + SafeAuditToken(Operation) +
+      ' report_id=' + IntToStr(ReportId) +
       ' response_code=' + IntToStr(AResponse.Code) +
       ' response_bytes=' + IntToStr(Length(AResponse.Content)) +
       ' outcome=' + Outcome);
@@ -1519,6 +1562,7 @@ begin
   end;
   finally
     LogFormRequestAudit;
+    LogNavigationRequestAudit;
     if HS.ResultCode = rcAjaxError then
       AResponse.ContentType := GetMimeType('.json');
 

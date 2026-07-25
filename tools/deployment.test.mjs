@@ -70,7 +70,10 @@ test('installer keeps persistent state outside an atomic release', () => {
 
 test('server reports unexpected renderer failures and audits form navigation', () => {
   assert.match(mainServer, /AUDIT form_request/);
-  assert.match(mainServer, /SafeIntegerParam\('fm'\)/);
+  assert.match(mainServer, /SafeIntegerQueryParam\('fm'\)/);
+  assert.match(mainServer, /AUDIT navigation_request/);
+  assert.match(mainServer, /resource=' \+ ResourceType/);
+  assert.match(mainServer, /report_id=/);
   assert.match(mainServer, /response_bytes=/);
   assert.match(mainServer, /outcome=/);
   assert.match(mainServer, /AResponse\.Code := rcServerError/);
