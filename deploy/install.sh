@@ -344,6 +344,10 @@ limit_req_zone $dx_login_key zone=dx_logins:10m rate=10r/m;
 NGINX
 
 install -d -m 0755 /var/www/letsencrypt/.well-known/acme-challenge
+install -d -m 0755 /etc/nginx/snippets
+touch /etc/nginx/snippets/dataexpress-worker-routes.conf
+chown root:root /etc/nginx/snippets/dataexpress-worker-routes.conf
+chmod 0644 /etc/nginx/snippets/dataexpress-worker-routes.conf
 cat >/etc/nginx/sites-available/dataexpress <<'NGINX'
 server {
     listen 80 default_server;
@@ -382,6 +386,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Request-ID $request_id;
     }
+    include /etc/nginx/snippets/dataexpress-worker-routes.conf;
     location / {
         limit_req zone=dx_requests burst=80 nodelay;
         limit_req zone=dx_logins burst=10 nodelay;
@@ -438,6 +443,7 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Request-ID \$request_id;
     }
+    include /etc/nginx/snippets/dataexpress-worker-routes.conf;
     location / {
         limit_req zone=dx_requests burst=80 nodelay;
         limit_req zone=dx_logins burst=10 nodelay;

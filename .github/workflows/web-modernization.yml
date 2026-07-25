@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+      - name: Test Windows worker configuration generator
+        run: python3 -m unittest discover -s deploy/windows-worker -p 'test_*.py'
       - name: Validate Linux one-line installer syntax
         run: bash -n deploy/install.sh
       - name: Install headless LibreOffice
@@ -297,6 +299,8 @@ jobs:
             Copy-Item -Recurse -LiteralPath (Join-Path $PWD "_test/$directory") `
               -Destination (Join-Path $packageRoot $directory)
           }
+          Copy-Item -Recurse -LiteralPath (Join-Path $PWD 'deploy/windows-worker') `
+            -Destination (Join-Path $packageRoot 'worker-tools')
           foreach ($file in @(
             'Except.dic',
             'favicon.ico',
