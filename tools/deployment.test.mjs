@@ -104,7 +104,7 @@ test('legacy report XML keeps bare boolean ampersands and Unicode filters', () =
 });
 
 test('modern skin preserves legacy form geometry and readable list selection', () => {
-  assert.match(modernCss, /\.main form input\[style\*="position"\][\s\S]*min-height: 0/);
+  assert.match(modernCss, /\.main form input\[style\*="position"\][\s\S]*min-height: 0 !important/);
   assert.match(modernCss, /\.listcbx table\.list tr\.sel:hover[\s\S]*color: #fff !important/);
   assert.match(htmlRuntime, /class=database-home href="\/"/);
   for (const template of [

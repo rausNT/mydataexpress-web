@@ -83,13 +83,13 @@ input:focus, select:focus, textarea:focus {
 .main form select[style*="position"],
 .main form textarea[style*="position"],
 .main form button[style*="position"] {
-    min-height: 0;
+    min-height: 0 !important;
 }
 
 .main form input[style*="position"],
 .main form select[style*="position"],
 .main form textarea[style*="position"] {
-    padding-block: 2px;
+    padding-block: 2px !important;
 }
 
 .sidebar {
