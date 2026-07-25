@@ -82,6 +82,7 @@ type
     FPrivateKey: String;
     FShowConnections: Boolean;
     FUseSSL: Boolean;
+    FWindowsWorkerMode: Boolean;
     //function GetLanguageId: Integer;
     //procedure SetLanguageId(AValue: Integer);
   public
@@ -99,6 +100,8 @@ type
     property UseSSL: Boolean read FUseSSL;
     property PrivateKey: String read FPrivateKey;
     property Certificate: String read FCertificate;
+    property WindowsWorkerMode: Boolean read FWindowsWorkerMode
+      write FWindowsWorkerMode;
     //property LanguageId: Integer read GetLanguageId write SetLanguageId;
     property DBList: TDBList read FDBList;
     property ProviderList: TProviderList read FProviderList;
@@ -254,6 +257,7 @@ begin
     FFirebirdVer := ReadString('Server', 'Firebird', '2.5');
     FDebugMode := ReadBool('Server', 'DebugMode', False);
     FShowConnections := ReadBool('Server', 'ShowConnections', False);
+    FWindowsWorkerMode := ReadBool('Server', 'WindowsWorkerMode', False);
 
     ReadSections(Sections);
     for i := 0 to Sections.Count - 1 do

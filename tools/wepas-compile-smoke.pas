@@ -24,6 +24,88 @@ begin
   if not Condition then raise Exception.Create(MessageText);
 end;
 
+{$IFDEF WINDOWS}
+procedure CheckWindowsWorkerCompatibility;
+var
+  AddedActions, AddedFunctions, ClaimedActions, ClaimedFunctions,
+    CompileErrors: TStringList;
+  AutoSource, DesktopSource: String;
+  Manager: TScriptManager;
+  WebScript: TScriptData;
+begin
+  Require(AutomaticWebBlockReason(
+    'begin CreateOleObject(''Scripting.Dictionary''); end;') =
+    'CreateOleObject',
+    'COM must remain blocked outside the isolated worker');
+
+  AppSet.WindowsWorkerMode := True;
+  AddedActions := TStringList.Create;
+  AddedFunctions := TStringList.Create;
+  ClaimedActions := TStringList.Create;
+  ClaimedFunctions := TStringList.Create;
+  try
+    Require(AutomaticWebBlockReason(
+      'begin CreateOleObject(''Scripting.Dictionary''); end;') = '',
+      'The isolated Windows worker did not enable COM');
+    Require(AutomaticWebBlockReason(
+      'begin ShellExecute('''', ''open'', ''tool.exe'', '''', '''', 0); end;') = '',
+      'The isolated Windows worker did not enable Windows APIs');
+
+    DesktopSource :=
+      '{@module' + LineEnding +
+      'Author=DataExpress tests' + LineEnding +
+      'Version=1.0' + LineEnding +
+      'Description=Windows worker COM smoke' + LineEnding +
+      '@}' + LineEnding + LineEnding +
+      '{@function' + LineEnding +
+      'Name=WINDOWS_DICTIONARY_COUNT' + LineEnding +
+      'Args=' + LineEnding +
+      'Result=i' + LineEnding +
+      'Group=Windows' + LineEnding +
+      'Description=Compiles an OLE automation call' + LineEnding +
+      '@}' + LineEnding + LineEnding +
+      'function WindowsDictionaryCount: Integer;' + LineEnding +
+      'var Dictionary: OleVariant;' + LineEnding +
+      'begin' + LineEnding +
+      '  Dictionary := CreateOleObject(''Scripting.Dictionary'');' + LineEnding +
+      '  Result := Dictionary.Count;' + LineEnding +
+      'end;';
+    AutoSource := BuildAutomaticWebExtensionSource(DesktopSource,
+      ClaimedActions, ClaimedFunctions, AddedActions, AddedFunctions);
+    Require(AutoSource <> '',
+      'Windows-only desktop extension was not promoted inside the worker');
+
+    Manager := TScriptManager.Create(nil);
+    try
+      WebScript := Manager.AddScript(0, '__auto_web_windows_com', AutoSource);
+      WebScript.Kind := skWebExpr;
+      Manager.ParseExprModule(WebScript);
+      Manager.CompileModule(WebScript);
+      if Manager.HasErrorsInModule(WebScript) then
+      begin
+        CompileErrors := TStringList.Create;
+        try
+          Manager.ModuleMessagesToList(WebScript, CompileErrors, True);
+          Require(False, 'Windows worker COM source compile failed: ' +
+            CompileErrors.Text);
+        finally
+          CompileErrors.Free;
+        end;
+      end;
+    finally
+      Manager.Free;
+    end;
+  finally
+    AppSet.WindowsWorkerMode := False;
+    ClaimedFunctions.Free;
+    ClaimedActions.Free;
+    AddedFunctions.Free;
+    AddedActions.Free;
+  end;
+  WriteLn('windows-worker-com-compile-ok');
+end;
+{$ENDIF}
+
 procedure CompatibilityStatuses(const Json: String; out FirstStatus,
   SecondStatus: String; out Complete: Boolean);
 var
@@ -90,6 +172,9 @@ begin
       raise Exception.Create('Pascal Script compiler produced an empty program');
 
     AppSet := TAppSettings.Create;
+    {$IFDEF WINDOWS}
+    CheckWindowsWorkerCompatibility;
+    {$ENDIF}
     Manager := TScriptManager.Create(nil);
     try
       DesktopScript := Manager.AddScript(0, ExtractFileName(ParamStr(1)),

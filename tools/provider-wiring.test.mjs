@@ -28,6 +28,22 @@ test('provider configuration is separated from database sections', () => {
   assert.match(settings, /Provider\.TimeoutMs := ReadInteger/);
 });
 
+test('Windows-only APIs are enabled only in the explicit isolated worker mode', () => {
+  const settings = source('appsettings.pas');
+  const scripts = source('scriptmanager.pas');
+  const runtimeTypes = source('dxtypes.pas');
+
+  assert.match(settings,
+    /FWindowsWorkerMode := ReadBool\('Server', 'WindowsWorkerMode', False\)/);
+  assert.match(scripts, /\{\$IFDEF WINDOWS\}, uPSC_ComObj, uPSR_ComObj\{\$ENDIF\}/);
+  assert.match(scripts,
+    /AppSet\.WindowsWorkerMode then\s+SIRegister_ComObj\(Sender\)/);
+  assert.match(scripts,
+    /AppSet\.WindowsWorkerMode then\s+RIRegister_ComObj\(FExec\)/);
+  assert.match(runtimeTypes,
+    /AppSet\.WindowsWorkerMode then Exit/);
+});
+
 test('runtime exposes extension mapping status without breaking legacy forms', () => {
   const scripts = source('scriptmanager.pas');
   const runtimeTypes = source('dxtypes.pas');

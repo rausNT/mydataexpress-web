@@ -712,6 +712,11 @@ var
   i: Integer;
 begin
   Result := '';
+  {$IFDEF WINDOWS}
+  // Desktop-only APIs are permitted exclusively in the isolated Wine/Windows
+  // worker. A regular Windows deployment keeps the same safe default as Linux.
+  if Assigned(AppSet) and AppSet.WindowsWorkerMode then Exit;
+  {$ENDIF}
   for i := Low(BlockedIdentifiers) to High(BlockedIdentifiers) do
     if SourceCodeContainsIdentifier(Source, BlockedIdentifiers[i]) then
       Exit(BlockedIdentifiers[i]);

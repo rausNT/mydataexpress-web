@@ -437,7 +437,8 @@ implementation
 
 uses
   apputils, LazUtf8, FileUtil, StrUtils, dxtypes, compilerdecls, rundecls,
-  uPSR_dll, AppSettings;
+  uPSR_dll, AppSettings
+  {$IFDEF WINDOWS}, uPSC_ComObj, uPSR_ComObj{$ENDIF};
 
 type
 
@@ -976,6 +977,10 @@ begin
   if aName = 'SYSTEM' then
   begin
     SIRegister_All(Sender);
+    {$IFDEF WINDOWS}
+    if Assigned(AppSet) and AppSet.WindowsWorkerMode then
+      SIRegister_ComObj(Sender);
+    {$ENDIF}
     CompilerBindVars(TScriptCompiler(Sender));
   end;
 end;
@@ -1848,6 +1853,10 @@ begin
   RegisterDateTimeLibrary_R(FExec);
   RIRegister_Functions(FExec);
   RegisterDllRuntime(FExec);
+  {$IFDEF WINDOWS}
+  if Assigned(AppSet) and AppSet.WindowsWorkerMode then
+    RIRegister_ComObj(FExec);
+  {$ENDIF}
 end;
 
 destructor TRunScript.Destroy;
