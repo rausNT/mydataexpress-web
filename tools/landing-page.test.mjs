@@ -7,6 +7,7 @@ const serverView = readFileSync(new URL('../htmlshow.pas', import.meta.url), 'ut
 const template = readFileSync(new URL('../_test/html/index.html', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../_test/html/index.css', import.meta.url), 'utf8');
 const script = readFileSync(new URL('../_test/html/index.js', import.meta.url), 'utf8');
+const demoTerms = readFileSync(new URL('../_test/html/demo-terms.html', import.meta.url), 'utf8');
 const russian = readFileSync(new URL('../_test/languages/dxwebsrv.ru.po', import.meta.url), 'utf8');
 
 test('Pascal resource-string identifiers stay unique', () => {
@@ -48,11 +49,23 @@ test('landing template is keyboard-friendly and responsive', () => {
   assert.match(template, /role="alert" aria-live="polite"/);
   assert.match(template, /src="\/html\/index\.js" defer/);
   assert.match(template, /class="upload-database" href="\/admin\/" target="_self"/);
+  assert.match(template, /class="demo-disclaimer"/);
+  assert.match(template, /href="\/html\/demo-terms\.html" target="_self"/);
   assert.match(template, /\[open-existing-connection\]/);
   assert.match(styles, /@media \(max-width: 640px\)/);
+  assert.match(styles, /\.demo-disclaimer/);
   assert.match(styles, /\.connection-grid/);
   assert.match(styles, /\.connection-credentials/);
   assert.match(styles, /:focus-visible/);
+});
+
+test('demo terms clearly prohibit real data and preserve mandatory liability', () => {
+  assert.match(demoTerms, /только\s+вымышленные\s+или\s+надлежащим\s+образом\s+обезличенные\s+данные/i);
+  assert.match(demoTerms, /персональные данные реальных людей/i);
+  assert.match(demoTerms, /не исключает ответственность[\s\S]+запрещено законом/i);
+  assert.match(demoTerms, /ответственность\s+за\s+умышленное\s+нарушение/i);
+  assert.match(demoTerms, /Обязательные права потребителей/i);
+  assert.match(demoTerms, /href="\/" target="_self"/);
 });
 
 test('connection form builds only routable DataExpress aliases', () => {
