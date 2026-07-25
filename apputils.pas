@@ -885,6 +885,10 @@ end;
 
 function XmlToStr(S: String): String;
 begin
+  S := StringReplace(S, '__DATAEXPRESS_OPTIONAL_PARENT__', '?!', [rfReplaceAll]);
+  S := StringReplace(S, '__DATAEXPRESS_PARENT__', '!', [rfReplaceAll]);
+  S := StringReplace(S, '__DATAEXPRESS_OPTIONAL__', '?', [rfReplaceAll]);
+  S := StringReplace(S, '__DATAEXPRESS_EXCLAMATION__', '!', [rfReplaceAll]);
   S := StringReplace(S, '&amp;', '&', [rfReplaceall]);
   S := StringReplace(S, '&quot;', '"', [rfReplaceAll]);
   S := StringReplace(S, '&lt;', '<', [rfReplaceAll]);

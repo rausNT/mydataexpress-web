@@ -7,6 +7,8 @@ const readme = readFileSync('README.md', 'utf8');
 const runtime = readFileSync('dxtypes.pas', 'utf8');
 const htmlRuntime = readFileSync('htmlshow.pas', 'utf8');
 const program = readFileSync('dxwebsrv.pas', 'utf8');
+const saxReader = readFileSync('saxbasereader.pas', 'utf8');
+const appUtils = readFileSync('apputils.pas', 'utf8');
 
 test('one-line installer pins runtime downloads and runs services unprivileged', () => {
   assert.match(installer, /^set -euo pipefail$/m);
@@ -85,4 +87,15 @@ test('README attributes upstream projects and documents the public installer', (
 test('HTML responses never emit internal one- or two-digit result codes as HTTP status', () => {
   assert.match(htmlRuntime, /if FResultCode < 100 then Result := rcServerError/);
   assert.match(htmlRuntime, /property ResultCode: Integer read GetResultCode/);
+});
+
+test('legacy report XML keeps bare boolean ampersands and Unicode filters', () => {
+  assert.match(saxReader, /function NormalizeLegacyXml/);
+  assert.match(saxReader, /not HasNamedEntity\(i\) and not HasNumericEntity\(i\)/);
+  assert.match(saxReader, /__DATAEXPRESS_OPTIONAL_PARENT__/);
+  assert.match(saxReader, /__DATAEXPRESS_PARENT__/);
+  assert.match(saxReader, /__DATAEXPRESS_OPTIONAL__/);
+  assert.match(saxReader, /__DATAEXPRESS_EXCLAMATION__/);
+  assert.match(appUtils, /StringReplace\(S, '__DATAEXPRESS_OPTIONAL_PARENT__', '\?!'/);
+  assert.match(saxReader, /inherited ParseStream\(XmlStream\)/);
 });
