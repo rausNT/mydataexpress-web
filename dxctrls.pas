@@ -1149,11 +1149,7 @@ type
     procedure EnableScrollEvents;
     function ScrollEventsDisabled: Boolean;
     function WhoEdit(ARecId: Integer): String;
-    procedure GotoFormLegacy(const AFormName: String; ARecId: Integer);
-    procedure GotoFormBoolean(const AFormName: String; ARecId: Integer;
-      ANewTab: Boolean);
-    procedure GotoForm(const AFormName: String; ARecId: Integer;
-      AGotoOption: TGotoOption);
+    procedure GotoForm(const AFormName: String; ARecId: Integer; AGotoOption: TGotoOption);
     procedure GotoReport(const AReportName: String; AGotoOption: TGotoOption);
     procedure GotoUrl(const Url: String; AGotoOption: TGotoOption);
     procedure MessageDlg(const Title, Msg: String; MsgType: TMsgDlgType; Buttons: TMsgDlgButtons; ClickHandler: TMsgButtonClickEvent);
@@ -5095,20 +5091,6 @@ function TdxForm.WhoEdit(ARecId: Integer): String;
 begin
   if FPId > 0 then raise Exception.CreateFmt(rsInvalidMethotCall, [FormCaption]);
   Result := TSsRecordSet(FRS).WhoEdit(ARecId);
-end;
-
-procedure TdxForm.GotoFormLegacy(const AFormName: String; ARecId: Integer);
-begin
-  GotoForm(AFormName, ARecId, gtoDefault);
-end;
-
-procedure TdxForm.GotoFormBoolean(const AFormName: String; ARecId: Integer;
-  ANewTab: Boolean);
-begin
-  if ANewTab then
-    GotoForm(AFormName, ARecId, gtoNewTab)
-  else
-    GotoForm(AFormName, ARecId, gtoDefault);
 end;
 
 procedure TdxForm.GotoForm(const AFormName: String; ARecId: Integer;

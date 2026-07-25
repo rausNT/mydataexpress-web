@@ -1040,8 +1040,6 @@ begin
     RegisterMethod('function GetRecordsCaption: String');
     RegisterMethod('function GetRecordCaption: String');
     RegisterMethod('function WhoEdit(ARecId: Integer): String');
-    RegisterMethod('procedure GotoForm(const AFormName: String; ARecId: Integer)');
-    RegisterMethod('procedure GotoForm(const AFormName: String; ARecId: Integer; ANewTab: Boolean)');
     RegisterMethod('procedure GotoForm(const AFormName: String; ARecId: Integer; AGotoOption: TGotoOption)');
     RegisterMethod('procedure GotoReport(const AReportName: String; AGotoOption: TGotoOption)');
     RegisterMethod('procedure GotoUrl(const Url: String; AGotoOption: TGotoOption)');

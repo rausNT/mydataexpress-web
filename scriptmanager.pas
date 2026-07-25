@@ -432,6 +432,7 @@ var
 
 function ScriptLastErrorToString: String;
 function EPSExceptionToString(E: EPSException): String;
+function NormalizeLegacyGotoFormCalls(const Source: String): String;
 
 implementation
 
@@ -439,6 +440,191 @@ uses
   apputils, LazUtf8, FileUtil, StrUtils, dxtypes, compilerdecls, rundecls,
   uPSR_dll, AppSettings
   {$IFDEF WINDOWS}, uPSC_ComObj, uPSR_ComObj{$ENDIF};
+
+function NormalizeLegacyGotoFormCalls(const Source: String): String;
+var
+  AfterName, ClosePos, CommaCount, Cursor, Depth, FirstComma, i, j,
+    SecondComma: Integer;
+  ThirdArgument: String;
+
+  function IsIdentifierChar(C: Char): Boolean;
+  begin
+    Result := C in ['a'..'z', 'A'..'Z', '0'..'9', '_'];
+  end;
+
+  function FindCallEnd(OpenPos: Integer; out AFirstComma, ASecondComma,
+    ACommaCount: Integer): Integer;
+  var
+    C: Char;
+    P: Integer;
+  begin
+    Result := 0;
+    AFirstComma := 0;
+    ASecondComma := 0;
+    ACommaCount := 0;
+    Depth := 1;
+    P := OpenPos + 1;
+    while P <= Length(Source) do
+    begin
+      C := Source[P];
+      if C = '''' then
+      begin
+        Inc(P);
+        while P <= Length(Source) do
+        begin
+          if Source[P] = '''' then
+          begin
+            if (P < Length(Source)) and (Source[P + 1] = '''') then
+              Inc(P, 2)
+            else
+            begin
+              Inc(P);
+              Break;
+            end;
+          end
+          else
+            Inc(P);
+        end;
+        Continue;
+      end;
+      if C = '{' then
+      begin
+        Inc(P);
+        while (P <= Length(Source)) and (Source[P] <> '}') do Inc(P);
+        Inc(P);
+        Continue;
+      end;
+      if (C = '(') and (P < Length(Source)) and (Source[P + 1] = '*') then
+      begin
+        Inc(P, 2);
+        while (P < Length(Source)) and
+          not ((Source[P] = '*') and (Source[P + 1] = ')')) do Inc(P);
+        Inc(P, 2);
+        Continue;
+      end;
+      if (C = '/') and (P < Length(Source)) and (Source[P + 1] = '/') then
+      begin
+        Inc(P, 2);
+        while (P <= Length(Source)) and not (Source[P] in [#10, #13]) do
+          Inc(P);
+        Continue;
+      end;
+      if C = '(' then
+        Inc(Depth)
+      else if C = ')' then
+      begin
+        Dec(Depth);
+        if Depth = 0 then Exit(P);
+      end
+      else if (C = ',') and (Depth = 1) then
+      begin
+        Inc(ACommaCount);
+        if ACommaCount = 1 then AFirstComma := P
+        else if ACommaCount = 2 then ASecondComma := P;
+      end;
+      Inc(P);
+    end;
+  end;
+
+begin
+  Result := '';
+  Cursor := 1;
+  i := 1;
+  while i <= Length(Source) do
+  begin
+    if Source[i] = '''' then
+    begin
+      Inc(i);
+      while i <= Length(Source) do
+      begin
+        if Source[i] = '''' then
+        begin
+          if (i < Length(Source)) and (Source[i + 1] = '''') then
+            Inc(i, 2)
+          else
+          begin
+            Inc(i);
+            Break;
+          end;
+        end
+        else
+          Inc(i);
+      end;
+      Continue;
+    end;
+    if Source[i] = '{' then
+    begin
+      Inc(i);
+      while (i <= Length(Source)) and (Source[i] <> '}') do Inc(i);
+      Inc(i);
+      Continue;
+    end;
+    if (Source[i] = '(') and (i < Length(Source)) and
+      (Source[i + 1] = '*') then
+    begin
+      Inc(i, 2);
+      while (i < Length(Source)) and
+        not ((Source[i] = '*') and (Source[i + 1] = ')')) do Inc(i);
+      Inc(i, 2);
+      Continue;
+    end;
+    if (Source[i] = '/') and (i < Length(Source)) and
+      (Source[i + 1] = '/') then
+    begin
+      Inc(i, 2);
+      while (i <= Length(Source)) and not (Source[i] in [#10, #13]) do
+        Inc(i);
+      Continue;
+    end;
+    if (Source[i] <> '.') or
+      not SameText(Copy(Source, i + 1, 8), 'GotoForm') then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    AfterName := i + 9;
+    if (AfterName <= Length(Source)) and
+      IsIdentifierChar(Source[AfterName]) then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    j := AfterName;
+    while (j <= Length(Source)) and (Source[j] in [' ', #9, #10, #13]) do
+      Inc(j);
+    if (j > Length(Source)) or (Source[j] <> '(') then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    ClosePos := FindCallEnd(j, FirstComma, SecondComma, CommaCount);
+    if ClosePos = 0 then Break;
+    if CommaCount = 1 then
+    begin
+      Result := Result + Copy(Source, Cursor, ClosePos - Cursor) +
+        ', gtoDefault';
+      Cursor := ClosePos;
+    end
+    else if CommaCount = 2 then
+    begin
+      ThirdArgument := Trim(Copy(Source, SecondComma + 1,
+        ClosePos - SecondComma - 1));
+      if SameText(ThirdArgument, 'False') or
+        SameText(ThirdArgument, 'True') then
+      begin
+        Result := Result + Copy(Source, Cursor,
+          SecondComma - Cursor + 1);
+        if SameText(ThirdArgument, 'True') then
+          Result := Result + ' gtoNewTab'
+        else
+          Result := Result + ' gtoDefault';
+        Cursor := ClosePos;
+      end;
+    end;
+    i := ClosePos + 1;
+  end;
+  Result := Result + Copy(Source, Cursor, MaxInt);
+end;
 
 type
 
@@ -2668,7 +2854,7 @@ begin
 
   try
 
-  if FCompiler.Compile(SD.Source) then
+  if FCompiler.Compile(NormalizeLegacyGotoFormCalls(SD.Source)) then
   begin
     if FCompiler.GetOutput(SD.Bin) = False then
     begin

@@ -168,7 +168,7 @@ begin
     Compiler.AllowDuplicateRegister := False;
     Compiler.OnUses := @RegisterSystemDeclarations;
 
-    if not Compiler.Compile(WebSource.Text) then
+    if not Compiler.Compile(NormalizeLegacyGotoFormCalls(WebSource.Text)) then
     begin
       for i := 0 to Compiler.MsgCount - 1 do
         WriteLn(Compiler.Msg[i].MessageToString);

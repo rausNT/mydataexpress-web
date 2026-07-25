@@ -94,21 +94,17 @@ test('runtime exposes extension mapping status without breaking legacy forms', (
   assert.match(source('dxactions.pas'), /not EAction\.WebExists then Exit/);
 });
 
-test('legacy DX_PLUS web modules keep every historical GotoForm signature', () => {
-  const compiler = source('compilerdecls.pas');
-  const runtime = source('rundecls.pas');
-  const controls = source('dxctrls.pas');
+test('legacy DX_PLUS web modules normalize every historical GotoForm signature', () => {
+  const scripts = source('scriptmanager.pas');
   const smoke = source('tools/wepas-compile-smoke.pas');
 
-  assert.match(compiler,
-    /GotoForm\(const AFormName: String; ARecId: Integer\)'\)/);
-  assert.match(compiler,
-    /GotoForm\(const AFormName: String; ARecId: Integer; ANewTab: Boolean\)'\)/);
-  assert.match(compiler,
-    /GotoForm\(const AFormName: String; ARecId: Integer; AGotoOption: TGotoOption\)'\)/);
-  assert.match(runtime, /@TdxForm\.GotoFormLegacy, 'GotoForm'/);
-  assert.match(runtime, /@TdxForm\.GotoFormBoolean, 'GotoForm'/);
-  assert.match(controls, /if ANewTab then\s+GotoForm\(AFormName, ARecId, gtoNewTab\)/);
+  assert.match(scripts, /function NormalizeLegacyGotoFormCalls/);
+  assert.match(scripts, /CommaCount = 1/);
+  assert.match(scripts, /gtoDefault/);
+  assert.match(scripts, /gtoNewTab/);
+  assert.match(scripts,
+    /FCompiler\.Compile\(NormalizeLegacyGotoFormCalls\(SD\.Source\)\)/);
   assert.match(smoke, /Self\.GotoForm\(''Compatibility'', 1\)/);
   assert.match(smoke, /Self\.GotoForm\(''Compatibility'', 1, False\)/);
+  assert.match(smoke, /NormalizeLegacyGotoFormCalls\(WebSource\.Text\)/);
 });
