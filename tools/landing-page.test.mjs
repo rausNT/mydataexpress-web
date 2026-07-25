@@ -50,12 +50,15 @@ test('landing template is keyboard-friendly and responsive', () => {
   assert.match(template, /src="\/html\/index\.js" defer/);
   assert.match(template, /class="upload-database" href="\/admin\/" target="_self"/);
   assert.match(template, /class="demo-disclaimer"/);
+  assert.match(template, /class="dev-joke"/);
+  assert.match(template, /EPAS<\/code> к Linux/);
   assert.match(template, /href="\/html\/demo-terms\.html" target="_self"/);
-  assert.match(template, /index\.css\?v=20260725-4/);
-  assert.match(demoTerms, /index\.css\?v=20260725-4/);
+  assert.match(template, /index\.css\?v=20260725-5/);
+  assert.match(demoTerms, /index\.css\?v=20260725-5/);
   assert.match(template, /\[open-existing-connection\]/);
   assert.match(styles, /@media \(max-width: 640px\)/);
   assert.match(styles, /\.demo-disclaimer/);
+  assert.match(styles, /\.dev-joke/);
   assert.match(styles, /\.connection-grid/);
   assert.match(styles, /\.connection-credentials/);
   assert.match(styles, /:focus-visible/);

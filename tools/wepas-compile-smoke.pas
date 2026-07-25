@@ -31,6 +31,7 @@ var
     CompileErrors: TStringList;
   AutoSource, DesktopSource: String;
   Manager: TScriptManager;
+  MetaData: TMetaData;
   WebScript: TScriptData;
 begin
   Require(AutomaticWebBlockReason(
@@ -75,8 +76,9 @@ begin
     Require(AutoSource <> '',
       'Windows-only desktop extension was not promoted inside the worker');
 
-    Manager := TScriptManager.Create(nil);
+    MetaData := TMetaData.Create;
     try
+      Manager := MetaData.ScriptMan;
       WebScript := Manager.AddScript(0, '__auto_web_windows_com', AutoSource);
       WebScript.Kind := skWebExpr;
       Manager.ParseExprModule(WebScript);
@@ -93,7 +95,7 @@ begin
         end;
       end;
     finally
-      Manager.Free;
+      MetaData.Free;
     end;
   finally
     AppSet.WindowsWorkerMode := False;

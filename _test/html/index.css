@@ -67,6 +67,34 @@
     box-shadow: 0 0 0 5px rgba(34, 197, 94, .13);
 }
 
+.dev-joke {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 10px;
+    margin: 0 0 18px;
+    padding: 13px 17px;
+    border: 1px solid rgba(99, 102, 241, .18);
+    border-radius: 16px;
+    background: rgba(238, 242, 255, .72);
+    color: #39415f;
+}
+
+.dev-joke > span {
+    color: #6366f1;
+    font: 700 34px/1 Georgia, serif;
+}
+
+.dev-joke p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.dev-joke code {
+    color: #4338ca;
+    font-weight: 750;
+}
+
 .demo-disclaimer {
     display: grid;
     grid-template-columns: 42px minmax(0, 1fr);
