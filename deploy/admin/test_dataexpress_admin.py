@@ -7,6 +7,7 @@ import unittest
 import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).with_name("dataexpress_admin.py")
@@ -153,6 +154,35 @@ class AdminImportTests(unittest.TestCase):
             self.assertIsNone(
                 ADMIN.inspect_firebird_database(database, "/usr/bin/false", os.environ.copy())
             )
+
+    def test_web_schema_migration_adds_lastmodified_idempotently(self):
+        settings = {
+            "modern_isql_path": "/opt/firebird/bin/isql",
+            "modern_firebird_env": {"FIREBIRD": "/opt/firebird"},
+        }
+        completed = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch.object(ADMIN.subprocess, "run", return_value=completed) as run:
+            ADMIN.ensure_web_schema(Path("/data/demo.dxdb"), settings)
+        arguments, options = run.call_args
+        self.assertEqual(arguments[0][0], "/opt/firebird/bin/isql")
+        self.assertEqual(arguments[0][-1], "/data/demo.dxdb")
+        self.assertIn("RDB$RELATION_NAME = 'DX_IMAGES'", options["input"])
+        self.assertIn("CREATE TABLE DX_IMAGES", options["input"])
+        self.assertIn("RDB$FIELD_NAME = 'LASTMODIFIED'", options["input"])
+        self.assertIn("ALTER TABLE DX_MAIN ADD LASTMODIFIED TIMESTAMP", options["input"])
+        self.assertIn("WHERE LASTMODIFIED IS NULL", options["input"])
+
+    def test_web_schema_migration_rejects_isql_errors(self):
+        settings = {
+            "modern_isql_path": "/opt/firebird/bin/isql",
+            "modern_firebird_env": {},
+        }
+        completed = mock.Mock(
+            returncode=0, stdout="Statement failed, SQL error code = -206", stderr=""
+        )
+        with mock.patch.object(ADMIN.subprocess, "run", return_value=completed):
+            with self.assertRaises(ADMIN.ImportErrorResponse):
+                ADMIN.ensure_web_schema(Path("/data/demo.dxdb"), settings)
 
 
 if __name__ == "__main__":

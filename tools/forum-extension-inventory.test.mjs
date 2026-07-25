@@ -15,6 +15,10 @@ test('crawls catalog topics, pagination and attachments without copying source i
       <a href="viewtopic.php?f=16&amp;t=2">Second extension</a>
       <a href="/viewtopic.php?t=1">First extension</a>
       <a href="/download/file.php?id=9">Direct attachment</a>
+      <a href="/exts.php?start=25">2</a>
+    `)],
+    ['https://forum.example/exts.php?start=25', response(`
+      <a href="/viewtopic.php?t=3">Third extension</a>
     `)],
     ['https://forum.example/viewtopic.php?t=1', response(`
       <a href="viewtopic.php?t=1&amp;start=20">2</a>
@@ -24,6 +28,7 @@ test('crawls catalog topics, pagination and attachments without copying source i
       <a href="/download/file.php?id=11">archive</a>
     `)],
     ['https://forum.example/viewtopic.php?t=2', response('<p>No attachments</p>')],
+    ['https://forum.example/viewtopic.php?t=3', response('<p>No attachments</p>')],
     ['https://forum.example/download/file.php?id=9', response('direct', {
       headers: { 'content-disposition': 'attachment; filename="direct.epas"' },
     })],
@@ -46,8 +51,8 @@ test('crawls catalog topics, pagination and attachments without copying source i
   });
 
   assert.deepEqual(inventory.summary, {
-    topics: 2,
-    topicPages: 3,
+    topics: 3,
+    topicPages: 4,
     topicErrors: 0,
     attachments: 3,
     attachmentErrors: 0,
@@ -56,11 +61,35 @@ test('crawls catalog topics, pagination and attachments without copying source i
     types: { epas: 2, zip: 1 },
     complete: true,
   });
-  assert.deepEqual(inventory.topics.map(item => item.id), [1, 2]);
+  assert.deepEqual(inventory.catalogPages, [0, 25]);
+  assert.deepEqual(inventory.topics.map(item => item.id), [1, 2, 3]);
   assert.deepEqual(inventory.topics[0].attachmentIds, [10, 11]);
   assert.deepEqual(inventory.attachments.map(item => item.id), [9, 10, 11]);
   assert.deepEqual(inventory.attachments[1].topicIds, [1]);
   assert.equal(JSON.stringify(inventory).includes('private source text'), false);
+});
+
+test('metadata-only inventory keeps attachment labels without downloading files', async () => {
+  const requested = [];
+  const inventory = await buildForumExtensionInventory({
+    catalogUrl: 'https://forum.example/viewforum.php?f=40',
+    inspectAttachments: false,
+    fetchImpl: async url => {
+      requested.push(String(url));
+      if (String(url) === 'https://forum.example/viewforum.php?f=40') {
+        return response('<a href="/viewtopic.php?t=7">Demo database</a>');
+      }
+      if (String(url) === 'https://forum.example/viewtopic.php?t=7') {
+        return response('<a href="/download/file.php?id=70">demo.dxdb.zip</a>');
+      }
+      return response('not found', { status: 404 });
+    },
+  });
+
+  assert.equal(requested.some(url => url.includes('download/file.php')), false);
+  assert.equal(inventory.attachments[0].originalName, 'demo.dxdb.zip');
+  assert.equal(inventory.attachments[0].extension, 'zip');
+  assert.equal(inventory.attachments[0].inspected, false);
 });
 
 test('strict completeness records topic and attachment failures', async () => {

@@ -2421,7 +2421,10 @@ end;
 
 function THtmlShow.ShowIndexPage: String;
 var
-  AppVer, ConnectionItems, Connections, ConnectionName, ConnectionUrl: String;
+  AppVer, ConnectionAlias, ConnectionCredentials, ConnectionDescription,
+  ConnectionItems, ConnectionMeta, Connections, ConnectionName,
+  ConnectionSource, ConnectionUrl: String;
+  DBItem: TDBItem;
   i: Integer;
 
   function IsValidConnectionName(const Value: String): Boolean;
@@ -2444,13 +2447,31 @@ begin
   if AppSet.ShowConnections then
     for i := 0 to AppSet.DBList.Count - 1 do
     begin
-      ConnectionName := AppSet.DBList[i].Name;
-      if not IsValidConnectionName(ConnectionName) then Continue;
-      ConnectionUrl := '/' + LowerCase(ConnectionName) + '/';
+      DBItem := AppSet.DBList[i];
+      ConnectionAlias := DBItem.Name;
+      if not IsValidConnectionName(ConnectionAlias) then Continue;
+      ConnectionName := Trim(DBItem.Title);
+      if ConnectionName = '' then ConnectionName := ConnectionAlias;
+      ConnectionDescription := Trim(DBItem.Description);
+      ConnectionCredentials := Trim(DBItem.DemoCredentials);
+      ConnectionSource := Trim(DBItem.SourceUrl);
+      ConnectionUrl := '/' + LowerCase(ConnectionAlias) + '/';
+      ConnectionMeta := '<span class="connection-alias">/' +
+        StrToHtml(LowerCase(ConnectionAlias)) + '/</span>';
+      if ConnectionDescription <> '' then
+        ConnectionMeta := ConnectionMeta + '<span class="connection-description">' +
+          StrToHtml(ConnectionDescription) + '</span>';
+      if ConnectionCredentials <> '' then
+        ConnectionMeta := ConnectionMeta + '<span class="connection-credentials">' +
+          StrToHtml(rsDemoAccess) + ': ' + StrToHtml(ConnectionCredentials) + '</span>';
+      if Pos('https://forum.mydataexpress.ru/', LowerCase(ConnectionSource)) = 1 then
+        ConnectionMeta := ConnectionMeta + '<span class="connection-source">' +
+          StrToHtml(rsForumSource) + '</span>';
       ConnectionItems := ConnectionItems +
         '<a class="connection-card" href="' + ConnectionUrl + '" target="_self">' +
         '<span class="connection-icon" aria-hidden="true"><img src="/img/database.svg" alt=""></span>' +
-        '<span class="connection-name">' + StrToHtml(ConnectionName) + '</span>' +
+        '<span class="connection-details"><span class="connection-name">' +
+        StrToHtml(ConnectionName) + '</span>' + ConnectionMeta + '</span>' +
         '<span class="connection-arrow" aria-hidden="true">&#8594;</span></a>';
     end;
   if ConnectionItems <> '' then

@@ -19,10 +19,14 @@ test('Pascal resource-string identifiers stay unique', () => {
 test('connection discovery is explicit and does not expose database paths by default', () => {
   assert.match(settings, /FShowConnections := ReadBool\('Server', 'ShowConnections', False\)/);
   assert.match(settings, /property ShowConnections: Boolean read FShowConnections/);
+  assert.match(settings, /Item\.DemoCredentials := ReadString\(Sect, 'DemoCredentials', ''\)/);
   assert.match(serverView, /if AppSet\.ShowConnections then/);
   assert.match(serverView, /Value\[j\] in \['a'\.\.'z', 'A'\.\.'Z', '0'\.\.'9', '_'\]/);
-  assert.match(serverView, /ConnectionUrl := '\/' \+ LowerCase\(ConnectionName\) \+ '\/'/);
+  assert.match(serverView, /ConnectionUrl := '\/' \+ LowerCase\(ConnectionAlias\) \+ '\/'/);
   assert.match(serverView, /StrToHtml\(ConnectionName\)/);
+  assert.match(serverView, /StrToHtml\(ConnectionDescription\)/);
+  assert.match(serverView, /StrToHtml\(ConnectionCredentials\)/);
+  assert.match(serverView, /class="connection-details"/);
   assert.match(
     serverView,
     /StringReplace\(Result, '\[landing-title\]', StrToHtml\(rsLandingTitle\), \[rfReplaceAll\]\)/,
@@ -47,6 +51,7 @@ test('landing template is keyboard-friendly and responsive', () => {
   assert.match(template, /\[open-existing-connection\]/);
   assert.match(styles, /@media \(max-width: 640px\)/);
   assert.match(styles, /\.connection-grid/);
+  assert.match(styles, /\.connection-credentials/);
   assert.match(styles, /:focus-visible/);
 });
 

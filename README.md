@@ -35,7 +35,8 @@ curl -fsSL https://raw.githubusercontent.com/rausNT/mydataexpress-web/main/deplo
   `templates`, а также добавление шаблонов к уже подключённой базе;
 - `/health` — проверка процесса DataExpress.
 
-Ключ панели создаётся установщиком и хранится в `/etc/dataexpress/admin.env`.
+Ключ панели создаётся установщиком, не печатается в общий журнал и хранится в
+`/etc/dataexpress/admin.env`.
 Посмотреть его на сервере:
 
 ```bash
@@ -57,7 +58,10 @@ sudo sed -n 's/^DX_ADMIN_TOKEN=//p' /etc/dataexpress/admin.env
   traversal/symlink, атомарной регистрацией подключения и безопасной установкой
   DOCX/DOCM/XML/ODT/ODS/HTML-шаблонов;
 - определение Firebird ODS 11/12/13 и автоматическая миграция старых баз через
-  backup/restore в Firebird 5 ODS 13;
+  backup/restore в Firebird 5 ODS 13, включая обновление служебной web-схемы;
+- каталог бесплатных баз из
+  [раздела форума](https://forum.mydataexpress.ru/viewforum.php?f=40) с исходными
+  ссылками, понятными названиями, описаниями и проверенными демо-логинами;
 - общесерверный каталог переносимых `.wepas`: модуль из самой базы имеет приоритет,
   а отсутствующий стандартный web-модуль подхватывается без изменения `.DXDB`;
 - проверенные по хешу официальные web-версии `DX_PLUS 1.71`–`1.8.1` с

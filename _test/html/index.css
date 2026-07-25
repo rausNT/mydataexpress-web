@@ -208,7 +208,7 @@
     grid-template-columns: 38px minmax(0, 1fr) auto;
     gap: 11px;
     align-items: center;
-    min-height: 62px;
+    min-height: 96px;
     padding: 10px 14px;
     border: 1px solid var(--dx-border);
     border-radius: 13px;
@@ -249,6 +249,39 @@
     font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.connection-details {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.connection-alias,
+.connection-source {
+    color: var(--dx-muted);
+    font-size: 11px;
+}
+
+.connection-description {
+    display: -webkit-box;
+    overflow: hidden;
+    color: #53647d;
+    font-size: 12px;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
+.connection-credentials {
+    width: fit-content;
+    margin-top: 3px;
+    padding: 3px 7px;
+    border-radius: 7px;
+    background: #e7efff;
+    color: #244d9d;
+    font-size: 11px;
+    font-weight: 700;
 }
 
 .connection-arrow {

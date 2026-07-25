@@ -49,6 +49,7 @@ type
   TDBItem = class
   public
     Name, DatabasePath, TemplatesPath, DBPwd, ServiceId: String;
+    Title, Description, DemoCredentials, SourceUrl: String;
     SessionTime: Integer;
     KeepMetaData: Boolean;
   end;
@@ -280,6 +281,10 @@ begin
         Item.SessionTime := ReadInteger(Sect, 'SessionTime', 0);
         Item.DBPwd := ReadString(Sect, 'DBPwd', '');
         Item.ServiceId := ReadString(Sect, 'ServiceId', '');
+        Item.Title := ReadString(Sect, 'Title', '');
+        Item.Description := ReadString(Sect, 'Description', '');
+        Item.DemoCredentials := ReadString(Sect, 'DemoCredentials', '');
+        Item.SourceUrl := ReadString(Sect, 'SourceUrl', '');
         Item.KeepMetaData := ReadBool(Sect, 'KeepMetadata', False);
       end;
     end;

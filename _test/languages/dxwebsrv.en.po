@@ -867,6 +867,14 @@ msgstr ""
 msgid "Enter the connection name from dxwebsrv.cfg."
 msgstr ""
 
+#: strconsts.rsdemoaccess
+msgid "Demo access"
+msgstr ""
+
+#: strconsts.rsforumsource
+msgid "Source: DataExpress forum"
+msgstr ""
+
 #: strconsts.rslandingmeta
 #, object-pascal-format
 msgid "Version: %s &middot; Copyright &#169; 2016-2026 Pavel Duborkin<br><a href=\"https://mydataexpress.ru\">Project Website</a> &middot; <a href=\"https://forum.mydataexpress.ru\">Forum</a> &middot; <a href=\"https://wiki.mydataexpress.ru\">Wiki</a>"

@@ -292,7 +292,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/etc/dataexpress /var/lib/dataexpress
+ReadWritePaths=/etc/dataexpress /var/lib/dataexpress /opt/dataexpress/runtime/firebird25 /opt/dataexpress/runtime/firebird5
 
 [Install]
 WantedBy=multi-user.target

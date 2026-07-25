@@ -8,6 +8,7 @@
     "audit:fixtures": "node tools/extension-audit.mjs test/fixtures/extensions",
     "report:extension-corpus": "node tools/extension-corpus-report.mjs",
     "inventory:forum-extensions": "node tools/forum-extension-inventory.mjs",
+    "catalog:forum-databases": "node tools/forum-database-catalog.mjs",
     "extract:forum-extensions": "node tools/forum-extension-extract.mjs",
     "verify:extension-bundle": "node tools/extension-bundle-verify.mjs",
     "migrate:extensions": "node tools/extension-batch-migrate.mjs",

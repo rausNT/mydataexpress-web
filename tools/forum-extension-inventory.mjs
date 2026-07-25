@@ -69,7 +69,26 @@ function topicPageLink(href, baseUrl, catalogUrl, topicId) {
   return { start: Number(start), url: url.href };
 }
 
-function attachmentLink(href, baseUrl, catalogUrl) {
+function catalogPageLink(href, baseUrl, catalogUrl) {
+  let url;
+  try {
+    url = new URL(href, baseUrl);
+  } catch {
+    return null;
+  }
+  const catalog = new URL(catalogUrl);
+  if (!sameForumHost(url, catalogUrl) || url.pathname !== catalog.pathname) return null;
+  const forumId = catalog.searchParams.get('f');
+  if (forumId && url.searchParams.get('f') !== forumId) return null;
+  const start = url.searchParams.get('start') || '0';
+  if (!/^\d+$/.test(start)) return null;
+  url.protocol = 'https:';
+  url.hash = '';
+  url.search = `${forumId ? `?f=${forumId}&` : '?'}start=${start}`;
+  return { start: Number(start), url: url.href };
+}
+
+function attachmentLink(href, baseUrl, catalogUrl, label = '') {
   let url;
   try {
     url = new URL(href, baseUrl);
@@ -82,7 +101,7 @@ function attachmentLink(href, baseUrl, catalogUrl) {
   url.protocol = 'https:';
   url.hash = '';
   url.search = `?id=${id}`;
-  return { id: Number(id), url: url.href };
+  return { id: Number(id), url: url.href, label: label.trim() };
 }
 
 function parseContentDisposition(value, id) {
@@ -174,8 +193,12 @@ function addAttachment(target, item, topicId = null) {
       id: item.id,
       url: item.url,
       topicIds: [],
+      labels: [],
     };
     target.set(item.id, attachment);
+  }
+  if (item.label && !attachment.labels.includes(item.label)) {
+    attachment.labels.push(item.label);
   }
   if (topicId !== null && !attachment.topicIds.includes(topicId)) {
     attachment.topicIds.push(topicId);
@@ -227,6 +250,7 @@ export async function buildForumExtensionInventory({
   downloadDir = '',
   maxAttachmentBytes = DEFAULT_MAX_ATTACHMENT_BYTES,
   maxTotalBytes = DEFAULT_MAX_TOTAL_BYTES,
+  inspectAttachments = true,
   generatedAt = new Date().toISOString(),
 } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('fetch is unavailable');
@@ -239,20 +263,31 @@ export async function buildForumExtensionInventory({
   };
   if (downloadDir) await mkdir(resolve(downloadDir), { recursive: true });
 
-  const catalogResponse = await fetchWithRetry(catalogUrl, options);
-  const catalogHtml = await catalogResponse.text();
   const topicMap = new Map();
   const attachmentMap = new Map();
-
-  for (const anchor of anchors(catalogHtml)) {
-    const topic = topicLink(anchor.href, catalogUrl, catalogUrl);
-    if (topic) {
-      const current = topicMap.get(topic.id) || { ...topic, titles: [] };
-      if (anchor.text && !current.titles.includes(anchor.text)) current.titles.push(anchor.text);
-      topicMap.set(topic.id, current);
+  const catalogPages = new Map([[0, catalogUrl]]);
+  let catalogPageIndex = 0;
+  while (catalogPageIndex < catalogPages.size) {
+    const starts = [...catalogPages.keys()].sort((left, right) => left - right);
+    const start = starts[catalogPageIndex];
+    const pageUrl = catalogPages.get(start);
+    catalogPageIndex += 1;
+    const catalogResponse = await fetchWithRetry(pageUrl, options);
+    const catalogHtml = await catalogResponse.text();
+    for (const anchor of anchors(catalogHtml)) {
+      const page = catalogPageLink(anchor.href, pageUrl, catalogUrl);
+      if (page && !catalogPages.has(page.start)) {
+        catalogPages.set(page.start, page.url);
+      }
+      const topic = topicLink(anchor.href, pageUrl, catalogUrl);
+      if (topic) {
+        const current = topicMap.get(topic.id) || { ...topic, titles: [] };
+        if (anchor.text && !current.titles.includes(anchor.text)) current.titles.push(anchor.text);
+        topicMap.set(topic.id, current);
+      }
+      const attachment = attachmentLink(anchor.href, pageUrl, catalogUrl, anchor.text);
+      if (attachment) addAttachment(attachmentMap, attachment);
     }
-    const attachment = attachmentLink(anchor.href, catalogUrl, catalogUrl);
-    if (attachment) addAttachment(attachmentMap, attachment);
   }
 
   const topics = [...topicMap.values()].sort((left, right) => left.id - right.id);
@@ -272,7 +307,7 @@ export async function buildForumExtensionInventory({
         for (const anchor of anchors(html)) {
           const page = topicPageLink(anchor.href, pageUrl, catalogUrl, topic.id);
           if (page && !pages.has(page.start)) pages.set(page.start, page.url);
-          const attachment = attachmentLink(anchor.href, pageUrl, catalogUrl);
+          const attachment = attachmentLink(anchor.href, pageUrl, catalogUrl, anchor.text);
           if (attachment) attachments.set(attachment.id, attachment);
         }
       } catch (error) {
@@ -294,10 +329,9 @@ export async function buildForumExtensionInventory({
   });
 
   const budget = { bytes: 0 };
-  const attachments = await mapLimit(
-    [...attachmentMap.values()].sort((left, right) => left.id - right.id),
-    1,
-    async attachment => {
+  const attachmentItems = [...attachmentMap.values()].sort((left, right) => left.id - right.id);
+  const attachments = inspectAttachments
+    ? await mapLimit(attachmentItems, 1, async attachment => {
       try {
         return await inspectAttachment(attachment, options, budget);
       } catch (error) {
@@ -308,8 +342,23 @@ export async function buildForumExtensionInventory({
           downloaded: false,
         };
       }
-    },
-  );
+    })
+    : attachmentItems.map(attachment => {
+      const originalName = attachment.labels.find(label => extension(label)) ||
+        attachment.labels[0] || `attachment-${attachment.id}`;
+      return {
+        ...attachment,
+        topicIds: [...attachment.topicIds].sort((left, right) => left - right),
+        originalName,
+        fileName: safeFilename(originalName, attachment.id),
+        extension: extension(originalName),
+        contentType: '',
+        bytes: 0,
+        sha256: '',
+        downloaded: false,
+        inspected: false,
+      };
+    });
 
   const types = {};
   for (const attachment of attachments) {
@@ -322,6 +371,7 @@ export async function buildForumExtensionInventory({
     schemaVersion: 1,
     generatedAt,
     catalogUrl,
+    catalogPages: [...catalogPages.keys()].sort((left, right) => left - right),
     summary: {
       topics: topicResults.length,
       topicPages: topicResults.reduce((total, topic) => total + topic.pages.length, 0),
@@ -367,6 +417,7 @@ async function main() {
         DEFAULT_MAX_TOTAL_BYTES,
         '--max-total-bytes',
       ),
+      inspectAttachments: !args.includes('--metadata-only'),
     });
     const json = `${JSON.stringify(inventory, null, 2)}\n`;
     if (output) await writeFile(resolve(output), json);

@@ -49,11 +49,14 @@ tools/*
 !tools/extension-capabilities.test.mjs
 !tools/forum-extension-inventory.mjs
 !tools/forum-extension-inventory.test.mjs
+!tools/forum-database-catalog.mjs
+!tools/forum-database-catalog.test.mjs
 !tools/forum-extension-extract.mjs
 !tools/forum-extension-extract.test.mjs
 !tools/admin-upload.test.mjs
 !tools/deployment.test.mjs
 /.tmp/
 /_dist
+__pycache__/
 
 

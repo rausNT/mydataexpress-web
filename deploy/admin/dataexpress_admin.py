@@ -403,6 +403,67 @@ def normalize_firebird_database(database_path: Path, settings: dict) -> str:
         normalized_path.unlink(missing_ok=True)
 
 
+def ensure_web_schema(database_path: Path, settings: dict) -> None:
+    migration = """
+SET AUTODDL OFF;
+SET TERM ^ ;
+EXECUTE BLOCK AS
+BEGIN
+  IF (NOT EXISTS(
+    SELECT 1
+    FROM RDB$RELATIONS
+    WHERE RDB$RELATION_NAME = 'DX_IMAGES'
+  )) THEN
+    EXECUTE STATEMENT
+      'CREATE TABLE DX_IMAGES (' ||
+      'ID INTEGER, ' ||
+      'NAME VARCHAR(50), ' ||
+      'IMG_100 BLOB SUB_TYPE 0 SEGMENT SIZE 512, ' ||
+      'IMG_150 BLOB SUB_TYPE 0 SEGMENT SIZE 512, ' ||
+      'IMG_200 BLOB SUB_TYPE 0 SEGMENT SIZE 512, ' ||
+      'LASTMODIFIED TIMESTAMP)';
+  IF (NOT EXISTS(
+    SELECT 1
+    FROM RDB$RELATION_FIELDS
+    WHERE RDB$RELATION_NAME = 'DX_MAIN'
+      AND RDB$FIELD_NAME = 'LASTMODIFIED'
+  )) THEN
+    EXECUTE STATEMENT 'ALTER TABLE DX_MAIN ADD LASTMODIFIED TIMESTAMP';
+END^
+SET TERM ; ^
+COMMIT;
+UPDATE DX_MAIN
+SET LASTMODIFIED = CURRENT_TIMESTAMP
+WHERE LASTMODIFIED IS NULL;
+COMMIT;
+QUIT;
+"""
+    process = subprocess.run(
+        [
+            settings["modern_isql_path"],
+            "-user",
+            "sysdba",
+            "-password",
+            "masterkey",
+            str(database_path),
+        ],
+        input=migration,
+        capture_output=True,
+        check=False,
+        env=settings["modern_firebird_env"],
+        text=True,
+        timeout=120,
+    )
+    output = f"{process.stdout}\n{process.stderr}"
+    if process.returncode != 0 or re.search(
+        r"Statement failed|SQL error|Dynamic SQL Error", output, re.IGNORECASE
+    ):
+        raise ImportErrorResponse(
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+            f"Не удалось обновить служебную схему DataExpress: {output.strip()[:500]}",
+        )
+
+
 def read_connections(config_path: Path) -> list[dict[str, str]]:
     parser = configparser.ConfigParser(interpolation=None)
     parser.optionxform = str
@@ -739,6 +800,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                     extracted_templates,
                 )
                 ods = normalize_firebird_database(database_path, self.settings)
+                ensure_web_schema(database_path, self.settings)
 
                 prepared_directory = root / f".new-{alias}-{os.getpid()}"
                 templates_path = prepared_directory / "templates"
@@ -839,6 +901,7 @@ def build_settings() -> dict:
         ),
         "modern_gstat_path": os.environ.get("DX_FIREBIRD5_GSTAT", f"{modern_root}/bin/gstat"),
         "modern_gbak_path": os.environ.get("DX_FIREBIRD5_GBAK", f"{modern_root}/bin/gbak"),
+        "modern_isql_path": os.environ.get("DX_FIREBIRD5_ISQL", f"{modern_root}/bin/isql"),
         "modern_firebird_env": modern_env,
         "migration_sources": [
             {

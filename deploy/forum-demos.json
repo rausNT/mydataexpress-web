@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "sourceUrl": "https://forum.mydataexpress.ru/viewforum.php?f=40",
+  "demos": [
+    {
+      "topicId": 48,
+      "attachmentId": 2024,
+      "alias": "PC_ASSETS",
+      "title": "Учёт компьютеров и лицензий",
+      "description": "Оборудование, ремонты, картриджи, программное обеспечение и лицензии.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 148,
+      "attachmentId": 100,
+      "alias": "HOTEL",
+      "title": "Учёт в гостинице",
+      "description": "Номера, проживание, занятость и диаграммы прибыли.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 150,
+      "attachmentId": 101,
+      "alias": "AQUATICA",
+      "title": "Акватика — центр плавания",
+      "description": "Демонстрационная база для учёта работы центра плавания.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 774,
+      "attachmentId": 1360,
+      "alias": "METROLOGY",
+      "title": "Учёт средств измерения",
+      "description": "Поверка, калибровка, маркировка оборудования и печать отчётов.",
+      "credentials": "Admin / 1"
+    },
+    {
+      "topicId": 1004,
+      "attachmentId": 985,
+      "alias": "DOU_PLAN",
+      "title": "Перспективный план ДОУ",
+      "description": "Планирование повторяющихся мероприятий дошкольного учреждения.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 1339,
+      "attachmentId": 6659,
+      "alias": "STOMAT",
+      "title": "Стоматологическая клиника",
+      "description": "Пациенты, планы лечения, карты, финансы, зарплаты и медицинские шаблоны.",
+      "credentials": "Врач / 123; Администратор / 1; Главный врач / 123456"
+    },
+    {
+      "topicId": 1970,
+      "attachmentId": 2613,
+      "alias": "AD_PRODUCTION",
+      "title": "Рекламное производство",
+      "description": "Заказы, клиенты, дизайн и производственные статусы.",
+      "credentials": "Иванов И. И. / 1; Петров П. П. / 1; Сидоров С. С. / 1; Администратор / 1"
+    },
+    {
+      "topicId": 3340,
+      "attachmentId": 5871,
+      "alias": "COWORDS",
+      "title": "Словосочетания и цитаты",
+      "description": "Каталог словосочетаний и цитат с пользовательским и разработческим режимами.",
+      "credentials": "developer / 1; user / 1"
+    },
+    {
+      "topicId": 3356,
+      "attachmentId": 5113,
+      "alias": "VEHICLE_PASSES",
+      "title": "Бюро пропусков для автомобилей",
+      "description": "Заявки на въезд, автомобили, контрагенты, подразделения и инспекторы.",
+      "credentials": "Администратор / 1; ввод заявок / 1; кпп охрана / 1"
+    },
+    {
+      "topicId": 3426,
+      "attachmentId": 5254,
+      "alias": "AUTOSERVICE",
+      "title": "Автосервис",
+      "description": "Демонстрационная база для работы автосервиса.",
+      "credentials": "admin / 1; Админ / 1; manager / 1"
+    },
+    {
+      "topicId": 3624,
+      "attachmentId": 5674,
+      "alias": "COMMERCIAL_RENT",
+      "title": "Аренда коммерческой недвижимости",
+      "description": "Объекты, арендаторы и работа отдела коммерческой аренды.",
+      "credentials": "Admin / 555; Татьяна / 123; Михаил / 123"
+    },
+    {
+      "topicId": 3667,
+      "attachmentId": 5789,
+      "alias": "DOCFLOW",
+      "title": "Документооборот",
+      "description": "Учёт документов, раздельная нумерация по видам и архив.",
+      "credentials": "Админ / 1"
+    },
+    {
+      "topicId": 3678,
+      "attachmentId": 5812,
+      "alias": "DEV_REFERENCE",
+      "title": "Справочник программиста",
+      "description": "Персональный справочник материалов и заметок разработчика.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 3916,
+      "attachmentId": 6408,
+      "alias": "PROCUREMENT",
+      "title": "Объекты закупки",
+      "description": "Подготовка характеристик товаров для технических заданий и КТРУ.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 4067,
+      "attachmentId": 7169,
+      "alias": "SELFEMPLOYED",
+      "title": "Самозанятый",
+      "description": "Простой учёт и выставление счетов для самозанятого.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 4069,
+      "attachmentId": 6724,
+      "alias": "DOGOVOR_DB_DEMO",
+      "title": "Управленческий учёт и бюджетирование",
+      "description": "Сделки, договоры, счета, заявки, ДДС и бюджетирование.",
+      "credentials": "admin / 1; Хитров / 1; РП / 1"
+    },
+    {
+      "topicId": 4252,
+      "attachmentId": 7119,
+      "alias": "PRINT_DOCS",
+      "title": "Документы для печати",
+      "description": "Создание, хранение, редактирование и печать документов из форм.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 4424,
+      "attachmentId": 7479,
+      "templatesAttachmentId": 7478,
+      "alias": "DETSAD",
+      "title": "Детский сад",
+      "description": "Демонстрационная база дошкольного учреждения с комплектом шаблонов.",
+      "credentials": "Пользователь / 1; Разработчик / 2"
+    },
+    {
+      "topicId": 4544,
+      "attachmentId": 7747,
+      "alias": "METERS",
+      "title": "Учёт показаний счётчиков",
+      "description": "Счётчики, показания, плановые и контрольные проверки.",
+      "credentials": "Админ / 1"
+    },
+    {
+      "topicId": 4620,
+      "attachmentId": 7895,
+      "alias": "PITANIE",
+      "title": "Школьное питание",
+      "description": "Составление меню и расчёты для школьного питания.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 4658,
+      "attachmentId": 7933,
+      "alias": "SALON",
+      "title": "Салон красоты",
+      "description": "Демонстрационная база салона красоты.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 4713,
+      "attachmentId": 8755,
+      "templatesAttachmentId": 8031,
+      "alias": "COT",
+      "title": "Специалист по охране труда",
+      "description": "Автоматизация работы специалиста по охране труда.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 5274,
+      "attachmentId": 9120,
+      "alias": "MOBILE_SERVICE",
+      "title": "Ремонт мобильной электроники",
+      "description": "Приём устройств, история ремонта, работы, аванс и итоговая стоимость.",
+      "credentials": "Пользователь / 1; Админ / 1"
+    },
+    {
+      "topicId": 5368,
+      "attachmentId": 9341,
+      "templatesAttachmentId": 9342,
+      "alias": "CAFETERIA",
+      "title": "Моя столовая",
+      "description": "Питание и упрощённый складской учёт для столовой.",
+      "credentials": "Администратор / 1"
+    },
+    {
+      "topicId": 5378,
+      "attachmentId": 9382,
+      "alias": "MY_MONEY",
+      "title": "MY_MONEY",
+      "description": "Простой учёт расчётов с поставщиками и кассовых операций.",
+      "credentials": "Пользователь / 1; Админ / 1"
+    },
+    {
+      "topicId": 5391,
+      "attachmentId": 9965,
+      "alias": "ASSET_ACCOUNTING",
+      "title": "Учёт оборудования и расходников",
+      "description": "Оборудование, расходные материалы, лицензии и резервное копирование.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 5421,
+      "attachmentId": 9584,
+      "alias": "PLANNER",
+      "title": "Календарь-планировщик",
+      "description": "Планирование задач, оптимизированное для веб и мобильного экрана.",
+      "credentials": "без логина и пароля"
+    },
+    {
+      "topicId": 5517,
+      "attachmentId": 9745,
+      "alias": "BOM_REGISTER",
+      "title": "Ведомости покупных изделий",
+      "description": "Децимальные номера, склад, BOM и ведомости покупных изделий.",
+      "credentials": "Админ / 4321"
+    },
+    {
+      "topicId": 5722,
+      "attachmentId": 10146,
+      "alias": "SELLER_PRODUCTION",
+      "title": "Seller: производство и бухгалтерия",
+      "description": "Остатки, производство, маркетплейсы и бухгалтерский учёт.",
+      "credentials": "Шаров И.А. / 1"
+    }
+  ]
+}
