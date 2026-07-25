@@ -537,5 +537,6 @@ source "$CONFIG_ROOT/admin.env"
 echo
 echo "DataExpress is ready: http://$SERVER_ADDRESS/"
 echo "Database administration: http://$SERVER_ADDRESS/admin/"
-echo "Admin token: $DX_ADMIN_TOKEN"
+echo "Admin token: stored in $CONFIG_ROOT/admin.env"
+echo "Read it with: sudo sed -n 's/^DX_ADMIN_TOKEN=//p' $CONFIG_ROOT/admin.env"
 echo "Enable HTTPS before uploading private production databases."

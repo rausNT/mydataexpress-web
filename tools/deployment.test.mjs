@@ -10,8 +10,10 @@ const program = readFileSync('dxwebsrv.pas', 'utf8');
 const saxReader = readFileSync('saxbasereader.pas', 'utf8');
 const appUtils = readFileSync('apputils.pas', 'utf8');
 const modernCss = readFileSync('_test/html/modern.css', 'utf8');
+const gitAttributes = readFileSync('.gitattributes', 'utf8');
 
 test('one-line installer pins runtime downloads and runs services unprivileged', () => {
+  assert.match(gitAttributes, /^\*\.sh text eol=lf$/m);
   assert.match(installer, /^set -euo pipefail$/m);
   assert.match(installer, /FB25_SHA256=[a-f0-9]{64}/);
   assert.match(installer, /FB5_SHA256=[a-f0-9]{64}/);
@@ -105,4 +107,12 @@ test('modern skin preserves legacy form geometry and readable list selection', (
   assert.match(modernCss, /\.main form input\[style\*="position"\][\s\S]*min-height: 0/);
   assert.match(modernCss, /\.listcbx table\.list tr\.sel:hover[\s\S]*color: #fff !important/);
   assert.match(htmlRuntime, /class=database-home href="\/"/);
+  for (const template of [
+    '_test/html/editform.html',
+    '_test/html/form.html',
+    '_test/html/loginuser.html',
+    '_test/html/report.html',
+  ]) {
+    assert.match(readFileSync(template, 'utf8'), /modern\.css\?v=\d{8}-\d+/);
+  }
 });

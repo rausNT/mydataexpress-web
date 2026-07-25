@@ -35,6 +35,13 @@ curl -fsSL https://raw.githubusercontent.com/rausNT/mydataexpress-web/main/deplo
   `templates`, а также добавление шаблонов к уже подключённой базе;
 - `/health` — проверка процесса DataExpress.
 
+Ключ панели создаётся установщиком и хранится в `/etc/dataexpress/admin.env`.
+Посмотреть его на сервере:
+
+```bash
+sudo sed -n 's/^DX_ADMIN_TOKEN=//p' /etc/dataexpress/admin.env
+```
+
 Пока домен и TLS не настроены, не загружайте через публичный HTTP базы с личными или
 коммерческими данными. Админ-ключ защищает от несанкционированной загрузки, но не
 шифрует сетевой трафик.
