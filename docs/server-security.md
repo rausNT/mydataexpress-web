@@ -19,6 +19,11 @@ SSH, HTTP и HTTPS. Firebird, DataExpress и панель импорта слу�
 - backend-порты 8080/8090 доступны только на `127.0.0.1`.
 - systemd journal ограничен 256 МБ и 14 днями; импорт базы пишет audit-событие
   с результатом, псевдонимом, размером, ODS и IP без ключа администратора.
+- отдельный JSON-журнал Nginx `/var/log/nginx/dataexpress-access.log` фиксирует
+  IP, время, request ID, метод, путь без query-параметров, HTTP-статус, объёмы,
+  длительность и User-Agent. Тела запросов, пароли и admin-токен в access-log не
+  записываются. Logrotate выполняется ежедневно, хранит до 30 ротаций/суток и
+  сжимает старые файлы; один файл ограничен 50 МБ.
 
 Парольный вход root намеренно не отключается автоматически: универсальный
 установщик не должен лишать владельца единственного административного доступа.
@@ -35,6 +40,8 @@ sudo nginx -t
 systemctl --failed
 curl -fsS http://127.0.0.1/health
 journalctl -u dataexpress-admin -g 'AUDIT ' --since today
+sudo tail -f /var/log/nginx/dataexpress-access.log
+sudo logrotate --debug /etc/logrotate.d/dataexpress-nginx
 ```
 
 Каталог `/var/www/letsencrypt` опубликован только для ACME HTTP-01. Если для

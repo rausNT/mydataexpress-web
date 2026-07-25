@@ -61,7 +61,7 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-  ca-certificates curl fail2ban git nginx openssl python3 ufw unattended-upgrades unzip \
+  ca-certificates curl fail2ban git logrotate nginx openssl python3 ufw unattended-upgrades unzip \
   firebird3.0-server-core firebird3.0-utils libfbclient2 \
   fp-compiler fp-units-base fp-units-db fp-units-fcl fp-units-misc fp-units-net \
   lazarus-src lcl-nogui lcl-units
@@ -325,6 +325,12 @@ cat >/etc/nginx/conf.d/dataexpress-security.conf <<'NGINX'
 server_tokens off;
 limit_req_status 429;
 limit_conn_status 429;
+log_format dataexpress_json escape=json
+    '{"time":"$time_iso8601","request_id":"$request_id",'
+    '"ip":"$remote_addr","method":"$request_method","path":"$uri",'
+    '"status":$status,"request_bytes":$request_length,"response_bytes":$bytes_sent,'
+    '"request_time":$request_time,"upstream_time":"$upstream_response_time",'
+    '"user_agent":"$http_user_agent"}';
 limit_req_zone $binary_remote_addr zone=dx_requests:10m rate=20r/s;
 limit_conn_zone $binary_remote_addr zone=dx_connections:10m;
 map $args $dx_login_key {
@@ -340,6 +346,8 @@ server {
     listen 80 default_server;
     listen [::]:80 default_server;
     server_name _;
+    access_log /var/log/nginx/dataexpress-access.log dataexpress_json;
+    error_log /var/log/nginx/dataexpress-error.log warn;
     client_max_body_size 256m;
     client_header_timeout 15s;
     client_body_timeout 60s;
@@ -352,6 +360,7 @@ server {
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "same-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header X-Request-ID $request_id always;
 
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/letsencrypt;
@@ -368,6 +377,7 @@ server {
         proxy_send_timeout 600s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Request-ID $request_id;
     }
     location / {
         limit_req zone=dx_requests burst=80 nodelay;
@@ -377,6 +387,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Request-ID $request_id;
     }
 }
 NGINX
@@ -388,6 +399,8 @@ server {
     listen 443 ssl default_server;
     listen [::]:443 ssl default_server;
     server_name $SERVER_IP;
+    access_log /var/log/nginx/dataexpress-access.log dataexpress_json;
+    error_log /var/log/nginx/dataexpress-error.log warn;
     ssl_certificate /etc/letsencrypt/live/$SERVER_IP/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$SERVER_IP/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -407,6 +420,7 @@ server {
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "same-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header X-Request-ID \$request_id always;
 
     location = /admin { return 301 /admin/; }
     location /admin/ {
@@ -419,6 +433,7 @@ server {
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID \$request_id;
     }
     location / {
         limit_req zone=dx_requests burst=80 nodelay;
@@ -429,10 +444,30 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID \$request_id;
     }
 }
 NGINX
 fi
+cat >/etc/logrotate.d/dataexpress-nginx <<'LOGROTATE'
+/var/log/nginx/dataexpress-access.log /var/log/nginx/dataexpress-error.log {
+    daily
+    rotate 30
+    maxage 30
+    maxsize 50M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 www-data adm
+    sharedscripts
+    postrotate
+        if [ -s /run/nginx.pid ]; then
+            kill -USR1 "$(cat /run/nginx.pid)"
+        fi
+    endscript
+}
+LOGROTATE
 rm -f /etc/nginx/sites-enabled/default
 ln -sfn /etc/nginx/sites-available/dataexpress /etc/nginx/sites-enabled/dataexpress
 nginx -t

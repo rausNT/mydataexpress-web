@@ -686,7 +686,7 @@ begin
   SetPrecisionMode(pmExtended);
   {$endif}
 
-  DebugStr(GetRealIP + ' ' + ARequest.Method + ': ' + ARequest.URI);
+  DebugStr(GetRealIP + ' ' + ARequest.Method + ': ' + ARequest.PathInfo);
   if not FirstCleanCacheDir then CleanCacheDir;
 
   SS := nil;
@@ -767,7 +767,7 @@ begin
     Exit;
   end;
 
-  DebugStr(ARequest.RemoteAddress + ': ' + ARequest.URI);
+  DebugStr(GetRealIP + ': ' + ARequest.PathInfo);
 
   if URI = '/' then
   begin

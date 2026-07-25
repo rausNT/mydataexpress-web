@@ -393,6 +393,17 @@
     line-height: 1.7;
 }
 
+.terms-card ul {
+    margin: 10px 0 12px;
+    padding-left: 24px;
+    color: #43516a;
+}
+
+.terms-card li {
+    margin: 8px 0;
+    line-height: 1.6;
+}
+
 .terms-kicker {
     color: var(--dx-primary) !important;
     font-size: 13px;

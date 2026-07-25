@@ -24,6 +24,14 @@ test('one-line installer pins runtime downloads and runs services unprivileged',
   assert.match(installer, /client_max_body_size 256m/);
   assert.match(installer, /limit_req_zone \$binary_remote_addr/);
   assert.match(installer, /limit_conn dx_connections/);
+  assert.match(installer, /log_format dataexpress_json escape=json/);
+  assert.match(installer, /"ip":"\$remote_addr"/);
+  assert.match(installer, /"path":"\$uri"/);
+  assert.match(installer, /access_log \/var\/log\/nginx\/dataexpress-access\.log dataexpress_json/);
+  assert.match(installer, /\/etc\/logrotate\.d\/dataexpress-nginx/);
+  assert.match(installer, /rotate 30/);
+  assert.match(installer, /maxage 30/);
+  assert.doesNotMatch(installer, /dataexpress_json[\s\S]{0,500}\$request_uri/);
   assert.match(installer, /bantime = 24h/);
   assert.match(installer, /ufw limit OpenSSH/);
   assert.match(installer, /unattended-upgrades/);

@@ -51,6 +51,8 @@ test('landing template is keyboard-friendly and responsive', () => {
   assert.match(template, /class="upload-database" href="\/admin\/" target="_self"/);
   assert.match(template, /class="demo-disclaimer"/);
   assert.match(template, /href="\/html\/demo-terms\.html" target="_self"/);
+  assert.match(template, /index\.css\?v=20260725-4/);
+  assert.match(demoTerms, /index\.css\?v=20260725-4/);
   assert.match(template, /\[open-existing-connection\]/);
   assert.match(styles, /@media \(max-width: 640px\)/);
   assert.match(styles, /\.demo-disclaimer/);
@@ -65,6 +67,15 @@ test('demo terms clearly prohibit real data and preserve mandatory liability', (
   assert.match(demoTerms, /не исключает ответственность[\s\S]+запрещено законом/i);
   assert.match(demoTerms, /ответственность\s+за\s+умышленное\s+нарушение/i);
   assert.match(demoTerms, /Обязательные права потребителей/i);
+  assert.match(demoTerms, /террористическая\s+и\s+экстремистская\s+деятельность/i);
+  assert.match(demoTerms, /Это не мессенджер и не хранилище/i);
+  assert.match(demoTerms, /не предназначен[\s\S]+как мессенджер/i);
+  assert.match(demoTerms, /обмена сообщениями[\s\S]+между пользователями/i);
+  assert.match(demoTerms, /уполномоченным государственным органам[\s\S]+законного\s+основания/i);
+  assert.match(demoTerms, /IP-адрес пользователя/i);
+  assert.match(demoTerms, /путь без строки параметров/i);
+  assert.match(demoTerms, /обычный срок хранения — до 30 суток/i);
+  assert.match(demoTerms, /не записывает[\s\S]+тела POST-запросов/i);
   assert.match(demoTerms, /href="\/" target="_self"/);
 });
 
