@@ -977,6 +977,10 @@ msgstr ""
 msgid "Welcome!"
 msgstr ""
 
+#: strconsts.rsalldatabases
+msgid "All databases"
+msgstr ""
+
 #: strconsts.rsyes
 msgid "Yes"
 msgstr ""

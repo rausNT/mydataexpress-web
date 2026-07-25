@@ -985,6 +985,10 @@ msgstr "Пн Вт Ср Чт Пт Сб Вс"
 msgid "Welcome!"
 msgstr "Добро пожаловать!"
 
+#: strconsts.rsalldatabases
+msgid "All databases"
+msgstr "Все базы"
+
 #: strconsts.rsyes
 msgid "Yes"
 msgstr "Да"

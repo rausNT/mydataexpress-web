@@ -13,17 +13,22 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import uuid
 import zipfile
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import unquote
 
 
 MAX_UPLOAD_BYTES = int(os.environ.get("DX_ADMIN_MAX_UPLOAD_BYTES", 256 * 1024 * 1024))
 MAX_DATABASE_BYTES = int(os.environ.get("DX_ADMIN_MAX_DATABASE_BYTES", 1024 * 1024 * 1024))
+MAX_TEMPLATE_BYTES = int(os.environ.get("DX_ADMIN_MAX_TEMPLATE_BYTES", 64 * 1024 * 1024))
+MAX_TEMPLATES_BYTES = int(os.environ.get("DX_ADMIN_MAX_TEMPLATES_BYTES", 256 * 1024 * 1024))
+MAX_TEMPLATE_FILES = int(os.environ.get("DX_ADMIN_MAX_TEMPLATE_FILES", 2048))
 ALIAS_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
 ODS_PATTERN = re.compile(r"ODS version\s+([0-9.]+)", re.IGNORECASE)
+TEMPLATE_EXTENSIONS = frozenset({".docx", ".docm", ".xml", ".odt", ".ods", ".html", ".htm"})
 
 
 class ImportErrorResponse(Exception):
@@ -59,7 +64,13 @@ def is_authorized(header: str | None, token: str) -> bool:
     return hmac.compare_digest(header[len(prefix) :], token)
 
 
-def _copy_bounded(source, destination, expected_size: int) -> None:
+def _copy_bounded(
+    source,
+    destination: Path,
+    expected_size: int,
+    maximum_size: int = MAX_DATABASE_BYTES,
+    too_large_message: str = "База слишком большая.",
+) -> None:
     copied = 0
     with destination.open("wb") as target:
         while True:
@@ -67,14 +78,109 @@ def _copy_bounded(source, destination, expected_size: int) -> None:
             if not chunk:
                 break
             copied += len(chunk)
-            if copied > expected_size or copied > MAX_DATABASE_BYTES:
-                raise ImportErrorResponse(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "База слишком большая.")
+            if copied > expected_size or copied > maximum_size:
+                raise ImportErrorResponse(
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE, too_large_message
+                )
             target.write(chunk)
     if copied != expected_size:
         raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Размер файла в архиве не совпадает.")
 
 
-def extract_database(upload_path: Path, original_name: str, output_path: Path) -> None:
+def _normalized_zip_path(info: zipfile.ZipInfo) -> tuple[str, ...]:
+    mode = (info.external_attr >> 16) & 0o170000
+    if mode == stat.S_IFLNK:
+        raise ImportErrorResponse(
+            HTTPStatus.BAD_REQUEST, "Символические ссылки в ZIP запрещены."
+        )
+    if info.flag_bits & 0x1:
+        raise ImportErrorResponse(
+            HTTPStatus.BAD_REQUEST, "Зашифрованные ZIP не поддерживаются."
+        )
+    normalized = info.filename.replace("\\", "/")
+    parts = tuple(part for part in normalized.split("/") if part)
+    if (
+        normalized.startswith("/")
+        or ".." in parts
+        or (parts and re.fullmatch(r"[A-Za-z]:", parts[0]))
+    ):
+        raise ImportErrorResponse(
+            HTTPStatus.BAD_REQUEST, "Небезопасный путь внутри ZIP."
+        )
+    return parts
+
+
+def _template_destination(parts: tuple[str, ...]) -> PurePosixPath | None:
+    if not parts:
+        return None
+    lower_parts = tuple(part.casefold() for part in parts)
+    if "templates" in lower_parts:
+        relative_parts = parts[lower_parts.index("templates") + 1 :]
+    elif len(parts) == 1:
+        relative_parts = parts
+    else:
+        return None
+    if not relative_parts:
+        return None
+    destination = PurePosixPath(*relative_parts)
+    if destination.suffix.casefold() not in TEMPLATE_EXTENSIONS:
+        return None
+    return destination
+
+
+def _extract_template_entries(
+    archive: zipfile.ZipFile,
+    entries: list[tuple[zipfile.ZipInfo, PurePosixPath]],
+    output_directory: Path,
+) -> list[str]:
+    if len(entries) > MAX_TEMPLATE_FILES:
+        raise ImportErrorResponse(
+            HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+            "В архиве слишком много файлов шаблонов.",
+        )
+    total_size = sum(info.file_size for info, _ in entries)
+    if total_size > MAX_TEMPLATES_BYTES:
+        raise ImportErrorResponse(
+            HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+            "Комплект шаблонов слишком большой.",
+        )
+
+    seen: set[str] = set()
+    extracted: list[str] = []
+    for info, relative in entries:
+        key = relative.as_posix().casefold()
+        if key in seen:
+            raise ImportErrorResponse(
+                HTTPStatus.BAD_REQUEST,
+                f"Повторяющийся путь шаблона: {relative.as_posix()}",
+            )
+        seen.add(key)
+        if info.file_size > MAX_TEMPLATE_BYTES:
+            raise ImportErrorResponse(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                f"Шаблон слишком большой: {relative.name}",
+            )
+        destination = output_directory.joinpath(*relative.parts)
+        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o750)
+        with archive.open(info, "r") as source:
+            _copy_bounded(
+                source,
+                destination,
+                info.file_size,
+                MAX_TEMPLATE_BYTES,
+                f"Шаблон слишком большой: {relative.name}",
+            )
+        os.chmod(destination, 0o640)
+        extracted.append(relative.as_posix())
+    return extracted
+
+
+def extract_database_bundle(
+    upload_path: Path,
+    original_name: str,
+    output_path: Path,
+    templates_directory: Path | None = None,
+) -> list[str]:
     suffix = Path(original_name).suffix.casefold()
     if suffix in {".dxdb", ".fdb"}:
         size = upload_path.stat().st_size
@@ -82,7 +188,7 @@ def extract_database(upload_path: Path, original_name: str, output_path: Path) -
             raise ImportErrorResponse(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "База слишком большая.")
         with upload_path.open("rb") as source:
             _copy_bounded(source, output_path, size)
-        return
+        return []
 
     if suffix != ".zip":
         raise ImportErrorResponse(
@@ -93,20 +199,18 @@ def extract_database(upload_path: Path, original_name: str, output_path: Path) -
     try:
         with zipfile.ZipFile(upload_path) as archive:
             candidates = []
+            template_entries: list[tuple[zipfile.ZipInfo, PurePosixPath]] = []
             for info in archive.infolist():
-                mode = (info.external_attr >> 16) & 0o170000
-                if mode == stat.S_IFLNK:
-                    raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Символические ссылки в ZIP запрещены.")
-                if info.flag_bits & 0x1:
-                    raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Зашифрованные ZIP не поддерживаются.")
+                parts = _normalized_zip_path(info)
                 if info.is_dir():
                     continue
-                normalized = info.filename.replace("\\", "/")
-                parts = [part for part in normalized.split("/") if part]
-                if normalized.startswith("/") or ".." in parts:
-                    raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Небезопасный путь внутри ZIP.")
-                if Path(normalized).suffix.casefold() in {".dxdb", ".fdb"}:
+                suffix = PurePosixPath(*parts).suffix.casefold()
+                if suffix in {".dxdb", ".fdb"}:
                     candidates.append(info)
+                    continue
+                template_destination = _template_destination(parts)
+                if template_destination is not None:
+                    template_entries.append((info, template_destination))
 
             if len(candidates) != 1:
                 raise ImportErrorResponse(
@@ -119,6 +223,69 @@ def extract_database(upload_path: Path, original_name: str, output_path: Path) -
                 raise ImportErrorResponse(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "База слишком большая.")
             with archive.open(item, "r") as source:
                 _copy_bounded(source, output_path, item.file_size)
+            if templates_directory is None:
+                return []
+            templates_directory.mkdir(parents=True, exist_ok=True, mode=0o750)
+            return _extract_template_entries(
+                archive, template_entries, templates_directory
+            )
+    except zipfile.BadZipFile as exc:
+        raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Повреждённый ZIP-архив.") from exc
+
+
+def extract_database(upload_path: Path, original_name: str, output_path: Path) -> None:
+    extract_database_bundle(upload_path, original_name, output_path)
+
+
+def extract_templates(
+    upload_path: Path, original_name: str, output_directory: Path
+) -> list[str]:
+    suffix = Path(original_name).suffix.casefold()
+    if suffix in TEMPLATE_EXTENSIONS:
+        safe_name = original_name.replace("\\", "/").split("/")[-1]
+        if not safe_name or Path(safe_name).suffix.casefold() not in TEMPLATE_EXTENSIONS:
+            raise ImportErrorResponse(
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Неподдерживаемый формат шаблона."
+            )
+        size = upload_path.stat().st_size
+        if size > MAX_TEMPLATE_BYTES:
+            raise ImportErrorResponse(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Шаблон слишком большой."
+            )
+        output_directory.mkdir(parents=True, exist_ok=True, mode=0o750)
+        destination = output_directory / safe_name
+        with upload_path.open("rb") as source:
+            _copy_bounded(
+                source,
+                destination,
+                size,
+                MAX_TEMPLATE_BYTES,
+                "Шаблон слишком большой.",
+            )
+        os.chmod(destination, 0o640)
+        return [safe_name]
+
+    if suffix != ".zip":
+        raise ImportErrorResponse(
+            HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+            "Поддерживаются DOCX, DOCM, XML, ODT, ODS, HTML или ZIP с шаблонами.",
+        )
+    try:
+        with zipfile.ZipFile(upload_path) as archive:
+            entries: list[tuple[zipfile.ZipInfo, PurePosixPath]] = []
+            for info in archive.infolist():
+                parts = _normalized_zip_path(info)
+                if info.is_dir():
+                    continue
+                destination = _template_destination(parts)
+                if destination is not None:
+                    entries.append((info, destination))
+            if not entries:
+                raise ImportErrorResponse(
+                    HTTPStatus.BAD_REQUEST, "В ZIP не найдены поддерживаемые шаблоны."
+                )
+            output_directory.mkdir(parents=True, exist_ok=True, mode=0o750)
+            return _extract_template_entries(archive, entries, output_directory)
     except zipfile.BadZipFile as exc:
         raise ImportErrorResponse(HTTPStatus.BAD_REQUEST, "Повреждённый ZIP-архив.") from exc
 
@@ -249,9 +416,58 @@ def read_connections(config_path: Path) -> list[dict[str, str]]:
                 "alias": section,
                 "url": f"/{section.casefold()}/",
                 "database": parser.get(section, "Database", fallback=""),
+                "templates": parser.get(section, "Templates", fallback=""),
             }
         )
     return result
+
+
+def install_templates(
+    target_directory: Path, incoming_directory: Path, database_root: Path
+) -> int:
+    root = database_root.resolve()
+    target = target_directory.resolve(strict=False)
+    if target == root or root not in target.parents:
+        raise ImportErrorResponse(
+            HTTPStatus.BAD_REQUEST,
+            "Каталог шаблонов должен находиться внутри каталога баз DataExpress.",
+        )
+
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o750)
+    prepared = Path(
+        tempfile.mkdtemp(prefix=".templates-new-", dir=target.parent)
+    )
+    backup = target.parent / f".templates-old-{uuid.uuid4().hex}"
+    installed = 0
+    try:
+        if target.exists():
+            shutil.copytree(target, prepared, dirs_exist_ok=True)
+        for source in incoming_directory.rglob("*"):
+            if not source.is_file():
+                continue
+            relative = source.relative_to(incoming_directory)
+            destination = prepared / relative
+            destination.parent.mkdir(parents=True, exist_ok=True, mode=0o750)
+            shutil.copy2(source, destination)
+            os.chmod(destination, 0o640)
+            installed += 1
+        if installed == 0:
+            raise ImportErrorResponse(
+                HTTPStatus.BAD_REQUEST, "Нет шаблонов для установки."
+            )
+
+        if target.exists():
+            target.rename(backup)
+        try:
+            prepared.rename(target)
+        except Exception:
+            if backup.exists() and not target.exists():
+                backup.rename(target)
+            raise
+        shutil.rmtree(backup, ignore_errors=True)
+        return installed
+    finally:
+        shutil.rmtree(prepared, ignore_errors=True)
 
 
 def _enable_connection_discovery(text: str) -> str:
@@ -361,11 +577,124 @@ class AdminHandler(BaseHTTPRequestHandler):
             return
         self.send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Маршрут не найден."})
 
+    def upload_templates(self) -> None:
+        raw_alias = self.headers.get("X-Database-Alias", "").strip()[:64]
+        original_name = unquote(self.headers.get("X-Filename", ""))
+        content_length = 0
+        try:
+            alias = validate_alias(raw_alias)
+            connection = next(
+                (
+                    item
+                    for item in read_connections(self.settings["config_path"])
+                    if item["alias"].casefold() == alias.casefold()
+                ),
+                None,
+            )
+            if connection is None:
+                raise ImportErrorResponse(
+                    HTTPStatus.NOT_FOUND, "Подключение с таким именем не найдено."
+                )
+            if not connection["templates"]:
+                raise ImportErrorResponse(
+                    HTTPStatus.CONFLICT,
+                    "Для подключения не настроен каталог шаблонов.",
+                )
+
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError as exc:
+                raise ImportErrorResponse(
+                    HTTPStatus.LENGTH_REQUIRED, "Нужен корректный Content-Length."
+                ) from exc
+            if content_length <= 0:
+                raise ImportErrorResponse(HTTPStatus.LENGTH_REQUIRED, "Пустой файл.")
+            if content_length > MAX_UPLOAD_BYTES:
+                raise ImportErrorResponse(
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                    "Комплект шаблонов слишком большой.",
+                )
+
+            root = self.settings["database_root"]
+            staging_root = root / ".staging"
+            staging_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            with tempfile.TemporaryDirectory(
+                prefix=f"{alias}-templates-", dir=staging_root
+            ) as temporary:
+                temporary_path = Path(temporary)
+                upload_path = temporary_path / "upload.bin"
+                remaining = content_length
+                with upload_path.open("wb") as upload:
+                    while remaining:
+                        chunk = self.rfile.read(min(1024 * 1024, remaining))
+                        if not chunk:
+                            raise ImportErrorResponse(
+                                HTTPStatus.BAD_REQUEST,
+                                "Передача файла оборвалась.",
+                            )
+                        upload.write(chunk)
+                        remaining -= len(chunk)
+
+                incoming = temporary_path / "templates"
+                names = extract_templates(upload_path, original_name, incoming)
+                installed = install_templates(
+                    Path(connection["templates"]), incoming, root
+                )
+
+            self.send_json(
+                HTTPStatus.CREATED,
+                {
+                    "ok": True,
+                    "alias": connection["alias"],
+                    "templates": installed,
+                    "files": names,
+                    "message": "Шаблоны установлены и доступны для печати.",
+                },
+            )
+            audit_event(
+                "template_import_succeeded",
+                client=self.client_ip(),
+                alias=connection["alias"],
+                filename=original_name.replace("\\", "/").split("/")[-1][:160],
+                bytes=content_length,
+                templates=installed,
+            )
+        except ImportErrorResponse as error:
+            audit_event(
+                "template_import_failed",
+                client=self.client_ip(),
+                alias=raw_alias,
+                filename=original_name.replace("\\", "/").split("/")[-1][:160],
+                bytes=content_length,
+                status=int(error.status),
+                reason=str(error)[:240],
+            )
+            self.send_error_json(error)
+        except (OSError, shutil.Error) as error:
+            audit_event(
+                "template_import_failed",
+                client=self.client_ip(),
+                alias=raw_alias,
+                filename=original_name.replace("\\", "/").split("/")[-1][:160],
+                bytes=content_length,
+                status=int(HTTPStatus.INTERNAL_SERVER_ERROR),
+                reason=type(error).__name__,
+            )
+            self.send_error_json(
+                ImportErrorResponse(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    f"Ошибка установки шаблонов: {error}",
+                )
+            )
+
     def do_POST(self) -> None:
-        if self.path != "/admin/api/databases":
+        if self.path not in {"/admin/api/databases", "/admin/api/templates"}:
             self.send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Маршрут не найден."})
             return
         if not self.require_auth():
+            return
+        if self.path == "/admin/api/templates":
+            self.upload_templates()
             return
 
         raw_alias = self.headers.get("X-Database-Alias", "").strip()[:64]
@@ -402,13 +731,22 @@ class AdminHandler(BaseHTTPRequestHandler):
                         remaining -= len(chunk)
 
                 database_path = temporary_path / f"{alias}.DXDB"
-                extract_database(upload_path, original_name, database_path)
+                extracted_templates = temporary_path / "templates"
+                template_names = extract_database_bundle(
+                    upload_path,
+                    original_name,
+                    database_path,
+                    extracted_templates,
+                )
                 ods = normalize_firebird_database(database_path, self.settings)
 
                 prepared_directory = root / f".new-{alias}-{os.getpid()}"
                 templates_path = prepared_directory / "templates"
                 prepared_directory.mkdir(mode=0o750)
-                templates_path.mkdir(mode=0o750)
+                if extracted_templates.exists():
+                    shutil.move(str(extracted_templates), templates_path)
+                else:
+                    templates_path.mkdir(mode=0o750)
                 shutil.move(str(database_path), prepared_directory / f"{alias}.DXDB")
                 os.chmod(prepared_directory / f"{alias}.DXDB", 0o640)
                 prepared_directory.rename(final_directory)
@@ -434,6 +772,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                     "alias": alias,
                     "url": f"/{alias.casefold()}/",
                     "ods": ods,
+                    "templates": len(template_names),
                     "message": "База зарегистрирована; сервер применяет конфигурацию.",
                 },
             )
@@ -444,6 +783,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                 filename=Path(original_name).name[:160],
                 bytes=content_length,
                 ods=ods,
+                templates=len(template_names),
             )
         except ImportErrorResponse as error:
             audit_event(

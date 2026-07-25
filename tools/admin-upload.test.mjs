@@ -32,6 +32,8 @@ test('admin page uploads the raw selected file with bearer authentication', () =
   assert.match(page, /X-Database-Alias/);
   assert.match(page, /X-Filename/);
   assert.match(page, /request\.send\(selected\)/);
+  assert.match(page, /\/admin\/api\/templates/);
+  assert.match(page, /Шаблоны печати/);
   assert.match(page, /sessionStorage/);
   assert.doesNotMatch(page, /localStorage/);
 });

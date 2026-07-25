@@ -2027,7 +2027,8 @@ function THtmlShow.ShowLoginUser: String;
 var
   S: String;
 begin
-  S := '<div id=msg>' + rsWelcome + '</div><div>' +
+  S := '<a class=database-home href="/">&#8592; ' + rsAllDatabases +
+    '</a><div id=msg>' + rsWelcome + '</div><div>' +
      rsUser + '</div><div><input type=text name=user autofocus></div><div>' + rsPassword +
     '</div><div><input type=password name=pwd></div><div class=bn>' +
     '<div id=loader class=hide><div></div></div><button id=submit type=submit>' +
@@ -2042,7 +2043,8 @@ function THtmlShow.ShowConnectionProgress(const UserName: String): String;
 var
   S: String;
 begin
-  S := '<div id=msg data-connecting>' + rsConnecting + '</div><div>' +
+  S := '<a class=database-home href="/">&#8592; ' + rsAllDatabases +
+    '</a><div id=msg data-connecting>' + rsConnecting + '</div><div>' +
      rsUser + '</div><div><input disabled type=text value="' + StrToHtml(UserName) + '"></div><div>' + rsPassword +
     '</div><div><input disabled type=password></div><div class=bn>' +
     '<div id=loader class=loader><div></div></div></div>';

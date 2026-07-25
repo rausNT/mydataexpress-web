@@ -9,6 +9,7 @@ const htmlRuntime = readFileSync('htmlshow.pas', 'utf8');
 const program = readFileSync('dxwebsrv.pas', 'utf8');
 const saxReader = readFileSync('saxbasereader.pas', 'utf8');
 const appUtils = readFileSync('apputils.pas', 'utf8');
+const modernCss = readFileSync('_test/html/modern.css', 'utf8');
 
 test('one-line installer pins runtime downloads and runs services unprivileged', () => {
   assert.match(installer, /^set -euo pipefail$/m);
@@ -98,4 +99,10 @@ test('legacy report XML keeps bare boolean ampersands and Unicode filters', () =
   assert.match(saxReader, /__DATAEXPRESS_EXCLAMATION__/);
   assert.match(appUtils, /StringReplace\(S, '__DATAEXPRESS_OPTIONAL_PARENT__', '\?!'/);
   assert.match(saxReader, /inherited ParseStream\(XmlStream\)/);
+});
+
+test('modern skin preserves legacy form geometry and readable list selection', () => {
+  assert.match(modernCss, /\.main form input\[style\*="position"\][\s\S]*min-height: 0/);
+  assert.match(modernCss, /\.listcbx table\.list tr\.sel:hover[\s\S]*color: #fff !important/);
+  assert.match(htmlRuntime, /class=database-home href="\/"/);
 });

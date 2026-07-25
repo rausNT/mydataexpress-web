@@ -31,7 +31,8 @@ curl -fsSL https://raw.githubusercontent.com/rausNT/mydataexpress-web/main/deplo
 После установки:
 
 - `/` — список подключённых баз;
-- `/admin/` — загрузка `.DXDB`, `.FDB` или официального `.DXDB.zip`;
+- `/admin/` — загрузка `.DXDB`, `.FDB`, ZIP-комплекта с базой и каталогом
+  `templates`, а также добавление шаблонов к уже подключённой базе;
 - `/health` — проверка процесса DataExpress.
 
 Пока домен и TLS не настроены, не загружайте через публичный HTTP базы с личными или
@@ -46,7 +47,8 @@ curl -fsSL https://raw.githubusercontent.com/rausNT/mydataexpress-web/main/deplo
 - UFW, усиленный SSH/fail2ban, автоматические security updates и ограничения
   частоты HTTP-запросов и соединений;
 - browser uploader с bearer-аутентификацией, лимитами размера, защитой ZIP path
-  traversal/symlink и атомарной регистрацией подключения;
+  traversal/symlink, атомарной регистрацией подключения и безопасной установкой
+  DOCX/DOCM/XML/ODT/ODS/HTML-шаблонов;
 - определение Firebird ODS 11/12/13 и автоматическая миграция старых баз через
   backup/restore в Firebird 5 ODS 13;
 - общесерверный каталог переносимых `.wepas`: модуль из самой базы имеет приоритет,

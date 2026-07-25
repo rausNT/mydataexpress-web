@@ -76,6 +76,22 @@ input:focus, select:focus, textarea:focus {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
 }
 
+/* Legacy forms use absolute coordinates exported by the Lazarus designer.
+   Preserve their explicit heights; a global 40px minimum makes adjacent
+   controls overlap when the original layout uses 24-32px rows. */
+.main form input[style*="position"],
+.main form select[style*="position"],
+.main form textarea[style*="position"],
+.main form button[style*="position"] {
+    min-height: 0;
+}
+
+.main form input[style*="position"],
+.main form select[style*="position"],
+.main form textarea[style*="position"] {
+    padding-block: 2px;
+}
+
 .sidebar {
     width: var(--dx-sidebar-width) !important;
     background: var(--dx-sidebar) !important;
@@ -171,6 +187,17 @@ tbody tr:hover { background: #f7faff !important; }
     box-shadow: var(--dx-shadow) !important;
 }
 
+.listcbx table.list tr.sel,
+.listcbx table.list tr.sel:hover {
+    background: var(--dx-primary) !important;
+    color: #fff !important;
+}
+
+.listcbx table.list tr:not(.sel):hover {
+    background: var(--dx-primary-soft) !important;
+    color: var(--dx-text) !important;
+}
+
 .hide { display: none !important; }
 
 .login-page, .landing-page {
@@ -209,6 +236,16 @@ tbody tr:hover { background: #f7faff !important; }
     letter-spacing: -.025em;
     text-align: center;
 }
+
+.login-page .database-home {
+    display: inline-flex;
+    margin: -8px 0 18px;
+    color: var(--dx-muted);
+    font-weight: 650;
+    text-decoration: none;
+}
+
+.login-page .database-home:hover { color: var(--dx-primary); }
 
 .login-page #msg {
     margin: -8px 0 20px !important;

@@ -43,6 +43,7 @@ resourcestring
   rsReports = 'Reports';
   rsData = 'Data';
   rsExit = 'Exit';
+  rsAllDatabases = 'All databases';
   //rsIncorrectPwd = 'Incorrect user or password';
   rsPassword = 'Password';
   rsLogin = 'Login';

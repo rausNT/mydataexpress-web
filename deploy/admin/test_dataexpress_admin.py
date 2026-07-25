@@ -54,6 +54,59 @@ class AdminImportTests(unittest.TestCase):
             ADMIN.extract_database(archive, archive.name, extracted)
             self.assertEqual(extracted.read_bytes(), payload)
 
+    def test_extracts_database_and_nested_template_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / "bundle.zip"
+            database_payload = b"\x01\x00\x00\x00" + b"d" * 4092
+            with zipfile.ZipFile(archive, "w") as output:
+                output.writestr("package/DEMO.DXDB", database_payload)
+                output.writestr(
+                    "package/templates/Товарооборот.docm", b"word-template"
+                )
+                output.writestr(
+                    "templates/reports/summary.html",
+                    "<p>[Сумма]</p>".encode(),
+                )
+                output.writestr("package/readme.txt", b"ignored")
+
+            database = root / "database.dxdb"
+            templates = root / "templates"
+            names = ADMIN.extract_database_bundle(
+                archive, archive.name, database, templates
+            )
+            self.assertEqual(database.read_bytes(), database_payload)
+            self.assertEqual(
+                names, ["Товарооборот.docm", "reports/summary.html"]
+            )
+            self.assertEqual(
+                (templates / "Товарооборот.docm").read_bytes(),
+                b"word-template",
+            )
+            self.assertEqual(
+                (templates / "reports" / "summary.html").read_bytes(),
+                "<p>[Сумма]</p>".encode(),
+            )
+
+    def test_installs_templates_atomically_and_preserves_existing_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database_root = root / "databases"
+            target = database_root / "Demo" / "templates"
+            target.mkdir(parents=True)
+            (target / "existing.docx").write_bytes(b"old")
+            (target / "replace.docm").write_bytes(b"before")
+            incoming = root / "incoming"
+            incoming.mkdir()
+            (incoming / "replace.docm").write_bytes(b"after")
+            (incoming / "new.html").write_bytes(b"<p>new</p>")
+
+            installed = ADMIN.install_templates(target, incoming, database_root)
+            self.assertEqual(installed, 2)
+            self.assertEqual((target / "existing.docx").read_bytes(), b"old")
+            self.assertEqual((target / "replace.docm").read_bytes(), b"after")
+            self.assertEqual((target / "new.html").read_bytes(), b"<p>new</p>")
+
     def test_rejects_ambiguous_and_traversing_archives(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
