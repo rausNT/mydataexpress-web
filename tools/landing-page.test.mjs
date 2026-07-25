@@ -107,7 +107,7 @@ test('connection form builds only routable DataExpress aliases', () => {
 
 test('dark mode follows the system and persists an explicit user choice', () => {
   assert.match(template, /theme\.js\?v=20260725-2/);
-  assert.match(template, /modern\.css\?v=20260725-5/);
+  assert.match(template, /modern\.css\?v=20260725-6/);
   assert.match(themeScript, /prefers-color-scheme: dark/);
   assert.match(themeScript, /dataexpress-theme/);
   assert.match(themeScript, /localStorage\.setItem\(storageKey, value\)/);

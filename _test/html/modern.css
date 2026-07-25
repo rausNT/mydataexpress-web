@@ -285,53 +285,59 @@ html[data-theme="dark"] fieldset {
 /* Database designers can store bright desktop-only panel colors. In dark
    mode those colors become isolated white/yellow islands. Neutralize panel
    paint while keeping semantic text colors and modern input states. */
-html[data-theme="dark"] .data div:not(.error):not(.msg):not(.dialog):not(.calendar):not(.listcbx),
-html[data-theme="dark"] .data section,
-html[data-theme="dark"] .data article,
-html[data-theme="dark"] .data fieldset,
-html[data-theme="dark"] .data table,
-html[data-theme="dark"] .data thead,
-html[data-theme="dark"] .data tbody,
-html[data-theme="dark"] .data tr,
-html[data-theme="dark"] .data td {
+html[data-theme="dark"] :is(.data, .fm) div:not(.error):not(.msg):not(.dialog):not(.calendar):not(.listcbx),
+html[data-theme="dark"] :is(.data, .fm) section,
+html[data-theme="dark"] :is(.data, .fm) article,
+html[data-theme="dark"] :is(.data, .fm) fieldset,
+html[data-theme="dark"] :is(.data, .fm) table,
+html[data-theme="dark"] :is(.data, .fm) thead,
+html[data-theme="dark"] :is(.data, .fm) tbody,
+html[data-theme="dark"] :is(.data, .fm) tr,
+html[data-theme="dark"] :is(.data, .fm) td {
     border-color: var(--dx-border) !important;
     background-color: transparent !important;
 }
 
-html[data-theme="dark"] .data table,
-html[data-theme="dark"] .data .grid {
+html[data-theme="dark"] :is(.data, .fm) table,
+html[data-theme="dark"] :is(.data, .fm) .grid {
     background-color: var(--dx-surface-soft) !important;
 }
 
-html[data-theme="dark"] .data th,
-html[data-theme="dark"] .data td,
-html[data-theme="dark"] .data legend {
+html[data-theme="dark"] :is(.data, .fm) th,
+html[data-theme="dark"] :is(.data, .fm) td,
+html[data-theme="dark"] :is(.data, .fm) legend {
     border-color: var(--dx-border) !important;
     color: var(--dx-text) !important;
 }
 
-html[data-theme="dark"] .data th {
+html[data-theme="dark"] :is(.data, .fm) th {
     background-color: #1a2941 !important;
 }
 
-html[data-theme="dark"] .data legend {
+html[data-theme="dark"] :is(.data, .fm) legend {
     padding-inline: 6px;
     background-color: var(--dx-surface) !important;
 }
 
-html[data-theme="dark"] .data .groupcap {
+html[data-theme="dark"] :is(.data, .fm) .groupcap {
     background-color: var(--dx-surface) !important;
     color: var(--dx-text) !important;
 }
 
-html[data-theme="dark"] .data .theme-panel-shape {
+html[data-theme="dark"] :is(.data, .fm) .groupframe,
+html[data-theme="dark"] :is(.data, .fm) .grouparea {
+    border-color: var(--dx-border) !important;
+    background-color: var(--dx-surface) !important;
+}
+
+html[data-theme="dark"] :is(.data, .fm) .theme-panel-shape {
     opacity: 0 !important;
     pointer-events: none;
 }
 
-html[data-theme="dark"] .data input,
-html[data-theme="dark"] .data select,
-html[data-theme="dark"] .data textarea {
+html[data-theme="dark"] :is(.data, .fm) input,
+html[data-theme="dark"] :is(.data, .fm) select,
+html[data-theme="dark"] :is(.data, .fm) textarea {
     border-color: var(--dx-border-strong) !important;
     background-color: #101b2d !important;
     color: var(--dx-text) !important;
