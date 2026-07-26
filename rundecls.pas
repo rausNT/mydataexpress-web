@@ -2346,9 +2346,22 @@ begin
   Result := 0;
 end;
 
+function LegacyEvalExpr(const Expr: String; Fm: TdxForm): Variant;
+var
+  RS: TSsRecordSet;
+begin
+  if Fm = nil then
+    raise Exception.Create('EvalExpr requires a form in a web extension');
+  RS := TSsRecordSet(Fm.RecordSet);
+  if RS = nil then
+    raise Exception.Create('EvalExpr form has no active record set');
+  Result := RS.Session.EvalExpr(Expr, Fm);
+end;
+
 procedure RIRegister_Functions(Exec: TPSExec);
 begin
   Exec.RegisterDelphiFunction(@LegacyMessageDlg, 'MessageDlg', cdRegister);
+  Exec.RegisterDelphiFunction(@LegacyEvalExpr, 'EvalExpr', cdRegister);
   Exec.RegisterDelphiFunction(@MyUTF8Length, 'Utf8Length', cdRegister);
   Exec.RegisterDelphiFunction(@UTF8Pos, 'Utf8Pos', cdRegister);
   Exec.RegisterDelphiFunction(@UTF8Copy, 'Utf8Copy', cdRegister);

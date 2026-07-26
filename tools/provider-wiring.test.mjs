@@ -57,6 +57,17 @@ test('legacy modal dialogs compile with a conservative web fallback', () => {
     /RegisterDelphiFunction\(@LegacyMessageDlg, 'MessageDlg'/);
 });
 
+test('legacy EvalExpr delegates through the form session', () => {
+  const compilerDecls = source('compilerdecls.pas');
+  const runtimeDecls = source('rundecls.pas');
+  assert.match(compilerDecls,
+    /function EvalExpr\(const Expr: String; Fm: TdxForm\): Variant/);
+  assert.match(runtimeDecls,
+    /function LegacyEvalExpr[\s\S]+RS\.Session\.EvalExpr\(Expr, Fm\)/);
+  assert.match(runtimeDecls,
+    /RegisterDelphiFunction\(@LegacyEvalExpr, 'EvalExpr'/);
+});
+
 test('runtime exposes extension mapping status without breaking legacy forms', () => {
   const scripts = source('scriptmanager.pas');
   const runtimeTypes = source('dxtypes.pas');

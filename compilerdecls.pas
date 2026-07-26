@@ -1581,7 +1581,8 @@ begin
   Cl.AddDelphiFunction('function StringReplace(const S, OldPattern, NewPattern: string;  Flags: TReplaceFlags): string;');
   Cl.AddDelphiFunction('procedure SplitStr(const S: String; Delim: Char; SL: TStrings)');
 
-  //Cl.AddDelphiFunction('function EvalExpr(const Expr: String; Fm: TdxForm): Variant');
+  Cl.AddDelphiFunction(
+    'function EvalExpr(const Expr: String; Fm: TdxForm): Variant');
   //Cl.AddDelphiFunction('function SQLSelect(const SQL: String): TdxSQLQuery');
   //Cl.AddDelphiFunction('procedure SQLExecute(const SQL: String)');
 
