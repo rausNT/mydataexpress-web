@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKER_VERSION="${DX_WORKER_VERSION:-compat-worker-v0.1.1}"
+WORKER_VERSION="${DX_WORKER_VERSION:-compat-worker-v0.1.2}"
 WORKER_URL="${DX_WORKER_URL:-https://github.com/rausNT/mydataexpress-web/releases/download/$WORKER_VERSION/dxwebsrv-wine-worker.zip}"
-WORKER_SHA256="${DX_WORKER_SHA256:-1ca87926e2bbd3827e03dcfc8484c7b7326bf241ce433c6756ba66ae556ca653}"
+WORKER_SHA256="${DX_WORKER_SHA256:-dbf24e88b242ad460ba67f640dbfd0b7eff880d6a8f085fde09ee8b606e52dde}"
 WORKER_ROOT=/opt/dataexpress-wine
 STATE_ROOT=/var/lib/dataexpress-wine
 PREFIX="$STATE_ROOT/prefix"
@@ -78,7 +78,7 @@ install -m 0755 "$RELEASE_DIR/worker-tools/reconfigure.sh" \
   "$WORKER_ROOT/bin/reconfigure.sh"
 
 install -d -m 0750 -o dataexpress -g dataexpress "$PREFIX"
-runuser -u dataexpress -- env WINEPREFIX="$PREFIX" WINEARCH=wow64 WINEDEBUG=-all \
+runuser -u dataexpress -- env WINEPREFIX="$PREFIX" WINEARCH=win64 WINEDEBUG=-all \
   xvfb-run -a wineboot -u
 
 install -d -m 0750 -o dataexpress -g dataexpress "$APP_DIR"

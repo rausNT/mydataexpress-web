@@ -10,7 +10,7 @@ User=dataexpress
 Group=dataexpress
 WorkingDirectory=/var/lib/dataexpress-wine/prefix/drive_c/dataexpress
 Environment=WINEPREFIX=/var/lib/dataexpress-wine/prefix
-Environment=WINEARCH=wow64
+Environment=WINEARCH=win64
 Environment=WINEDEBUG=-all
 ExecStartPre=/usr/bin/test -f /var/lib/dataexpress-wine/prefix/drive_c/dataexpress/dxwebsrv.exe
 ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1024x768x24 -nolisten tcp" /usr/bin/wine dxwebsrv.exe
