@@ -78,7 +78,30 @@ DOWNLOAD_ROOT="$(mktemp -d)"
 trap 'rm -rf "$DOWNLOAD_ROOT"' EXIT
 curl --fail --location --retry 3 --output "$DOWNLOAD_ROOT/worker.zip" "$WORKER_URL"
 echo "$WORKER_SHA256  $DOWNLOAD_ROOT/worker.zip" | sha256sum --check -
-unzip -q "$DOWNLOAD_ROOT/worker.zip" -d "$DOWNLOAD_ROOT/package"
+python3 - "$DOWNLOAD_ROOT/worker.zip" "$DOWNLOAD_ROOT/package" <<'PY'
+import shutil
+import sys
+from pathlib import Path, PurePosixPath
+from zipfile import ZipFile
+
+archive = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+destination.mkdir(parents=True, exist_ok=True)
+
+with ZipFile(archive) as zip_file:
+    for entry in zip_file.infolist():
+        normalized = entry.filename.replace("\\", "/")
+        relative = PurePosixPath(normalized)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise SystemExit(f"Unsafe path in worker archive: {entry.filename!r}")
+        target = destination.joinpath(*relative.parts)
+        if entry.is_dir() or normalized.endswith("/"):
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with zip_file.open(entry) as source, target.open("wb") as output:
+            shutil.copyfileobj(source, output)
+PY
 
 install -d -m 0755 "$WORKER_ROOT/releases" "$WORKER_ROOT/bin"
 install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT"
