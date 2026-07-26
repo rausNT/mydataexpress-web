@@ -1,0 +1,33 @@
+[Unit]
+Description=DataExpress isolated Win32 extension compatibility worker
+After=network-online.target dataexpress-firebird.service
+Requires=dataexpress-firebird.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dataexpress
+Group=dataexpress
+WorkingDirectory=/var/lib/dataexpress-wine/prefix/drive_c/dataexpress
+Environment=WINEPREFIX=/var/lib/dataexpress-wine/prefix
+Environment=WINEARCH=wow64
+Environment=WINEDEBUG=-all
+ExecStartPre=/usr/bin/test -f /var/lib/dataexpress-wine/prefix/drive_c/dataexpress/dxwebsrv.exe
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1024x768x24 -nolisten tcp" /usr/bin/wine dxwebsrv.exe
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/dataexpress-wine /var/lib/dataexpress
+InaccessiblePaths=/etc/dataexpress /root /home
+IPAddressDeny=any
+IPAddressAllow=localhost
+LimitNOFILE=4096
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

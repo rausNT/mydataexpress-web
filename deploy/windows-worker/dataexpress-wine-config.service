@@ -1,0 +1,6 @@
+[Unit]
+Description=Regenerate DataExpress Wine worker routing
+
+[Service]
+Type=oneshot
+ExecStart=/opt/dataexpress-wine/bin/reconfigure.sh

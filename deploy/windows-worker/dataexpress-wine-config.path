@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch the DataExpress database catalog for Wine worker routing
+
+[Path]
+PathChanged=/etc/dataexpress/dxwebsrv.cfg
+Unit=dataexpress-wine-config.service
+
+[Install]
+WantedBy=multi-user.target

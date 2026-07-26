@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const installer = readFileSync('deploy/install.sh', 'utf8');
+const workerInstaller = readFileSync('deploy/install-windows-worker.sh', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
 const runtime = readFileSync('dxtypes.pas', 'utf8');
 const htmlRuntime = readFileSync('htmlshow.pas', 'utf8');
@@ -46,6 +47,7 @@ test('one-line installer pins runtime downloads and runs services unprivileged',
   assert.match(installer, /ufw limit OpenSSH/);
   assert.match(installer, /unattended-upgrades/);
   assert.match(installer, /\.well-known\/acme-challenge/);
+  assert.match(installer, /location ~ \/\\\.\(\?!well-known/);
   assert.match(installer, /ssl_protocols TLSv1\.2 TLSv1\.3/);
   assert.match(installer, /MaxAuthTries 3/);
   assert.match(installer, /StartLimitIntervalSec=0/);
@@ -72,6 +74,28 @@ test('installer keeps persistent state outside an atomic release', () => {
   );
 });
 
+test('Windows compatibility worker stays loopback-only and uses a pinned artifact', () => {
+  assert.match(workerInstaller, /compat-worker-v0\.1\.1/);
+  assert.match(workerInstaller,
+    /1ca87926e2bbd3827e03dcfc8484c7b7326bf241ce433c6756ba66ae556ca653/);
+  assert.match(workerInstaller, /WINEARCH=wow64/);
+  assert.match(workerInstaller, /rm -f "\$DOS_DEVICES\/z:"/);
+  assert.match(workerInstaller,
+    /ln -sfn \/var\/lib\/dataexpress "\$DOS_DEVICES\/d:"/);
+  assert.match(
+    readFileSync('deploy/windows-worker/dataexpress-wine-worker.service', 'utf8'),
+    /IPAddressDeny=any[\s\S]+IPAddressAllow=localhost/,
+  );
+  assert.match(
+    readFileSync('deploy/windows-worker/dataexpress-firebird.service', 'utf8'),
+    /IPAddressDeny=any[\s\S]+IPAddressAllow=localhost/,
+  );
+  assert.match(
+    readFileSync('deploy/windows-worker/reconfigure.sh', 'utf8'),
+    /RemoteBindAddress = 127\.0\.0\.1/,
+  );
+});
+
 test('server reports unexpected renderer failures and audits form navigation', () => {
   assert.match(mainServer, /AUDIT form_request/);
   assert.match(mainServer, /SafeIntegerQueryParam\('fm'\)/);
@@ -82,6 +106,8 @@ test('server reports unexpected renderer failures and audits form navigation', (
   assert.match(mainServer, /outcome=/);
   assert.match(mainServer, /AResponse\.Code := rcServerError/);
   assert.match(mainServer, /LogFormRequestAudit;/);
+  assert.match(mainServer, /AUDIT extension_compile_error connection=/);
+  assert.match(mainServer, /LogExtensionCompileErrors\(MD\.ScriptMan\)/);
 });
 
 test('form filters register object-field joins before resolving their aliases', () => {

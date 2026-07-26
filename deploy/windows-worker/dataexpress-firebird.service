@@ -1,0 +1,25 @@
+[Unit]
+Description=DataExpress loopback Firebird service for the Windows worker
+After=network.target
+Before=dataexpress-wine-worker.service
+
+[Service]
+Type=simple
+User=dataexpress
+Group=dataexpress
+Environment=FIREBIRD=/opt/dataexpress/runtime/firebird5
+Environment=LD_LIBRARY_PATH=/opt/dataexpress/runtime/firebird5/lib
+ExecStart=/opt/dataexpress/runtime/firebird5/bin/firebird -p 3050
+Restart=on-failure
+RestartSec=3
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/dataexpress/runtime/firebird5 /var/lib/dataexpress
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target

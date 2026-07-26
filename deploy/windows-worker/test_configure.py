@@ -47,7 +47,7 @@ Token=secret
         )
         self.assertEqual(
             worker["Demo_DB"]["Templates"],
-            r"Z:\var\lib\dataexpress\databases\Demo\templates",
+            r"D:\databases\Demo\templates",
         )
         self.assertEqual(worker["provider:office"]["Token"], "secret")
 
@@ -62,6 +62,8 @@ Token=secret
     def test_rejects_relative_or_unsafe_paths(self):
         with self.assertRaises(ValueError):
             windows_path("../templates")
+        with self.assertRaises(ValueError):
+            windows_path("/etc/dataexpress")
         with self.assertRaises(ValueError):
             remote_database("../database.fdb", "127.0.0.1")
         source = self.source()

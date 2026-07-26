@@ -14,14 +14,22 @@ from pathlib import Path
 ALIAS_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
 
-def windows_path(value: str) -> str:
+def windows_path(
+    value: str, *, data_root: str = "/var/lib/dataexpress", drive: str = "D:"
+) -> str:
     if not value:
         return value
     if re.match(r"^[A-Za-z]:[\\/]", value):
         return value
     if not value.startswith("/"):
         raise ValueError(f"worker filesystem path must be absolute: {value!r}")
-    return "Z:" + value.replace("/", "\\")
+    root = data_root.rstrip("/")
+    if value != root and not value.startswith(root + "/"):
+        raise ValueError(
+            f"worker filesystem path is outside {data_root!r}: {value!r}"
+        )
+    relative = value[len(root) :].lstrip("/")
+    return drive + ("\\" + relative.replace("/", "\\") if relative else "\\")
 
 
 def remote_database(value: str, host: str) -> str:
@@ -45,7 +53,11 @@ def load_config(path: Path) -> configparser.ConfigParser:
 
 
 def build_worker_config(
-    source: configparser.ConfigParser, *, port: int, firebird_host: str
+    source: configparser.ConfigParser,
+    *,
+    port: int,
+    firebird_host: str,
+    data_root: str = "/var/lib/dataexpress",
 ) -> configparser.ConfigParser:
     result = configparser.ConfigParser(interpolation=None, strict=True)
     result.optionxform = str
@@ -70,7 +82,9 @@ def build_worker_config(
             values.get("Database", ""), firebird_host
         )
         if values.get("Templates"):
-            values["Templates"] = windows_path(values["Templates"])
+            values["Templates"] = windows_path(
+                values["Templates"], data_root=data_root
+            )
         result[section] = values
     return result
 
@@ -131,7 +145,10 @@ def serialize_config(config: configparser.ConfigParser) -> str:
 def configure(args: argparse.Namespace) -> None:
     source = load_config(args.source)
     worker = build_worker_config(
-        source, port=args.port, firebird_host=args.firebird_host
+        source,
+        port=args.port,
+        firebird_host=args.firebird_host,
+        data_root=args.data_root,
     )
     routes = build_routes(source, args.upstream)
     atomic_write(args.worker_config, serialize_config(worker), 0o640)
@@ -146,6 +163,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=8180)
     parser.add_argument("--upstream", default="127.0.0.1:8180")
     parser.add_argument("--firebird-host", default="127.0.0.1")
+    parser.add_argument("--data-root", default="/var/lib/dataexpress")
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535:
         parser.error("--port must be between 1024 and 65535")
@@ -153,6 +171,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--upstream must be a loopback IPv4 host and port")
     if args.firebird_host not in {"127.0.0.1", "localhost"}:
         parser.error("--firebird-host must be loopback")
+    if not args.data_root.startswith("/"):
+        parser.error("--data-root must be absolute")
     return args
 
 
