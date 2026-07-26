@@ -81,6 +81,10 @@ test('Windows compatibility worker stays loopback-only and uses a pinned artifac
   assert.match(workerInstaller, /WINEARCH=win64/);
   assert.match(workerInstaller, /CREATE OR ALTER USER SYSDBA PASSWORD 'masterkey'/);
   assert.match(workerInstaller, /select 1 from rdb\$database/);
+  assert.match(workerInstaller,
+    /WORKER_HANDOFF_STARTED[\s\S]+dataexpress-worker-routes\.backup/);
+  assert.match(workerInstaller,
+    /INSTALL_SUCCEEDED[\s\S]+systemctl restart dataexpress-web\.service/);
   assert.match(workerInstaller, /rm -f "\$DOS_DEVICES\/z:"/);
   assert.match(workerInstaller,
     /ln -sfn \/var\/lib\/dataexpress "\$DOS_DEVICES\/d:"/);

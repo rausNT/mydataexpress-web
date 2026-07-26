@@ -75,7 +75,33 @@ if ! id dataexpress >/dev/null 2>&1; then
 fi
 
 DOWNLOAD_ROOT="$(mktemp -d)"
-trap 'rm -rf "$DOWNLOAD_ROOT"' EXIT
+MAIN_SERVICE_STOPPED=0
+WORKER_HANDOFF_STARTED=0
+INSTALL_SUCCEEDED=0
+ROUTES_BACKUP="$DOWNLOAD_ROOT/dataexpress-worker-routes.backup"
+
+cleanup() {
+  exit_status=$?
+  set +e
+  if [ "$WORKER_HANDOFF_STARTED" -eq 1 ] &&
+     [ "$INSTALL_SUCCEEDED" -eq 0 ]; then
+    systemctl stop dataexpress-wine-worker.service \
+      dataexpress-firebird.service
+    if [ -f "$ROUTES_BACKUP" ]; then
+      cp "$ROUTES_BACKUP" /etc/nginx/snippets/dataexpress-worker-routes.conf
+      chown root:root /etc/nginx/snippets/dataexpress-worker-routes.conf
+      chmod 0644 /etc/nginx/snippets/dataexpress-worker-routes.conf
+      nginx -t && systemctl reload nginx.service
+    fi
+    systemctl restart dataexpress-web.service
+  elif [ "$MAIN_SERVICE_STOPPED" -eq 1 ]; then
+    systemctl start dataexpress-web.service
+  fi
+  rm -rf "$DOWNLOAD_ROOT"
+  return "$exit_status"
+}
+trap cleanup EXIT
+
 curl --fail --location --retry 3 --output "$DOWNLOAD_ROOT/worker.zip" "$WORKER_URL"
 echo "$WORKER_SHA256  $DOWNLOAD_ROOT/worker.zip" | sha256sum --check -
 python3 - "$DOWNLOAD_ROOT/worker.zip" "$DOWNLOAD_ROOT/package" <<'PY'
@@ -150,7 +176,6 @@ systemctl stop dataexpress-wine-worker.service \
   dataexpress-firebird.service 2>/dev/null || true
 systemctl stop dataexpress-web.service
 MAIN_SERVICE_STOPPED=1
-trap 'if [ "${MAIN_SERVICE_STOPPED:-0}" -eq 1 ]; then systemctl start dataexpress-web.service; fi; rm -rf "$DOWNLOAD_ROOT"' EXIT
 printf "%s\n" \
   "CREATE OR ALTER USER SYSDBA PASSWORD 'masterkey';" \
   "COMMIT;" |
@@ -163,6 +188,8 @@ systemctl start dataexpress-web.service
 MAIN_SERVICE_STOPPED=0
 systemctl enable dataexpress-firebird.service dataexpress-wine-worker.service \
   dataexpress-wine-config.path
+cp /etc/nginx/snippets/dataexpress-worker-routes.conf "$ROUTES_BACKUP"
+WORKER_HANDOFF_STARTED=1
 "$WORKER_ROOT/bin/reconfigure.sh"
 systemctl start dataexpress-wine-config.path
 
@@ -190,6 +217,7 @@ printf '%s\n' 'select 1 from rdb$database;' |
 for _ in $(seq 1 60); do
   if curl --fail --silent http://127.0.0.1:8180/health |
      grep -q '"status":"ok"'; then
+    INSTALL_SUCCEEDED=1
     echo "DataExpress Wine worker is ready on loopback port 8180."
     echo "Database routes remain available at their original public URLs."
     exit 0
