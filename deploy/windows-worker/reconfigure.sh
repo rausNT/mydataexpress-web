@@ -5,6 +5,8 @@ FIREBIRD_CONFIG=/opt/dataexpress/runtime/firebird5/firebird.conf
 SOURCE_CONFIG=/etc/dataexpress/dxwebsrv.cfg
 WORKER_ROOT=/var/lib/dataexpress-wine/prefix/drive_c/dataexpress
 WORKER_CONFIG="$WORKER_ROOT/dxwebsrv.cfg"
+SHARED_EXTENSIONS=/var/lib/dataexpress/extensions
+WORKER_EXTENSIONS="$WORKER_ROOT/extensions"
 ROUTES=/etc/nginx/snippets/dataexpress-worker-routes.conf
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -33,6 +35,15 @@ python3 /opt/dataexpress-wine/bin/configure.py \
 
 chown dataexpress:dataexpress "$WORKER_CONFIG"
 chmod 0640 "$WORKER_CONFIG"
+install -d -m 0750 -o dataexpress -g dataexpress "$WORKER_EXTENSIONS"
+if [ -d "$SHARED_EXTENSIONS" ]; then
+  while IFS= read -r -d '' extension; do
+    install -m 0640 -o dataexpress -g dataexpress "$extension" \
+      "$WORKER_EXTENSIONS/$(basename "$extension")"
+  done < <(
+    find "$SHARED_EXTENSIONS" -maxdepth 1 -type f -iname '*.wepas' -print0
+  )
+fi
 chown root:root "$ROUTES"
 chmod 0644 "$ROUTES"
 

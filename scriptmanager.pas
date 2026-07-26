@@ -2813,6 +2813,8 @@ begin
     Summary.Add('webModules', WebModules);
     Summary.Add('automaticModules', AutomaticModules);
     Summary.Add('extensionModules', DesktopModules + WebModules);
+    Summary.Add('windowsWorkerMode',
+      Assigned(AppSet) and AppSet.WindowsWorkerMode);
     Summary.Add('providerBacked', ProviderBacked);
     Summary.Add('providerReady', ProviderReady);
     Summary.Add('providerUnconfigured', ProviderUnconfigured);

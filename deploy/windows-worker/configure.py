@@ -67,7 +67,7 @@ def build_worker_config(
     result["Server"]["UseSSL"] = "False"
     result["Server"]["Firebird"] = "5"
     result["Server"]["ShowConnections"] = "False"
-    result["Server"]["WindowsWorkerMode"] = "True"
+    result["Server"]["WindowsWorkerMode"] = "1"
 
     for section in source.sections():
         if section == "Server":

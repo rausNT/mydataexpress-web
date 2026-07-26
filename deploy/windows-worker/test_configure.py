@@ -39,7 +39,7 @@ Token=secret
         worker = build_worker_config(
             self.source(), port=8180, firebird_host="127.0.0.1"
         )
-        self.assertEqual(worker["Server"]["WindowsWorkerMode"], "True")
+        self.assertEqual(worker["Server"]["WindowsWorkerMode"], "1")
         self.assertEqual(worker["Server"]["ShowConnections"], "False")
         self.assertEqual(
             worker["Demo_DB"]["Database"],

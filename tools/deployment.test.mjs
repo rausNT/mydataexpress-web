@@ -106,6 +106,10 @@ test('Windows compatibility worker stays loopback-only and uses a pinned artifac
   );
   assert.match(
     readFileSync('deploy/windows-worker/reconfigure.sh', 'utf8'),
+    /SHARED_EXTENSIONS=\/var\/lib\/dataexpress\/extensions[\s\S]+-iname '\*\.wepas'/,
+  );
+  assert.match(
+    readFileSync('deploy/windows-worker/reconfigure.sh', 'utf8'),
     /reload nginx\.service[\s\S]+restart dataexpress-web\.service[\s\S]+restart dataexpress-firebird\.service/,
   );
 });

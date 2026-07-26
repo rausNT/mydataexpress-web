@@ -55,6 +55,8 @@ begin
 
   AppSet := TAppSettings.Create;
   AppSet.Load;
+  LogString('Windows worker mode: ' +
+    BoolToStr(AppSet.WindowsWorkerMode, True));
   TranslateUnitResourceStrings('strconsts', AppPath + 'languages' +
     DirectorySeparator + 'dxwebsrv.%s.po', AppSet.Language, '');
 
