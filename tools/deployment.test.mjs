@@ -75,9 +75,9 @@ test('installer keeps persistent state outside an atomic release', () => {
 });
 
 test('Windows compatibility worker stays loopback-only and uses a pinned artifact', () => {
-  assert.match(workerInstaller, /compat-worker-v0\.1\.2/);
+  assert.match(workerInstaller, /compat-worker-v0\.1\.3/);
   assert.match(workerInstaller,
-    /8e7dececdedc291b2551c0864efaac6372770e603e97b81e9dc2ebcb606d9e8f/);
+    /15f1d2306bfbddb2f523a7c4edb35bb540aeabf9df6d8ef8ae813cbba30b05c9/);
   assert.match(workerInstaller, /WINEARCH=win64/);
   assert.match(workerInstaller, /CREATE OR ALTER USER SYSDBA PASSWORD 'masterkey'/);
   assert.match(workerInstaller, /select 1 from rdb\$database/);
