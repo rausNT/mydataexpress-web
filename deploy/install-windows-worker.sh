@@ -41,18 +41,16 @@ curl --fail --location --retry 3 \
   https://dl.winehq.org/wine-builds/ubuntu/dists/noble/winehq-noble.sources
 apt-get update
 apt-get install -y --install-recommends winehq-stable xvfb
+apt-get install -y --no-install-recommends systemd-zram-generator
 
 if ! swapon --show=NAME --noheadings | grep -q .; then
-  install -d -m 0750 "$STATE_ROOT"
-  if [ ! -f "$STATE_ROOT/swapfile" ]; then
-    fallocate -l 1G "$STATE_ROOT/swapfile"
-    chmod 0600 "$STATE_ROOT/swapfile"
-    mkswap "$STATE_ROOT/swapfile"
-  fi
-  swapon "$STATE_ROOT/swapfile"
-  if ! grep -qF "$STATE_ROOT/swapfile none swap sw 0 0" /etc/fstab; then
-    printf '%s\n' "$STATE_ROOT/swapfile none swap sw 0 0" >>/etc/fstab
-  fi
+  cat >/etc/systemd/zram-generator.conf <<'EOF'
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+EOF
+  systemctl daemon-reload
+  systemctl start /dev/zram0
 fi
 
 if ! id dataexpress >/dev/null 2>&1; then
