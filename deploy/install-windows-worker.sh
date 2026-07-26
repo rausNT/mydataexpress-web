@@ -49,8 +49,19 @@ if ! swapon --show=NAME --noheadings | grep -q .; then
 zram-size = ram / 2
 compression-algorithm = zstd
 EOF
-  systemctl daemon-reload
-  systemctl start /dev/zram0
+  if modprobe zram 2>/dev/null; then
+    systemctl daemon-reload
+    systemctl start /dev/zram0
+  else
+    install -d -m 0750 "$STATE_ROOT"
+    fallocate -l 256M "$STATE_ROOT/swapfile"
+    chmod 0600 "$STATE_ROOT/swapfile"
+    mkswap "$STATE_ROOT/swapfile"
+    swapon "$STATE_ROOT/swapfile"
+    if ! grep -qF "$STATE_ROOT/swapfile none swap sw 0 0" /etc/fstab; then
+      printf '%s\n' "$STATE_ROOT/swapfile none swap sw 0 0" >>/etc/fstab
+    fi
+  fi
 fi
 
 if ! id dataexpress >/dev/null 2>&1; then
