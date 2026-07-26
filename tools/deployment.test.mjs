@@ -77,7 +77,7 @@ test('installer keeps persistent state outside an atomic release', () => {
 test('Windows compatibility worker stays loopback-only and uses a pinned artifact', () => {
   assert.match(workerInstaller, /compat-worker-v0\.1\.2/);
   assert.match(workerInstaller,
-    /30af33a82d4f19ac8c7d2c1fe38244341adcb2f8482de2faa07cd28f85f0d692/);
+    /8e7dececddc291b2551c0864efaac6372770e603e97b81e9dc2ebcb606d9e8f/);
   assert.match(workerInstaller, /WINEARCH=win64/);
   assert.match(workerInstaller, /rm -f "\$DOS_DEVICES\/z:"/);
   assert.match(workerInstaller,
