@@ -38,5 +38,9 @@ chmod 0644 "$ROUTES"
 
 nginx -t
 systemctl reload nginx.service
+# Nginx now keeps new database requests away from the embedded Linux engine.
+# Restart it before Firebird Server opens the same database files; otherwise
+# the first worker request can fail with an incompatible engine-instance lock.
+systemctl restart dataexpress-web.service
 systemctl restart dataexpress-firebird.service
 systemctl restart dataexpress-wine-worker.service

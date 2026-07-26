@@ -77,7 +77,7 @@ test('installer keeps persistent state outside an atomic release', () => {
 test('Windows compatibility worker stays loopback-only and uses a pinned artifact', () => {
   assert.match(workerInstaller, /compat-worker-v0\.1\.2/);
   assert.match(workerInstaller,
-    /dbf24e88b242ad460ba67f640dbfd0b7eff880d6a8f085fde09ee8b606e52dde/);
+    /30af33a82d4f19ac8c7d2c1fe38244341adcb2f8482de2faa07cd28f85f0d692/);
   assert.match(workerInstaller, /WINEARCH=win64/);
   assert.match(workerInstaller, /rm -f "\$DOS_DEVICES\/z:"/);
   assert.match(workerInstaller,
@@ -93,6 +93,10 @@ test('Windows compatibility worker stays loopback-only and uses a pinned artifac
   assert.match(
     readFileSync('deploy/windows-worker/reconfigure.sh', 'utf8'),
     /RemoteBindAddress = 127\.0\.0\.1/,
+  );
+  assert.match(
+    readFileSync('deploy/windows-worker/reconfigure.sh', 'utf8'),
+    /reload nginx\.service[\s\S]+restart dataexpress-web\.service[\s\S]+restart dataexpress-firebird\.service/,
   );
 });
 

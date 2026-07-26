@@ -3,7 +3,7 @@ set -euo pipefail
 
 WORKER_VERSION="${DX_WORKER_VERSION:-compat-worker-v0.1.2}"
 WORKER_URL="${DX_WORKER_URL:-https://github.com/rausNT/mydataexpress-web/releases/download/$WORKER_VERSION/dxwebsrv-wine-worker.zip}"
-WORKER_SHA256="${DX_WORKER_SHA256:-dbf24e88b242ad460ba67f640dbfd0b7eff880d6a8f085fde09ee8b606e52dde}"
+WORKER_SHA256="${DX_WORKER_SHA256:-30af33a82d4f19ac8c7d2c1fe38244341adcb2f8482de2faa07cd28f85f0d692}"
 WORKER_ROOT=/opt/dataexpress-wine
 STATE_ROOT=/var/lib/dataexpress-wine
 PREFIX="$STATE_ROOT/prefix"
