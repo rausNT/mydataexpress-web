@@ -1421,6 +1421,18 @@ procedure SIRegister_Consts(Cl: TPSPascalCompiler);
 begin
   Cl.AddConstantN('LineEnding', 'String').SetString(LineEnding);
   Cl.AddConstantN('PathDelim', 'Char').SetChar( {$IFDEF WINDOWS}'\'{$ELSE}'/'{$ENDIF} );
+  Cl.AddConstantN('mrNone', 'Integer').SetInt(0);
+  Cl.AddConstantN('mrOk', 'Integer').SetInt(1);
+  Cl.AddConstantN('mrCancel', 'Integer').SetInt(2);
+  Cl.AddConstantN('mrAbort', 'Integer').SetInt(3);
+  Cl.AddConstantN('mrRetry', 'Integer').SetInt(4);
+  Cl.AddConstantN('mrIgnore', 'Integer').SetInt(5);
+  Cl.AddConstantN('mrYes', 'Integer').SetInt(6);
+  Cl.AddConstantN('mrNo', 'Integer').SetInt(7);
+  Cl.AddConstantN('mrAll', 'Integer').SetInt(8);
+  Cl.AddConstantN('mrNoToAll', 'Integer').SetInt(9);
+  Cl.AddConstantN('mrYesToAll', 'Integer').SetInt(10);
+  Cl.AddConstantN('mrClose', 'Integer').SetInt(11);
 
   Cl.AddConstantN('faReadOnly', 'LongInt').SetInt(faReadOnly);
   Cl.AddConstantN('faHidden', 'LongInt').SetInt(faHidden);
@@ -1446,6 +1458,9 @@ begin
     'LongDayNames: TWeekNameArray; TwoDigitYearCenturyWindow: Word; end;');
   Cl.AddTypeS('TReplaceFlag', '(rfReplaceAll, rfIgnoreCase)');
   Cl.AddTypeS('TReplaceFlags', 'set of TReplaceFlag');
+  Cl.AddDelphiFunction(
+    'function MessageDlg(const Title, Msg: String; MsgType: TMsgDlgType; ' +
+    'Buttons: TMsgDlgButtons): Integer');
 
   Cl.AddDelphiFunction('function UTF8Length(const s: string): LongInt;');
   Cl.AddDelphiFunction('function UTF8Pos(const SearchForText, SearchInText: string; StartPos: LongInt): LongInt;');

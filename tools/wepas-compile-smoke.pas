@@ -68,6 +68,8 @@ begin
       'function WindowsDictionaryCount: Integer;' + LineEnding +
       'var Dictionary: OleVariant;' + LineEnding +
       'begin' + LineEnding +
+      '  if MessageDlg(''Confirm'', ''Continue?'', mtConfirmation, ' +
+      '[mbYes, mbNo]) = mrYes then Result := 0;' + LineEnding +
       '  Dictionary := CreateOleObject(''Scripting.Dictionary'');' + LineEnding +
       '  Result := Dictionary.Count;' + LineEnding +
       'end;';

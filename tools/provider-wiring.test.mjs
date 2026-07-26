@@ -45,6 +45,18 @@ test('Windows-only APIs are enabled only in the explicit isolated worker mode', 
     /AppSet\.WindowsWorkerMode then Exit/);
 });
 
+test('legacy modal dialogs compile with a conservative web fallback', () => {
+  const compilerDecls = source('compilerdecls.pas');
+  const runtimeDecls = source('rundecls.pas');
+  assert.match(compilerDecls,
+    /function MessageDlg\(const Title, Msg: String; MsgType: TMsgDlgType;/);
+  assert.match(compilerDecls, /'mrYes', 'Integer'\)\.SetInt\(6\)/);
+  assert.match(runtimeDecls,
+    /function LegacyMessageDlg[\s\S]+if mbNo in Buttons then Exit\(7\)/);
+  assert.match(runtimeDecls,
+    /RegisterDelphiFunction\(@LegacyMessageDlg, 'MessageDlg'/);
+});
+
 test('runtime exposes extension mapping status without breaking legacy forms', () => {
   const scripts = source('scriptmanager.pas');
   const runtimeTypes = source('dxtypes.pas');

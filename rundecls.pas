@@ -36,7 +36,7 @@ implementation
 uses
   ScriptFuncs, Math, exprfuncs, DateUtils, dxctrls, apputils, IniFiles,
   BGRABitmap, dxSQLQuery, HMAC, Variants, pivotgrid, dxtypes,
-  extensionproviders;
+  extensionproviders, mylogger;
 
 type
   TFileSetDateFunc = function (const FileName : RawByteString;Age : Int64) : Longint;
@@ -2328,8 +2328,27 @@ begin
   end;
 end;
 
+function LegacyMessageDlg(const Title, Msg: String; MsgType: TMsgDlgType;
+  Buttons: TMsgDlgButtons): Integer;
+begin
+  LogString('Legacy MessageDlg [' + Title + ']: ' + Msg);
+  if MsgType = mtConfirmation then
+  begin
+    if mbNo in Buttons then Exit(7);
+    if mbCancel in Buttons then Exit(2);
+    if mbAbort in Buttons then Exit(3);
+    if mbIgnore in Buttons then Exit(5);
+  end;
+  if mbOk in Buttons then Exit(1);
+  if mbCancel in Buttons then Exit(2);
+  if mbNo in Buttons then Exit(7);
+  if mbYes in Buttons then Exit(6);
+  Result := 0;
+end;
+
 procedure RIRegister_Functions(Exec: TPSExec);
 begin
+  Exec.RegisterDelphiFunction(@LegacyMessageDlg, 'MessageDlg', cdRegister);
   Exec.RegisterDelphiFunction(@MyUTF8Length, 'Utf8Length', cdRegister);
   Exec.RegisterDelphiFunction(@UTF8Pos, 'Utf8Pos', cdRegister);
   Exec.RegisterDelphiFunction(@UTF8Copy, 'Utf8Copy', cdRegister);
