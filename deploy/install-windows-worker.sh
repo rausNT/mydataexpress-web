@@ -116,6 +116,7 @@ install -m 0755 "$RELEASE_DIR/worker-tools/reconfigure.sh" \
 
 install -d -m 0750 -o dataexpress -g dataexpress "$PREFIX"
 runuser -u dataexpress -- env WINEPREFIX="$PREFIX" WINEARCH=win64 WINEDEBUG=-all \
+  WINEDLLOVERRIDES='mscoree,mshtml=' \
   xvfb-run -a wineboot -u
 
 install -d -m 0750 -o dataexpress -g dataexpress "$APP_DIR"
