@@ -67,11 +67,13 @@ begin
       '@}' + LineEnding + LineEnding +
       'function WindowsDictionaryCount: Integer;' + LineEnding +
       'var Dictionary: OleVariant;' + LineEnding +
+      '    Control: TWinControl;' + LineEnding +
       'begin' + LineEnding +
       '  if MessageDlg(''Confirm'', ''Continue?'', mtConfirmation, ' +
       '[mbYes, mbNo]) = mrYes then Result := 0;' + LineEnding +
       '  if EvalExpr(''1'', nil) = 1 then Result := 0;' + LineEnding +
-      '  if TWinControl(nil).CanFocus then TWinControl(nil).SetFocus;' + LineEnding +
+      '  Control := nil;' + LineEnding +
+      '  if (Control <> nil) and Control.CanFocus then Control.SetFocus;' + LineEnding +
       '  Dictionary := CreateOleObject(''Scripting.Dictionary'');' + LineEnding +
       '  Result := Dictionary.Count;' + LineEnding +
       'end;';
