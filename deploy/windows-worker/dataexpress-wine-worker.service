@@ -12,11 +12,15 @@ WorkingDirectory=/var/lib/dataexpress-wine/prefix/drive_c/dataexpress
 Environment=WINEPREFIX=/var/lib/dataexpress-wine/prefix
 Environment=WINEARCH=win64
 Environment=WINEDEBUG=-all
+Environment=HOME=/var/lib/dataexpress-wine
+Environment=XDG_CACHE_HOME=/var/lib/dataexpress-wine/cache
 ExecStartPre=/usr/bin/test -f /var/lib/dataexpress-wine/prefix/drive_c/dataexpress/dxwebsrv.exe
 ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1024x768x24 -nolisten tcp" /usr/bin/wine dxwebsrv.exe
+ExecStop=/usr/bin/wineserver -k
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=30
+KillMode=mixed
+TimeoutStopSec=15
 UMask=0027
 NoNewPrivileges=true
 PrivateTmp=true

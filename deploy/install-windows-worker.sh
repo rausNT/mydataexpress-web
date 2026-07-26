@@ -115,7 +115,9 @@ install -m 0755 "$RELEASE_DIR/worker-tools/reconfigure.sh" \
   "$WORKER_ROOT/bin/reconfigure.sh"
 
 install -d -m 0750 -o dataexpress -g dataexpress "$PREFIX"
+install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT/cache"
 runuser -u dataexpress -- env WINEPREFIX="$PREFIX" WINEARCH=win64 WINEDEBUG=-all \
+  HOME="$STATE_ROOT" XDG_CACHE_HOME="$STATE_ROOT/cache" \
   WINEDLLOVERRIDES='mscoree,mshtml=' \
   xvfb-run -a wineboot -u
 
@@ -139,10 +141,51 @@ install -m 0644 "$RELEASE_DIR/worker-tools/dataexpress-wine-config.path" \
   /etc/systemd/system/dataexpress-wine-config.path
 
 systemctl daemon-reload
+BOOTSTRAP_DIR="$STATE_ROOT/bootstrap"
+install -d -m 0750 -o dataexpress -g dataexpress "$BOOTSTRAP_DIR"
+install -m 0640 -o dataexpress -g dataexpress \
+  /opt/dataexpress/runtime/firebird5/examples/empbuild/employee.fdb \
+  "$BOOTSTRAP_DIR/employee.fdb"
+systemctl stop dataexpress-wine-worker.service \
+  dataexpress-firebird.service 2>/dev/null || true
+systemctl stop dataexpress-web.service
+MAIN_SERVICE_STOPPED=1
+trap 'if [ "${MAIN_SERVICE_STOPPED:-0}" -eq 1 ]; then systemctl start dataexpress-web.service; fi; rm -rf "$DOWNLOAD_ROOT"' EXIT
+printf "%s\n" \
+  "CREATE OR ALTER USER SYSDBA PASSWORD 'masterkey';" \
+  "COMMIT;" |
+  runuser -u dataexpress -- env \
+    FIREBIRD=/opt/dataexpress/runtime/firebird5 \
+    LD_LIBRARY_PATH=/opt/dataexpress/runtime/firebird5/lib \
+    /opt/dataexpress/runtime/firebird5/bin/isql -q -user sysdba \
+    "$BOOTSTRAP_DIR/employee.fdb"
+systemctl start dataexpress-web.service
+MAIN_SERVICE_STOPPED=0
 systemctl enable dataexpress-firebird.service dataexpress-wine-worker.service \
   dataexpress-wine-config.path
 "$WORKER_ROOT/bin/reconfigure.sh"
 systemctl start dataexpress-wine-config.path
+
+FIRST_DATABASE="$(
+  awk -F= '
+    /^[[:space:]]*Database[[:space:]]*=/ {
+      value=$0
+      sub(/^[^=]*=/, "", value)
+      print value
+      exit
+    }
+  ' /etc/dataexpress/dxwebsrv.cfg
+)"
+if [ -z "$FIRST_DATABASE" ]; then
+  echo "The main DataExpress config has no database to validate." >&2
+  exit 1
+fi
+printf '%s\n' 'select 1 from rdb$database;' |
+  env FIREBIRD=/opt/dataexpress/runtime/firebird5 \
+    LD_LIBRARY_PATH=/opt/dataexpress/runtime/firebird5/lib \
+    /opt/dataexpress/runtime/firebird5/bin/isql -q \
+    -user sysdba -password masterkey "127.0.0.1:$FIRST_DATABASE" \
+    >/dev/null
 
 for _ in $(seq 1 60); do
   if curl --fail --silent http://127.0.0.1:8180/health |
