@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKER_VERSION="${DX_WORKER_VERSION:-compat-worker-v0.1.3}"
+WORKER_VERSION="${DX_WORKER_VERSION:-compat-worker-v0.1.4}"
 WORKER_URL="${DX_WORKER_URL:-https://github.com/rausNT/mydataexpress-web/releases/download/$WORKER_VERSION/dxwebsrv-wine-worker.zip}"
-WORKER_SHA256="${DX_WORKER_SHA256:-15f1d2306bfbddb2f523a7c4edb35bb540aeabf9df6d8ef8ae813cbba30b05c9}"
+WORKER_SHA256="${DX_WORKER_SHA256:-9d2225617d53f52515b8a79aa82be4f1f66e256d7a10533978708b5fd1644ff0}"
 WORKER_ROOT=/opt/dataexpress-wine
 STATE_ROOT=/var/lib/dataexpress-wine
 PREFIX="$STATE_ROOT/prefix"
