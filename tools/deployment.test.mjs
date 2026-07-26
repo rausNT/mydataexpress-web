@@ -14,6 +14,7 @@ const modernCss = readFileSync('_test/html/modern.css', 'utf8');
 const gitAttributes = readFileSync('.gitattributes', 'utf8');
 const mainServer = readFileSync('mainserver.pas', 'utf8');
 const sqlGenerator = readFileSync('sqlgen.pas', 'utf8');
+const demoDomain = readFileSync('deploy/nginx-domain.conf', 'utf8');
 
 test('one-line installer pins runtime downloads and runs services unprivileged', () => {
   assert.match(gitAttributes, /^\*\.sh text eol=lf$/m);
@@ -72,6 +73,13 @@ test('installer keeps persistent state outside an atomic release', () => {
     installer.indexOf('STAGED_EXTENSIONS=') <
       installer.indexOf('systemctl stop dataexpress-config-reload.path'),
   );
+});
+
+test('public demo domain discourages crawler indexing', () => {
+  assert.match(demoDomain,
+    /add_header X-Robots-Tag "noindex, nofollow, noarchive" always/);
+  assert.match(demoDomain,
+    /location = \/robots\.txt[\s\S]+User-agent: \*\\nDisallow: \//);
 });
 
 test('Windows compatibility worker stays loopback-only and uses a pinned artifact', () => {
