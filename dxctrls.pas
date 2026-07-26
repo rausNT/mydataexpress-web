@@ -164,6 +164,7 @@ type
     procedure ProcessResize(dw, dh: Integer);
     procedure FontChange(Sender: TObject);
     function GetBoundsRect: TRect;
+    function GetCanFocus: Boolean;
     procedure SetBoundsRect(AValue: TRect);
     procedure SetCaption(AValue: String);
     procedure SetColor(AValue: TColor);
@@ -183,6 +184,8 @@ type
     destructor Destroy; override;
     procedure Assign(Source: TPersistent); override;
     procedure Hide;
+    procedure SelectAll;
+    procedure SetFocus;
     procedure Show;
     procedure SetBounds(X, Y, W, H: Integer);
     function GetRealFont: TdxFont;
@@ -200,6 +203,7 @@ type
     property Enabled: Boolean read FEnabled write SetEnabled;
     property BoundsRect: TRect read GetBoundsRect write SetBoundsRect;
     property Caption: String read FCaption write SetCaption;
+    property CanFocus: Boolean read GetCanFocus;
     property Hidden: Boolean read FHidden write FHidden;
     property FontStyleParsed: Boolean read FFontStyleParsed write FFontStyleParsed;
     property ControlVisible: Boolean read FControlVisible write FControlVisible;
@@ -983,6 +987,8 @@ type
     FCustomFilter: String;
     FCustomFilterRS: TObject;
     FErrs: TStringList;
+    FRequestedFocus: TdxControl;
+    FRequestedSelectAll: TdxControl;
     FFilter: TFilterObject;
     FFilters: TStrings;
     FFormCaption: String;
@@ -1073,6 +1079,8 @@ type
     procedure GetCalcLabels(L: TList);
     procedure GetPivots(L: TList);
     procedure ExtractFormGrid;
+    procedure ClearFocusRequest;
+    procedure RequestControlFocus(AControl: TdxControl; ASelectAll: Boolean);
 
     function FindField(aId: Integer): TdxField;
     function FindTable(aId: Integer): TdxGrid;
@@ -1112,6 +1120,8 @@ type
 
     property RecordSet: TObject read FRS write FRS;
     property Errs: TStringList read FErrs;
+    property RequestedFocus: TdxControl read FRequestedFocus;
+    property RequestedSelectAll: TdxControl read FRequestedSelectAll;
     property Timers: TdxTimerList read FTimers;
   public
     function Append: TAccessStatus;
@@ -2478,9 +2488,40 @@ begin
   Hidden := S.Hidden;
 end;
 
+function TdxControl.GetCanFocus: Boolean;
+var
+  C: TdxControl;
+begin
+  Result := False;
+  C := Self;
+  while C <> nil do
+  begin
+    if not C.Visible or not C.Enabled then Exit;
+    C := C.Parent;
+  end;
+  Result := TabStop;
+end;
+
 procedure TdxControl.Hide;
 begin
   Visible := False;
+end;
+
+procedure TdxControl.SelectAll;
+var
+  Fm: TdxForm;
+begin
+  Fm := Form;
+  if Fm <> nil then Fm.RequestControlFocus(Self, True);
+end;
+
+procedure TdxControl.SetFocus;
+var
+  Fm: TdxForm;
+begin
+  if not CanFocus then Exit;
+  Fm := Form;
+  if Fm <> nil then Fm.RequestControlFocus(Self, False);
 end;
 
 procedure TdxControl.Show;
@@ -4242,6 +4283,24 @@ begin
   FFilter := TFilterObject.Create(Self);
   FActionResult := Null;
   FTimers := TdxTimerList.Create;
+end;
+
+procedure TdxForm.ClearFocusRequest;
+begin
+  FRequestedFocus := nil;
+  FRequestedSelectAll := nil;
+end;
+
+procedure TdxForm.RequestControlFocus(AControl: TdxControl;
+  ASelectAll: Boolean);
+begin
+  if (AControl = nil) or (AControl.Form <> Self) or
+    not AControl.CanFocus then Exit;
+  FRequestedFocus := AControl;
+  if ASelectAll then
+    FRequestedSelectAll := AControl
+  else
+    FRequestedSelectAll := nil;
 end;
 
 destructor TdxForm.Destroy;

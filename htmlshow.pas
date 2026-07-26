@@ -67,6 +67,7 @@ type
     FSs: TSession;
     FTabOrderList: TList;
     FTopCtrl: TdxComponent;
+    FSelectAllCtrl: TdxComponent;
     FRecordCopies: array of TdxMemDataSet;
     function GetResultCode: Integer;
     function GetJsCode(IsEditForm: Boolean): String;
@@ -4905,7 +4906,8 @@ begin
   Result := '<button id=' + C.Name + ' type=button class="' +
     GetStyleClass(C) + '" style="' + GetBoundsCSS(C) + GetVisible(C) +
     IIF(C.Hint <> '', '" title="' + StrToHtml(C.Hint), '') + '" tabindex=' +
-    IntToStr(GetTabOrder(C)) + GetEnabled(C) + ' onclick="ctrlClick()">' +
+    IntToStr(GetTabOrder(C)) + GetEnabled(C) + GetAutoFocus(C) +
+    ' onclick="ctrlClick()">' +
     //IIF(C.ActionEnabled = True, ' onclick="bnClick(''' + C.Name + ''')"', ' disabled') +
     IIF(FlNm <> '', '<img src="' + FlNm + '">', '') +
     IIF(C.Caption <> '', '<span>' + StrToHtml(C.Caption) + '</span>', '') + '</button>';
@@ -4917,7 +4919,7 @@ begin
     ' id=f' + IntToStr(C.Id) +
     ' type=text value="' + GetFieldValue(C) + '" style="' + GetBoundsCSS(C) +
     GetVisible(C) + '" tabindex=' + IntToStr(GetTabOrder(C)) + GetEnabled(C) +
-    GetReadOnly(C) + '>';
+    GetReadOnly(C) + GetAutoFocus(C) + '>';
 end;
 
 function THtmlShow.ShowTimeEdit(C: TdxTimeEdit): String;
@@ -4926,7 +4928,8 @@ begin
     ' id=f' + IntToStr(C.Id) +
     ' type=text value="' + GetFieldValue(C) + '" style="' + GetBoundsCSS(C) +
     GetVisible(C) + '" tabindex=' + IntToStr(GetTabOrder(C)) + GetEnabled(C) +
-    GetReadOnly(C) + IIF(C.TextHint <> '', ' placeholder="' + StrToHtml(C.TextHint) + '"', '') + '>';
+    GetReadOnly(C) + GetAutoFocus(C) +
+    IIF(C.TextHint <> '', ' placeholder="' + StrToHtml(C.TextHint) + '"', '') + '>';
   if not C.HideButton then
     Result := Result + '<button class=editbn type=button style="position: absolute; left: ' +
       IntToStr(C.Left + C.Width) + 'px; top: ' + IntToStr(C.Top) + 'px; width: ' +
@@ -4942,7 +4945,7 @@ begin
     ' id=f' + IntToStr(C.Id) +
     ' type=text value="' + GetFieldValue(C) + '" style="' + GetBoundsCSS(C) +
     GetVisible(C) + '" tabindex=' + IntToStr(GetTabOrder(C)) + GetEnabled(C) +
-    ' readonly>';
+    GetAutoFocus(C) + ' readonly>';
 end;
 
 function THtmlShow.ShowFile(C: TdxFile): String;
@@ -4951,7 +4954,7 @@ begin
     ' id=f' + IntToStr(C.Id) +
     ' type=text value="' + GetFieldValue(C) + '" style="' + GetBoundsCSS(C) +
     GetVisible(C) + '" tabindex=' + IntToStr(GetTabOrder(C)) + GetEnabled(C) +
-    ' readonly' + IIF(ControlReadOnly(C), ' file-readonly', '') +
+    GetAutoFocus(C) + ' readonly' + IIF(ControlReadOnly(C), ' file-readonly', '') +
     '><button class=editbn type=button style="left: ' + IntToStr(C.Left + C.Width + 2) + 'px; ' +
     'top: ' + IntToStr(C.Top) + 'px; width: ' + IntToStr(C.Height) +
     'px; height: ' + IntToStr(C.Height) + 'px; position: absolute; padding: 0px;' +
@@ -5743,6 +5746,7 @@ begin
     'px; top: ' + IntToStr(C.Top) + 'px; width: ' + IntToStr(C.Width - 18) +
     'px; height: ' + IntToStr(C.Height) + 'px;' + GetVisible(C) + '" tabindex=' + IntToStr(GetTabOrder(C)) +
     ' value="' + GetFieldValue(C) + '"' + GetMaxLength(C) + ItemsOnlyStr + GetReadOnly(C) +
+    GetAutoFocus(C) +
     IIF((C.Style = csDropDownList) and FixedList and not RdOnly,
     ' readonly onclick="showFixedList(' + ')"', '') +
     IIF(not RdOnly, ' onkeydown="' +
@@ -5785,7 +5789,8 @@ begin
     ' disabled ', ' onchange="fieldChange(this)"') + ' value="' + V + '"';
   if V = '1' then
     Result := Result + ' checked';
-  Result := Result + ' tabindex=' + IntToStr(GetTabOrder(C)) + '>' +
+  Result := Result + ' tabindex=' + IntToStr(GetTabOrder(C)) +
+    GetAutoFocus(C) + '>' +
     StrToHtml(C.Caption) + '</span>';
 end;
 
@@ -5794,7 +5799,7 @@ begin
   Result := '<textarea class="' + GetStyleClass(C) + '" name=f' + IntToStr(C.Id) +
     ' id=f' + IntToStr(C.Id) + GetEnabled(C) + ' style="' + GetBoundsCSS(C) +
     GetVisible(C) + '" tabindex=' + IntToStr(GetTabOrder(C)) +
-    GetMaxLength(C) + GetReadOnly(C) + '>' +
+    GetMaxLength(C) + GetReadOnly(C) + GetAutoFocus(C) + '>' +
     GetFieldValue(C) + '</textarea>';
 end;
 
@@ -5804,6 +5809,7 @@ begin
     ' id=f' + IntToStr(C.Id) + GetEnabled(C) +
     ' type=text value="' + GetFieldValue(C) + '" style="' + GetBoundsCSS(C) +
     GetVisible(C) + '" tabindex=' + IntToStr(GetTabOrder(C)) + GetReadOnly(C) +
+    GetAutoFocus(C) +
     IIF(C.TextHint <> '', ' placeholder="' + StrToHtml(C.TextHint) + '"', '') + '>';
   if not C.HideButton then
     Result := Result + '<button class=editbn type=button style="position: absolute; left: ' +
@@ -5821,6 +5827,7 @@ begin
     ' id=f' + IntToStr(C.Id) + GetEnabled(C) +
     ' type=text value="' + GetFieldValue(C) + '" style="' + GetBoundsCSS(C) +
     GetVisible(C) + '" tabindex=' + IntToStr(GetTabOrder(C)) + GetReadOnly(C) +
+    GetAutoFocus(C) +
     IIF(C.TextHint <> '', ' placeholder="' + StrToHtml(C.TextHint) + '"', '') + '>';
 end;
 
@@ -5830,6 +5837,7 @@ begin
     ' id=f' + IntToStr(C.Id) + GetEnabled(C) +
     ' type=text value="' + GetFieldValue(C) + '" style="' + GetBoundsCSS(C) +
     GetVisible(C) + '" tabindex=' + IntToStr(GetTabOrder(C)) + GetReadOnly(C) +
+    GetAutoFocus(C) +
     IIF(C.TextHint <> '', ' placeholder="' + StrToHtml(C.TextHint) + '"', '') + '>';
 end;
 
@@ -6117,8 +6125,14 @@ end;
 
 function THtmlShow.GetAutoFocus(C: TdxComponent): String;
 begin
-  {if C = FTopCtrl then Result := ' autofocus'
-  else} Result := '';
+  if C = FTopCtrl then
+  begin
+    Result := ' autofocus';
+    if C = FSelectAllCtrl then
+      Result := Result + ' onfocus="this.select()"';
+  end
+  else
+    Result := '';
 end;
 
 function THtmlShow.ShowLabel(C: TdxLabel): String;
@@ -6467,7 +6481,10 @@ begin
   else
     FlChange := BuildHRef(5);}
 
-  FTopCtrl := GetTopControl(Fm);
+  FTopCtrl := Fm.RequestedFocus;
+  FSelectAllCtrl := Fm.RequestedSelectAll;
+  if FTopCtrl = nil then FTopCtrl := GetTopControl(Fm);
+  Fm.ClearFocusRequest;
   S := S + ShowDummyInput + ShowContainer(Fm);
   S := S + '</div>';
   if FRS.MsgInfo.Visible then

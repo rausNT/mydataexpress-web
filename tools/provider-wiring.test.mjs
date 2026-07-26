@@ -68,6 +68,23 @@ test('legacy EvalExpr delegates through the form session', () => {
     /RegisterDelphiFunction\(@LegacyEvalExpr, 'EvalExpr'/);
 });
 
+test('legacy focus APIs retain browser-visible focus semantics', () => {
+  const controls = source('dxctrls.pas');
+  const compilerDecls = source('compilerdecls.pas');
+  const runtimeDecls = source('rundecls.pas');
+  const renderer = source('htmlshow.pas');
+  assert.match(compilerDecls, /RegisterProperty\('CanFocus', 'Boolean', iptR\)/);
+  assert.match(compilerDecls, /RegisterMethod\('procedure SetFocus'\)/);
+  assert.match(runtimeDecls,
+    /RegisterPropertyHelper\(@TControlCanFocus_R, nil, 'CanFocus'\)/);
+  assert.match(runtimeDecls,
+    /RegisterMethod\(@TdxControl\.SetFocus, 'SetFocus'\)/);
+  assert.match(controls,
+    /procedure TdxControl\.SetFocus;[\s\S]+RequestControlFocus\(Self, False\)/);
+  assert.match(renderer,
+    /if C = FTopCtrl then[\s\S]+onfocus="this\.select\(\)"/);
+});
+
 test('runtime exposes extension mapping status without breaking legacy forms', () => {
   const scripts = source('scriptmanager.pas');
   const runtimeTypes = source('dxtypes.pas');

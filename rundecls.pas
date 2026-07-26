@@ -415,6 +415,7 @@ procedure TControlParent_R(Self: TdxControl; var T: TdxWinControl); begin T := S
 procedure TControlParent_W(Self: TdxControl; T: TdxWinControl); begin Self.Parent := T; end;
 procedure TControlCaption_R(Self: TdxControl; var T: String); begin T := Self.Caption; end;
 procedure TControlCaption_W(Self: TdxControl; T: String); begin Self.Caption := T; end;
+procedure TControlCanFocus_R(Self: TdxControl; var T: Boolean); begin T := Self.CanFocus; end;
 procedure TControlAnchors_R(Self: TdxControl; var T: TAnchors); begin T := Self.Anchors; end;
 procedure TControlAnchors_W(Self: TdxControl; T: TAnchors); begin Self.Anchors := T; end;
 procedure TControlOnChangeBounds_R(Self: TdxControl; var T: TNotifyEvent); begin T := Self.OnChangeBounds; end;
@@ -427,6 +428,8 @@ begin
   with Cl.Add2(TdxControl, 'TCONTROL') do
   begin
     RegisterMethod(@TdxControl.Hide, 'Hide');
+    RegisterMethod(@TdxControl.SelectAll, 'SelectAll');
+    RegisterMethod(@TdxControl.SetFocus, 'SetFocus');
     RegisterMethod(@TdxControl.Show, 'Show');
     RegisterMethod(@TdxControl.SetBounds, 'SetBounds');
     RegisterPropertyHelper(@TControlLeft_R, @TControlLeft_W, 'Left');
@@ -443,6 +446,7 @@ begin
     RegisterPropertyHelper(@TControlTabStop_R, @TControlTabStop_W, 'TabStop');
     RegisterPropertyHelper(@TControlParent_R, @TControlParent_W, 'Parent');
     RegisterPropertyHelper(@TControlCaption_R, @TControlCaption_W, 'Caption');
+    RegisterPropertyHelper(@TControlCanFocus_R, nil, 'CanFocus');
     RegisterPropertyHelper(@TControlAnchors_R, @TControlAnchors_W, 'Anchors');
     RegisterEventPropertyHelper(@TControlOnChangeBounds_R, @TControlOnChangeBounds_W, 'OnChangeBounds');
     RegisterEventPropertyHelper(@TControlOnResize_R, @TControlOnResize_W, 'OnResize');

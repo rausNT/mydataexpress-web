@@ -352,6 +352,8 @@ begin
   with Cl.AddClassN(cl.FindClass('TComponent'), 'TControl') do
   begin
     RegisterMethod('procedure Hide');
+    RegisterMethod('procedure SelectAll');
+    RegisterMethod('procedure SetFocus');
     RegisterMethod('procedure Show');
     RegisterMethod('procedure SetBounds(X,Y,w,h: Integer)');
     RegisterProperty('Left', 'Integer', iptRW);
@@ -363,6 +365,7 @@ begin
     RegisterProperty('BoundsRect', 'TRect', iptRW);
 
     RegisterProperty('Caption', 'String', iptRW);
+    RegisterProperty('CanFocus', 'Boolean', iptR);
     RegisterProperty('Color', 'TColor', iptRW);
     RegisterProperty('Font', 'TFont', iptRW);
     //RegisterProperty('ParentColor', 'Boolean', iptRW);

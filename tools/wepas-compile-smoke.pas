@@ -71,6 +71,7 @@ begin
       '  if MessageDlg(''Confirm'', ''Continue?'', mtConfirmation, ' +
       '[mbYes, mbNo]) = mrYes then Result := 0;' + LineEnding +
       '  if EvalExpr(''1'', nil) = 1 then Result := 0;' + LineEnding +
+      '  if TWinControl(nil).CanFocus then TWinControl(nil).SetFocus;' + LineEnding +
       '  Dictionary := CreateOleObject(''Scripting.Dictionary'');' + LineEnding +
       '  Result := Dictionary.Count;' + LineEnding +
       'end;';
