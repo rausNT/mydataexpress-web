@@ -83,9 +83,9 @@ test('public demo domain discourages crawler indexing', () => {
 });
 
 test('Windows compatibility worker stays loopback-only and uses a pinned artifact', () => {
-  assert.match(workerInstaller, /compat-worker-v0\.1\.5/);
+  assert.match(workerInstaller, /compat-worker-v0\.1\.6/);
   assert.match(workerInstaller,
-    /6693f97edbf0ff040f1e6fd71684993d3285a9a2dd886c460c668636ba330e44/);
+    /ff66233bf9a29a695220bc5278ad443021ea0b24009e0658bc41935260c34777/);
   assert.match(workerInstaller, /WINEARCH=win64/);
   assert.match(workerInstaller, /CREATE OR ALTER USER SYSDBA PASSWORD 'masterkey'/);
   assert.match(workerInstaller, /select 1 from rdb\$database/);
