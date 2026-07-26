@@ -266,6 +266,12 @@ begin
           '// SaveToFile must not count inside a comment' + LineEnding +
           'begin Result := ''ShellExecute is only text''; end;') = '',
           'Comments or strings incorrectly blocked a portable extension');
+        AutoSource := AutoSource + LineEnding +
+          'procedure LegacyDatasetControls;' + LineEnding +
+          'begin' + LineEnding +
+          '  Self.DisableControls;' + LineEnding +
+          '  Self.EnableControls;' + LineEnding +
+          'end;' + LineEnding;
 
         MetaData := TMetaData.Create;
         try

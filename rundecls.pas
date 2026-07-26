@@ -2162,6 +2162,8 @@ begin
     RegisterMethod(@TdxForm.Close, 'Close');
     RegisterMethod(@TdxForm.Validate, 'Validate');
     RegisterMethod(@TdxForm.FindComponentByFieldName, 'FindComponentByFieldName');
+    RegisterMethod(@TdxForm.DisableScrollEvents, 'DisableControls');
+    RegisterMethod(@TdxForm.EnableScrollEvents, 'EnableControls');
     RegisterMethod(@TdxForm.DisableScrollEvents, 'DisableScrollEvents');
     RegisterMethod(@TdxForm.EnableScrollEvents, 'EnableScrollEvents');
     RegisterMethod(@TdxForm.ScrollEventsDisabled, 'ScrollEventsDisabled');

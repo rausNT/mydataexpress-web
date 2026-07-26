@@ -108,3 +108,18 @@ test('legacy DX_PLUS web modules normalize every historical GotoForm signature',
   assert.match(smoke, /Self\.GotoForm\(''Compatibility'', 1, False\)/);
   assert.match(smoke, /NormalizeLegacyGotoFormCalls\(WebSource\.Text\)/);
 });
+
+test('desktop dataset control aliases compile against the deferred web form runtime', () => {
+  const compiler = source('compilerdecls.pas');
+  const runtime = source('rundecls.pas');
+  const smoke = source('tools/wepas-compile-smoke.pas');
+
+  assert.match(compiler, /RegisterMethod\('procedure DisableControls'\)/);
+  assert.match(compiler, /RegisterMethod\('procedure EnableControls'\)/);
+  assert.match(runtime,
+    /RegisterMethod\(@TdxForm\.DisableScrollEvents, 'DisableControls'\)/);
+  assert.match(runtime,
+    /RegisterMethod\(@TdxForm\.EnableScrollEvents, 'EnableControls'\)/);
+  assert.match(smoke, /Self\.DisableControls/);
+  assert.match(smoke, /Self\.EnableControls/);
+});

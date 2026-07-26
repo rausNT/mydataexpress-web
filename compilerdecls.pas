@@ -1034,6 +1034,11 @@ begin
     RegisterMethod('procedure Close');
     RegisterMethod('function Validate: Boolean');
     RegisterMethod('function FindComponentByFieldName(const FieldName: String): TComponent');
+    // Desktop extensions traditionally use these dataset-style names. In the
+    // web runtime they map to scroll-event suppression because rendering is
+    // already deferred until the request completes.
+    RegisterMethod('procedure DisableControls');
+    RegisterMethod('procedure EnableControls');
     RegisterMethod('procedure DisableScrollEvents');
     RegisterMethod('procedure EnableScrollEvents');
     RegisterMethod('function ScrollEventsDisabled: Boolean');
