@@ -2919,7 +2919,9 @@ end;    }
 procedure TScriptManager.CompileExpr;
 var
   i: Integer;
-  FailureReason: String;
+  FailureReason, SourceLine: String;
+  ErrorRow: Integer;
+  SourceLines: TStringList;
   SD: TScriptData;
 begin
   for i := 0 to FScripts.Count - 1 do
@@ -2934,8 +2936,26 @@ begin
         if SD.MsgCount > 0 then
         begin
           FailureReason := SD.Msgs[0].Msg;
+          ErrorRow := SD.Msgs[0].Row;
+          if ErrorRow > 0 then
+          begin
+            SourceLines := TStringList.Create;
+            try
+              SourceLines.Text := SD.Source;
+              if ErrorRow <= SourceLines.Count then
+              begin
+                SourceLine := Trim(SourceLines[ErrorRow - 1]);
+                if Length(SourceLine) > 160 then
+                  SourceLine := Copy(SourceLine, 1, 157) + '...';
+                if SourceLine <> '' then
+                  FailureReason := FailureReason + ' near `' + SourceLine + '`';
+              end;
+            finally
+              SourceLines.Free;
+            end;
+          end;
           LogString('Disabled automatic web extension ' + SD.Name + ': ' +
-            SD.Msgs[0].Msg)
+            FailureReason)
         end
         else
           LogString('Disabled automatic web extension ' + SD.Name);
