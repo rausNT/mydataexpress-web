@@ -54,6 +54,7 @@ EOF
     systemctl start /dev/zram0
   else
     install -d -m 0750 "$STATE_ROOT"
+    truncate -s 0 "$STATE_ROOT/swapfile"
     fallocate -l 256M "$STATE_ROOT/swapfile"
     chmod 0600 "$STATE_ROOT/swapfile"
     mkswap "$STATE_ROOT/swapfile"
