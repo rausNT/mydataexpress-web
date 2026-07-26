@@ -3,7 +3,7 @@ set -euo pipefail
 
 WORKER_VERSION="${DX_WORKER_VERSION:-compat-worker-v0.1.2}"
 WORKER_URL="${DX_WORKER_URL:-https://github.com/rausNT/mydataexpress-web/releases/download/$WORKER_VERSION/dxwebsrv-wine-worker.zip}"
-WORKER_SHA256="${DX_WORKER_SHA256:-8e7dececddc291b2551c0864efaac6372770e603e97b81e9dc2ebcb606d9e8f}"
+WORKER_SHA256="${DX_WORKER_SHA256:-8e7dececdedc291b2551c0864efaac6372770e603e97b81e9dc2ebcb606d9e8f}"
 WORKER_ROOT=/opt/dataexpress-wine
 STATE_ROOT=/var/lib/dataexpress-wine
 PREFIX="$STATE_ROOT/prefix"
@@ -25,6 +25,10 @@ if [ ! -x /opt/dataexpress/current/dxwebsrv ] ||
 fi
 if ! grep -q 'dataexpress-worker-routes.conf' /etc/nginx/sites-available/dataexpress; then
   echo "Update the main DataExpress installation before enabling the worker." >&2
+  exit 1
+fi
+if ! [[ "$WORKER_SHA256" =~ ^[[:xdigit:]]{64}$ ]]; then
+  echo "DX_WORKER_SHA256 must be a 64-character SHA-256 digest." >&2
   exit 1
 fi
 
