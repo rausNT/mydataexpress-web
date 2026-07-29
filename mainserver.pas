@@ -296,6 +296,7 @@ begin
                   else if Fields[4] = 'objedit' then
                   else if Fields[4] = 'resize' then
                   else if Fields[4] = 'timer' then
+                  else if Fields[4] = 'exportxls' then
                   else Exit;
                 end;
               end
@@ -345,6 +346,7 @@ begin
           else if Fields[2] = 'objedit' then
           else if Fields[2] = 'resize' then
           else if Fields[2] = 'timer' then
+          else if Fields[2] = 'exportxls' then
           else Exit;
         end;
       end
@@ -367,6 +369,7 @@ begin
       end
       else if Fields[1] = 'fltclr' then
       else if Fields[1] = 'sort' then
+      else if Fields[1] = 'exportxls' then
       else Exit;
     end;
   end
@@ -1320,6 +1323,11 @@ begin
   else if LPm = 'fldl' then
   begin
     AResponse.Contents.Text:=HS.DownloadFile(ARequest.ContentFields);
+    AResponse.Code := HS.ResultCode;
+  end
+  else if LPm = 'exportxls' then
+  begin
+    AResponse.Contents.Text := HS.ExportSpreadsheet(ARequest.ContentFields);
     AResponse.Code := HS.ResultCode;
   end
   else if LPm = 'flclr' then

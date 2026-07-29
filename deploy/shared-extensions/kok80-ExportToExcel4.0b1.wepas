@@ -1,0 +1,42 @@
+{@module
+Author=Codex for the DataExpress web modernization project
+Version=4.0b1-web1
+Description=Native web adapter for kok80-ExportToExcel4.0b1. The browser
+downloads an Excel-compatible SpreadsheetML workbook without Windows OLE.
+@}
+
+{@action
+Id=07B72A92-28B5-4707-96DA-D3D5AEC0FFE7
+@}
+procedure KOK80ExportToExcel_form(FormMultiSelect: Integer;
+  Fields: TVariantArray2d);
+begin
+  Session.Debug('kok80 Excel web: form export controls registered');
+end;
+
+{@action
+Id=F477247A-3094-4D6B-8FD6-C8C91972A3B3
+@}
+procedure KOK80ExportToExcel(AUseCalc: String;
+  AExportToClipboard, AExportToCSV, AAddToMainToolbarButton,
+  AAddTodxQueryGridToolbar, AAddTodxFormPopupMenu,
+  AAddTodxFormPopupMenuSelected, AAddTodxQueryGridPopupMenu,
+  AAddTodxQueryGridPopupMenuSelected, AAddTodxPivotGridPopupMenu: Boolean;
+  ACaption: String; AAllFormsMultiSelect, AAllQueriesMultiSelect: Integer;
+  ASetTextFormat: Boolean);
+begin
+  Session.Debug('kok80 Excel web: native browser download adapter enabled');
+end;
+
+{@function
+OrigName=ExportToExel
+Name=ExportToExel
+Args=
+Result=b
+Group=kok80
+Description=Export the current form to an Excel-compatible workbook
+@}
+function ExportToExel: Boolean;
+begin
+  Result := Session.ExportToExcel(Self, '') <> '';
+end;

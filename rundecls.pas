@@ -2273,6 +2273,7 @@ begin
     RegisterMethod(@TSession.GetCurrentUser, 'GetCurrentUser');
     RegisterMethod(@TSession.GetCurrentRole, 'GetCurrentRole');
     RegisterMethod(@TSession.GetCurrentDatabase, 'GetCurrentDatabase');
+    RegisterMethod(@TSession.ExportToExcel, 'ExportToExcel');
     RegisterMethod(@TSession.GetTemplatesPath, 'GetTemplatesDir');
     RegisterMethod(@TSession.GetExprVar, 'GetExprVar');
     RegisterMethod(@TSession.SetExprVar, 'SetExprVar');
