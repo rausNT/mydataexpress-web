@@ -1125,7 +1125,7 @@ var
   AvailableActions, AvailableFunctions, ClaimedActions, ClaimedFunctions: TStringList;
   Candidate: TSharedWebExtension;
   Candidates: TList;
-  ExtensionDir, FileName, ModuleName, Source: String;
+  ExtensionDir, FileName, ModuleName, RuntimeModuleName, Source: String;
   i, OriginalScriptCount: Integer;
   SearchRec: TSearchRec;
   Script: TScriptData;
@@ -1204,7 +1204,11 @@ begin
       if (SearchRec.Attr and faDirectory) <> 0 then Continue;
       FileName := ExtensionDir + SysToUtf8(SearchRec.Name);
       ModuleName := ChangeFileExt(ExtractFileName(FileName), '');
-      if FScriptMan.FindScriptByName(ModuleName) <> nil then Continue;
+      Script := FScriptMan.FindScriptByName(ModuleName);
+      // Desktop (.epas) and web (.wepas) modules normally have the same
+      // official name.  Only an already loaded web implementation shadows a
+      // shared adapter; a desktop module is the contract the adapter fulfils.
+      if (Script <> nil) and (Script.Kind = skWebExpr) then Continue;
       Source := LoadString(FileName);
       Candidate := TSharedWebExtension.Create;
       Candidate.ModuleName := ModuleName;
@@ -1233,7 +1237,11 @@ begin
       LogString('Skipped overlapping shared web extension: ' + Candidate.ModuleName);
       Continue;
     end;
-    Script := FScriptMan.AddScript(0, Candidate.ModuleName, Candidate.Source);
+    RuntimeModuleName := Candidate.ModuleName;
+    if FScriptMan.FindScriptByName(RuntimeModuleName) <> nil then
+      RuntimeModuleName := FScriptMan.MakeUniqueScriptName(
+        '__shared_web_' + Candidate.ModuleName + '_adapter');
+    Script := FScriptMan.AddScript(0, RuntimeModuleName, Candidate.Source);
     Script.Kind := skWebExpr;
     AddMappings(Candidate.ActionIds, ClaimedActions);
     AddMappings(Candidate.FunctionNames, ClaimedFunctions);
