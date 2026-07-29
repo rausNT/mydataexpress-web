@@ -216,6 +216,9 @@ jobs:
           & (Join-Path $smokeRoot 'wepas-syntax-smoke.exe') `
             (Join-Path $officeMigrationRoot 'legacy-office.wepas')
           if ($LASTEXITCODE -ne 0) { throw "Office recipe wepas compilation failed: $LASTEXITCODE" }
+          & (Join-Path $smokeRoot 'wepas-syntax-smoke.exe') `
+            (Join-Path $PWD 'deploy/shared-extensions/DX_PLUS_WEB-compat-1.8.1.wepas')
+          if ($LASTEXITCODE -ne 0) { throw "DX_PLUS compatibility module compilation failed: $LASTEXITCODE" }
 
           $token = 'provider-smoke-secret'
           $port = 19081

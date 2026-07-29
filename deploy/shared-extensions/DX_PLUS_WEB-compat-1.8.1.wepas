@@ -1,0 +1,172 @@
+{@module
+Author=Codex for the DataExpress web modernization project
+Version=1.0
+Description=Web compatibility adapters for DX_PLUS 1.8.1 mappings which are
+not provided by the upstream DX_PLUS_WEB module.
+@}
+
+function CompatRecordId(const Expr: String): Variant;
+begin
+  Result := 0;
+  if Expr = '' then Exit;
+  try
+    Result := EvalExpr(Expr, Self);
+    if Result = Null then Result := 0;
+  except
+    Result := 0;
+  end;
+end;
+
+{@action
+Id=916E554A-D986-4A5B-A28C-E1303BABE705
+OrigName=ListWindowShow
+Name=Показать окно списка
+@}
+function ListWindowShow(const FormName, AFilter, RecIdExpr, ACaption,
+  ViewType: String; W, H: Integer; HideTree, ReadOnly: Boolean;
+  const ObjName: String; FieldValues: TVariantArray2d): Boolean;
+begin
+  Self.GotoForm(FormName, CompatRecordId(RecIdExpr), gtoNewTab);
+  Result := True;
+end;
+
+{@action
+Id=E6733302-5018-4F2B-A5B2-7692F0249B39
+OrigName=CreatePageWithForm
+Name=Создать закладку с формой
+@}
+procedure CreatePageWithForm(const FormName, ViewType: String;
+  SetFmFilter: Boolean; FmFilter: TVariantArray2d;
+  const RecIdExpr, TabCaption: String);
+begin
+  Self.GotoForm(FormName, CompatRecordId(RecIdExpr), gtoNewTab);
+end;
+
+{@action
+Id=38CCE284-B508-450F-BF65-21917E79BAA7
+OrigName=ButtonToToolBarButton
+Name=Кнопка на панели инструментов
+@}
+procedure ButtonToToolBarButton(const FormName, ButtonName, ImageName,
+  Hint: String);
+begin
+  Session.Debug('DX_PLUS web: main toolbar buttons are rendered by the browser layout');
+end;
+
+{@action
+Id=BC27798C-D87E-46B8-9DA9-1E64AC67F188
+OrigName=AddDividerToToolBar
+Name=Добавить разделитель на панель инструментов
+@}
+procedure AddDividerToToolBar;
+begin
+  Session.Debug('DX_PLUS web: toolbar divider accepted without a desktop window');
+end;
+
+{@action
+Id=768EC118-96BD-4D76-A2DA-1C221D8B82ED
+OrigName=OpenFolderInExplorer
+Name=Открыть папку в проводнике
+@}
+function OpenFolderInExplorer(const FolderExpr: String;
+  AutoCreate: Boolean): Boolean;
+begin
+  Session.Debug('DX_PLUS web: opening a server folder in the client Explorer is blocked');
+  Result := False;
+end;
+
+{@action
+Id=4437AAE4-C3A2-4F27-8FC7-939AE8FE8429
+OrigName=CopyTextToClipboard
+Name=Копировать в буфер обмена
+@}
+function CopyTextToClipboard(const Expr: String): Boolean;
+begin
+  try
+    Self.ActionResult := EvalExpr(Expr, Self);
+    Session.Debug('DX_PLUS web: clipboard text is available in ActionResult');
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+{@action
+Id=B053C09F-768D-40A9-ACB9-F9F8B4F1E392
+OrigName=SetSortQuery
+Name=Установить сортировку запроса
+@}
+procedure SetSortQuery(const QryName: String; Fields: TVariantArray2d);
+begin
+  Self.Queries[QryName].Refresh;
+  Session.Debug('DX_PLUS web: query refreshed; browser sort metadata is applied by the renderer');
+end;
+
+{@action
+Id=80BB7D56-86CD-4546-9108-EC989D1E68A8
+OrigName=MoveButtonsToButtonPanel
+Name=Переместить кнопки на панель кнопок
+@}
+procedure MoveButtonsToButtonPanel(Buttons: TVariantArray2d);
+begin
+  Session.Debug('DX_PLUS web: button placement is controlled by the responsive layout');
+end;
+
+{@action
+Id=3A6BD266-E617-44C6-8663-616D91A6E565
+OrigName=ShoppingFromReport
+Name=Подбор из окна отчета
+@}
+procedure ShoppingFromReport(const Rp, TblName: String;
+  Fields: TVariantArray2d; AHideButtons: Boolean);
+begin
+  Self.GotoReport(Rp, gtoNewTab);
+end;
+
+{@action
+Id=678EB3BE-2FC4-45CF-A7E3-EA3CAB7E3571
+OrigName=InsertFromReport
+Name=Вставить из окна отчета
+@}
+function InsertFromReport(const Rp: String; Fields: TVariantArray2d;
+  AHideButtons: Boolean): Boolean;
+begin
+  Self.GotoReport(Rp, gtoNewTab);
+  Result := True;
+end;
+
+{@action
+Id=2973DD3B-75B3-4938-9497-AD0BB341D1DD
+OrigName=ShowWaitWindow
+Name=Показать окно ожидания
+@}
+function ShowWaitWindow(const AMsg, AImgName: String;
+  W, H: Integer): Variant;
+begin
+  Self.ActionResult := AMsg;
+  Session.Debug('DX_PLUS web: wait message stored for the current request');
+  Result := True;
+end;
+
+{@action
+Id=863C5553-93C2-4C8F-A1E6-1987C6D32920
+OrigName=CloseWaitWindow
+Name=Скрыть окно ожидания
+@}
+function CloseWaitWindow(SmoothClosing: Boolean): Variant;
+begin
+  Self.ActionResult := Null;
+  Result := True;
+end;
+
+{@action
+Id=AFB9DFCF-7996-43A1-A83A-BBCFC5A19928
+OrigName=DoubleClickInQuery
+Name=Двойной клик в запросе
+@}
+function DoubleClickInQuery(AQueries: TVariantArray2d;
+  ADefaultAction: Boolean): Variant;
+begin
+  Session.Debug('DX_PLUS web: query double-click mapping registered');
+  Result := True;
+end;

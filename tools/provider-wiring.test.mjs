@@ -189,3 +189,30 @@ test('automatic fallback removes source for mappings already handled by web modu
   assert.match(smoke, /TUnregisteredDesktopWindow/);
   assert.match(smoke, /PORTABLE-WEB-ACTION/);
 });
+
+test('DX_PLUS compatibility module covers every mapping missing from upstream web 1.8.1', () => {
+  const module = source('deploy/shared-extensions/DX_PLUS_WEB-compat-1.8.1.wepas');
+  const ids = [...module.matchAll(/^\s*Id\s*=\s*(.+?)\s*$/gim)]
+    .map(match => match[1].toUpperCase());
+
+  assert.equal(ids.length, 13);
+  assert.equal(new Set(ids).size, 13);
+  for (const name of [
+    'ListWindowShow',
+    'CreatePageWithForm',
+    'ButtonToToolBarButton',
+    'AddDividerToToolBar',
+    'OpenFolderInExplorer',
+    'CopyTextToClipboard',
+    'SetSortQuery',
+    'MoveButtonsToButtonPanel',
+    'ShoppingFromReport',
+    'InsertFromReport',
+    'ShowWaitWindow',
+    'CloseWaitWindow',
+    'DoubleClickInQuery',
+  ]) {
+    assert.match(module, new RegExp(`OrigName=${name}`));
+  }
+  assert.doesNotMatch(module, /ShellExecute|CreateOleObject|LoadLibrary|external\s+'/i);
+});
