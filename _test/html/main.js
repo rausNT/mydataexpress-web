@@ -1564,3 +1564,146 @@ function clearDebug() {
 	document.getElementById('debug-body').innerHTML = '';
 }
 
+function extensionCompatibilityElement(tag, className, text) {
+	let element = document.createElement(tag);
+	if (className) element.className = className;
+	if (text !== undefined) element.textContent = text;
+	return element;
+}
+
+function extensionCompatibilityStatus(status) {
+	const labels = {
+		'web-script': 'работает',
+		'auto-web-script': 'работает автоматически',
+		'provider': 'работает через провайдер',
+		'provider-unconfigured': 'провайдер не настроен',
+		'provider-unresolved': 'провайдер не определён',
+		'windows-worker-required': 'нужен Windows-адаптер',
+		'automatic-compile-failed': 'ошибка компиляции',
+		'missing': 'веб-реализация отсутствует'
+	};
+	return labels[status] || status || 'неизвестно';
+}
+
+function extensionCompatibilityWorks(status) {
+	return status === 'web-script' || status === 'auto-web-script' ||
+		status === 'provider';
+}
+
+function buildExtensionCompatibilityDialog(report) {
+	const dialog = extensionCompatibilityElement('dialog', 'extension-compat-dialog');
+	dialog.setAttribute('aria-labelledby', 'extension-compat-title');
+
+	const header = extensionCompatibilityElement('div', 'extension-compat-header');
+	const heading = extensionCompatibilityElement('h2', '', 'Совместимость расширений');
+	heading.id = 'extension-compat-title';
+	header.appendChild(heading);
+	const closeIcon = extensionCompatibilityElement('button',
+		'extension-compat-close', '×');
+	closeIcon.type = 'button';
+	closeIcon.setAttribute('aria-label', 'Закрыть отчёт');
+	closeIcon.addEventListener('click', () => dialog.close());
+	header.appendChild(closeIcon);
+	dialog.appendChild(header);
+
+	const summary = report.summary || {};
+	const allItems = (report.functions || []).concat(report.actions || []);
+	const working = allItems.filter(item =>
+		extensionCompatibilityWorks(item.status)).length;
+	const intro = extensionCompatibilityElement('p', 'extension-compat-intro',
+		`Проверено сервером для этой базы: работает ${working} из ${allItems.length} ` +
+		`функций и действий. Модулей расширений: ${summary.extensionModules || 0}.`);
+	dialog.appendChild(intro);
+
+	const meter = extensionCompatibilityElement('div', 'extension-compat-meter');
+	meter.setAttribute('role', 'progressbar');
+	meter.setAttribute('aria-valuemin', '0');
+	meter.setAttribute('aria-valuemax', String(allItems.length));
+	meter.setAttribute('aria-valuenow', String(working));
+	const meterValue = extensionCompatibilityElement('span', '');
+	meterValue.style.width = allItems.length ?
+		`${Math.round(working * 100 / allItems.length)}%` : '0%';
+	meter.appendChild(meterValue);
+	dialog.appendChild(meter);
+
+	const modules = new Map();
+	for (const item of allItems) {
+		const moduleName = item.desktopModule || 'Безымянный модуль';
+		if (!modules.has(moduleName)) modules.set(moduleName, []);
+		modules.get(moduleName).push(item);
+	}
+	const moduleList = extensionCompatibilityElement('div', 'extension-compat-modules');
+	for (const [moduleName, items] of [...modules.entries()]
+		.sort((left, right) => left[0].localeCompare(right[0], 'ru'))) {
+		const moduleWorking = items.filter(item =>
+			extensionCompatibilityWorks(item.status)).length;
+		const details = extensionCompatibilityElement('details', 'extension-compat-module');
+		if (moduleWorking !== items.length) details.open = true;
+		const moduleSummary = extensionCompatibilityElement('summary', '');
+		moduleSummary.appendChild(extensionCompatibilityElement('span', '',
+			moduleName));
+		const badgeClass = moduleWorking === items.length ? ' is-ok' : ' has-errors';
+		moduleSummary.appendChild(extensionCompatibilityElement('strong',
+			'extension-compat-badge' + badgeClass,
+			`${moduleWorking}/${items.length}`));
+		details.appendChild(moduleSummary);
+
+		const itemList = extensionCompatibilityElement('ul', 'extension-compat-items');
+		for (const item of items) {
+			const row = extensionCompatibilityElement('li',
+				extensionCompatibilityWorks(item.status) ? 'is-ok' : 'has-errors');
+			const title = extensionCompatibilityElement('span', '',
+				item.name || item.origName || item.id || 'Без названия');
+			row.appendChild(title);
+			row.appendChild(extensionCompatibilityElement('small', '',
+				extensionCompatibilityStatus(item.status)));
+			if (item.blockReason) {
+				const reason = extensionCompatibilityElement('code', '',
+					item.blockReason);
+				reason.title = item.blockReason;
+				row.appendChild(reason);
+			}
+			itemList.appendChild(row);
+		}
+		details.appendChild(itemList);
+		moduleList.appendChild(details);
+	}
+	dialog.appendChild(moduleList);
+
+	const footer = extensionCompatibilityElement('div', 'extension-compat-footer');
+	footer.appendChild(extensionCompatibilityElement('span', '',
+		'Отчёт отражает текущую серверную реализацию этой базы.'));
+	const closeButton = extensionCompatibilityElement('button', 'bn', 'Понятно');
+	closeButton.type = 'button';
+	closeButton.addEventListener('click', () => dialog.close());
+	footer.appendChild(closeButton);
+	dialog.appendChild(footer);
+	return dialog;
+}
+
+async function showExtensionCompatibilityOnFirstOpen() {
+	if (document.body.classList.contains('login-page') ||
+		document.body.classList.contains('landing-page') ||
+		!document.querySelector('.main, #main-block')) return;
+
+	const storageKey = `dataexpress-extension-compat:${location.pathname}`;
+	try {
+		if (sessionStorage.getItem(storageKey)) return;
+		const response = await fetch('?extensioncompat', {
+			credentials: 'same-origin',
+			headers: { 'Accept': 'application/json' }
+		});
+		if (!response.ok) return;
+		const report = await response.json();
+		if (!report || !report.summary) return;
+		const dialog = buildExtensionCompatibilityDialog(report);
+		document.body.appendChild(dialog);
+		sessionStorage.setItem(storageKey, 'shown');
+		if (typeof dialog.showModal === 'function') dialog.showModal();
+		else dialog.setAttribute('open', '');
+	} catch (error) {
+		console.warn('Extension compatibility report is unavailable', error);
+	}
+}
+
+window.addEventListener('load', showExtensionCompatibilityOnFirstOpen);

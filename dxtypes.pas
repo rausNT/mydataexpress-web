@@ -728,16 +728,21 @@ function BuildAutomaticWebExtensionSource(const Source: String;
 var
   Block, LowerSource, MappingValue, Replacement, TagName: String;
   ActionPos, BlockEnd, Cursor, FunctionPos, P, SearchPos: Integer;
-  IsAction: Boolean;
+  IsAction, KeepCurrentMapping, KeepPreviousCode: Boolean;
 begin
   Result := '';
   AddedActions.Clear;
   AddedFunctions.Clear;
-  if AutomaticWebBlockReason(Source) <> '' then Exit;
 
   LowerSource := LowerCase(Source);
   Cursor := 1;
   SearchPos := 1;
+  // A desktop module may contain routines which already have an authored web
+  // mapping. Keeping their source in the automatic candidate makes unrelated
+  // desktop-only declarations (forms, menus, bitmaps, etc.) break compilation
+  // of the still-unmapped routines. Mapping metadata and the routine which
+  // follows it form one extension segment, so omit both together.
+  KeepPreviousCode := True;
   while SearchPos <= Length(Source) do
   begin
     ActionPos := PosEx('{@action', LowerSource, SearchPos);
@@ -760,8 +765,10 @@ begin
     else
       ExtractMetadataField(Block, 'name', MappingValue);
 
-    Result := Result + Copy(Source, Cursor, P - Cursor);
+    if KeepPreviousCode then
+      Result := Result + Copy(Source, Cursor, P - Cursor);
     Replacement := '{ automatic web mapping omitted }';
+    KeepCurrentMapping := False;
     if MappingValue <> '' then
     begin
       if IsAction and (ClaimedActions.IndexOf(MappingValue) < 0) and
@@ -770,6 +777,7 @@ begin
         Replacement := '{@action' + LineEnding + 'Id=' + MappingValue +
           LineEnding + '@}';
         AddedActions.Add(MappingValue);
+        KeepCurrentMapping := True;
       end
       else if (not IsAction) and
         (ClaimedFunctions.IndexOf(MappingValue) < 0) and
@@ -778,14 +786,23 @@ begin
         Replacement := '{@function' + LineEnding + 'Name=' + MappingValue +
           LineEnding + '@}';
         AddedFunctions.Add(MappingValue);
+        KeepCurrentMapping := True;
       end;
     end;
-    Result := Result + Replacement;
+    if KeepCurrentMapping then Result := Result + Replacement;
+    KeepPreviousCode := KeepCurrentMapping;
     Cursor := BlockEnd + 2;
     SearchPos := Cursor;
   end;
-  Result := Result + Copy(Source, Cursor, MaxInt);
-  if (AddedActions.Count = 0) and (AddedFunctions.Count = 0) then Result := '';
+  if KeepPreviousCode then Result := Result + Copy(Source, Cursor, MaxInt);
+  if (AddedActions.Count = 0) and (AddedFunctions.Count = 0) then
+    Result := ''
+  else if AutomaticWebBlockReason(Result) <> '' then
+  begin
+    AddedActions.Clear;
+    AddedFunctions.Clear;
+    Result := '';
+  end;
 end;
 
 function AllMappingsAvailable(Required, Available: TStrings): Boolean;

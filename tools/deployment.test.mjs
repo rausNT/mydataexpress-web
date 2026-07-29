@@ -11,6 +11,7 @@ const program = readFileSync('dxwebsrv.pas', 'utf8');
 const saxReader = readFileSync('saxbasereader.pas', 'utf8');
 const appUtils = readFileSync('apputils.pas', 'utf8');
 const modernCss = readFileSync('_test/html/modern.css', 'utf8');
+const mainJs = readFileSync('_test/html/main.js', 'utf8');
 const gitAttributes = readFileSync('.gitattributes', 'utf8');
 const mainServer = readFileSync('mainserver.pas', 'utf8');
 const sqlGenerator = readFileSync('sqlgen.pas', 'utf8');
@@ -215,4 +216,16 @@ test('modern skin preserves legacy form geometry and readable list selection', (
   ]) {
     assert.match(readFileSync(template, 'utf8'), /modern\.css\?v=\d{8}-\d+/);
   }
+});
+
+test('database forms show a session-scoped extension compatibility report', () => {
+  assert.match(mainJs, /showExtensionCompatibilityOnFirstOpen/);
+  assert.match(mainJs, /fetch\('\?extensioncompat'/);
+  assert.match(mainJs, /sessionStorage\.getItem\(storageKey\)/);
+  assert.match(mainJs, /dialog\.showModal\(\)/);
+  assert.match(mainJs, /extensionCompatibilityWorks/);
+  assert.match(mainJs, /item\.blockReason/);
+  assert.match(modernCss, /\.extension-compat-dialog::backdrop/);
+  assert.match(modernCss,
+    /html\[data-theme="dark"\] \.extension-compat-badge\.has-errors/);
 });

@@ -143,10 +143,23 @@ test('legacy DX_PLUS web modules normalize every historical GotoForm signature',
   assert.match(scripts, /gtoDefault/);
   assert.match(scripts, /gtoNewTab/);
   assert.match(scripts,
-    /FCompiler\.Compile\(NormalizeLegacyGotoFormCalls\(SD\.Source\)\)/);
+    /FCompiler\.Compile\(NormalizeLegacyTdxFormConstructors\(\s*NormalizeLegacyGotoFormCalls\(SD\.Source\)\)\)/);
   assert.match(smoke, /Self\.GotoForm\(''Compatibility'', 1\)/);
   assert.match(smoke, /Self\.GotoForm\(''Compatibility'', 1, False\)/);
   assert.match(smoke, /NormalizeLegacyGotoFormCalls\(WebSource\.Text\)/);
+});
+
+test('legacy desktop form constructors use the existing web session factory', () => {
+  const scripts = source('scriptmanager.pas');
+  const smoke = source('tools/wepas-compile-smoke.pas');
+
+  assert.match(scripts, /function NormalizeLegacyTdxFormConstructors/);
+  assert.match(scripts, /LegacyCall = 'TdxForm\.Create'/);
+  assert.match(scripts, /WebCall = 'Session\.CreateForm'/);
+  assert.match(smoke, /Fm := TdxForm\.Create\(''Compatibility''\)/);
+  assert.match(smoke, /Session\.CreateForm\(''Compatibility''\)/);
+  assert.match(smoke, /comment must remain unchanged/);
+  assert.match(smoke, /text must remain unchanged/);
 });
 
 test('desktop dataset control aliases compile against the deferred web form runtime', () => {
@@ -162,4 +175,45 @@ test('desktop dataset control aliases compile against the deferred web form runt
     /RegisterMethod\(@TdxForm\.EnableScrollEvents, 'EnableControls'\)/);
   assert.match(smoke, /Self\.DisableControls/);
   assert.match(smoke, /Self\.EnableControls/);
+});
+
+test('automatic fallback removes source for mappings already handled by web modules', () => {
+  const runtimeTypes = source('dxtypes.pas');
+  const smoke = source('tools/wepas-compile-smoke.pas');
+
+  assert.match(runtimeTypes, /KeepPreviousCode := True/);
+  assert.match(runtimeTypes,
+    /if KeepPreviousCode then\s+Result := Result \+ Copy\(Source, Cursor, P - Cursor\)/);
+  assert.match(runtimeTypes, /KeepPreviousCode := KeepCurrentMapping/);
+  assert.match(runtimeTypes, /AutomaticWebBlockReason\(Result\)/);
+  assert.match(smoke, /TUnregisteredDesktopWindow/);
+  assert.match(smoke, /PORTABLE-WEB-ACTION/);
+});
+
+test('DX_PLUS compatibility module covers every mapping missing from upstream web 1.8.1', () => {
+  const module = source('deploy/shared-extensions/DX_PLUS_WEB-compat-1.8.1.wepas');
+  const ids = [...module.matchAll(/^\s*Id\s*=\s*(.+?)\s*$/gim)]
+    .map(match => match[1].toUpperCase());
+
+  assert.equal(ids.length, 13);
+  assert.equal(new Set(ids).size, 13);
+  for (const name of [
+    'ListWindowShow',
+    'CreatePageWithForm',
+    'ButtonToToolBarButton',
+    'AddDividerToToolBar',
+    'OpenFolderInExplorer',
+    'CopyTextToClipboard',
+    'SetSortQuery',
+    'MoveButtonsToButtonPanel',
+    'ShoppingFromReport',
+    'InsertFromReport',
+    'ShowWaitWindow',
+    'CloseWaitWindow',
+    'DoubleClickInQuery',
+  ]) {
+    assert.match(module, new RegExp(`(?:function|procedure)\\s+${name}\\b`, 'i'));
+  }
+  assert.doesNotMatch(module, /^\s*(?:OrigName|Name)\s*=/gim);
+  assert.doesNotMatch(module, /ShellExecute|CreateOleObject|LoadLibrary|external\s+'/i);
 });

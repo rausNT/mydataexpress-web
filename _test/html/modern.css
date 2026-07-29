@@ -435,6 +435,107 @@ html[data-theme="dark"] .login-page #msg.err {
 .landing-page .logo img { width: min(168px, 38vw); height: auto; }
 .landing-page .data { max-width: 680px; margin: 0 auto; padding: 24px; border: 1px solid var(--dx-border) !important; background: rgba(255,255,255,.86); box-shadow: var(--dx-shadow); }
 
+.extension-compat-dialog {
+    width: min(760px, calc(100vw - 32px));
+    max-height: min(760px, calc(100vh - 32px));
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--dx-border);
+    border-radius: 18px;
+    background: var(--dx-surface);
+    color: var(--dx-text);
+    box-shadow: 0 28px 80px rgba(15, 23, 42, .28);
+}
+
+.extension-compat-dialog::backdrop {
+    background: rgba(15, 23, 42, .58);
+    backdrop-filter: blur(3px);
+}
+
+.extension-compat-header,
+.extension-compat-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--dx-border);
+}
+
+.extension-compat-header h2 { margin: 0; font-size: 22px; }
+.extension-compat-close {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--dx-border);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--dx-muted);
+    font-size: 25px;
+    line-height: 1;
+    cursor: pointer;
+}
+.extension-compat-close:hover { border-color: var(--dx-primary); color: var(--dx-primary); }
+.extension-compat-intro { margin: 18px 22px 10px; color: var(--dx-muted); }
+.extension-compat-meter {
+    height: 8px;
+    margin: 0 22px 16px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--dx-primary-soft);
+}
+.extension-compat-meter span { display: block; height: 100%; border-radius: inherit; background: #22c55e; }
+.extension-compat-modules {
+    max-height: min(480px, calc(100vh - 270px));
+    padding: 0 22px 18px;
+    overflow: auto;
+}
+.extension-compat-module {
+    margin-top: 9px;
+    border: 1px solid var(--dx-border);
+    border-radius: 11px;
+    background: var(--dx-surface-soft);
+}
+.extension-compat-module > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    font-weight: 700;
+}
+.extension-compat-badge { padding: 3px 8px; border-radius: 999px; font-size: 12px; }
+.extension-compat-badge.is-ok { background: #dcfce7; color: #166534; }
+.extension-compat-badge.has-errors { background: #fee2e2; color: #991b1b; }
+.extension-compat-items { margin: 0; padding: 0 14px 12px; list-style: none; }
+.extension-compat-items li {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto;
+    gap: 4px 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--dx-border);
+}
+.extension-compat-items li > small { color: #15803d; }
+.extension-compat-items li.has-errors > small { color: var(--dx-danger); }
+.extension-compat-items code {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    color: var(--dx-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.extension-compat-footer {
+    border-top: 1px solid var(--dx-border);
+    border-bottom: 0;
+    color: var(--dx-muted);
+    font-size: 13px;
+}
+.extension-compat-footer .bn { min-width: 100px; }
+
+html[data-theme="dark"] .extension-compat-badge.is-ok { background: #153d2b; color: #86efac; }
+html[data-theme="dark"] .extension-compat-badge.has-errors { background: #421d28; color: #fda4af; }
+
 @media (max-width: 760px), (pointer: coarse) {
     :root { font-size: 15px; }
     .sidebar { width: 100% !important; }
@@ -444,6 +545,13 @@ html[data-theme="dark"] .login-page #msg.err {
     .btns span { display: inline-flex !important; align-items: center; background: transparent !important; color: var(--dx-text) !important; }
     .data, .grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     button, input[type="button"], input[type="submit"] { min-height: 44px; }
+    .extension-compat-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+    .extension-compat-header, .extension-compat-footer { padding: 14px; }
+    .extension-compat-intro { margin-inline: 14px; }
+    .extension-compat-meter { margin-inline: 14px; }
+    .extension-compat-modules { padding-inline: 14px; }
+    .extension-compat-footer { align-items: stretch; flex-direction: column; }
+    .extension-compat-items li { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -140,7 +140,8 @@ var
   Compiler: TPSPascalCompiler;
   AddedActions, AddedFunctions, ClaimedActions, ClaimedFunctions,
     CompileErrors, DesktopSource, WebSource: TStringList;
-  AutoSource, Output, FirstStatus, SecondStatus, ExpectedMode: String;
+  AutoSource, PrunedSource, Output, FirstStatus, SecondStatus, ExpectedMode,
+    NormalizedSource: String;
   i: Integer;
   Manager: TScriptManager;
   MetaData: TMetaData;
@@ -168,13 +169,35 @@ begin
     WebSource.Add('  Self.GotoForm(''Compatibility'', 1, False);');
     WebSource.Add('  Self.GotoForm(''Compatibility'', 1, gtoDefault);');
     WebSource.Add('end;');
+    WebSource.Add('procedure LegacyTdxFormConstructorCompatibilitySmoke;');
+    WebSource.Add('var Fm: TdxForm;');
+    WebSource.Add('begin');
+    WebSource.Add('  Fm := TdxForm.Create(''Compatibility'');');
+    WebSource.Add('  Fm.Free;');
+    WebSource.Add('end;');
+    WebSource.Add('// TdxForm.Create(''comment must remain unchanged'')');
+    WebSource.Add('procedure LegacyTdxFormConstructorStringSmoke;');
+    WebSource.Add('var S: String;');
+    WebSource.Add('begin');
+    WebSource.Add('  S := ''TdxForm.Create(''''text must remain unchanged'''')'';');
+    WebSource.Add('end;');
     Compiler.BooleanShortCircuit := True;
     Compiler.AllowNoBegin := True;
     Compiler.AllowNoEnd := True;
     Compiler.AllowDuplicateRegister := False;
     Compiler.OnUses := @RegisterSystemDeclarations;
 
-    if not Compiler.Compile(NormalizeLegacyGotoFormCalls(WebSource.Text)) then
+    NormalizedSource := NormalizeLegacyTdxFormConstructors(
+      NormalizeLegacyGotoFormCalls(WebSource.Text));
+    Require(Pos('Session.CreateForm(''Compatibility'')', NormalizedSource) > 0,
+      'Legacy TdxForm constructor was not normalized');
+    Require(Pos('// TdxForm.Create(''comment must remain unchanged'')',
+      NormalizedSource) > 0,
+      'Legacy TdxForm constructor inside a comment was modified');
+    Require(Pos('TdxForm.Create(''''text must remain unchanged'''')',
+      NormalizedSource) > 0,
+      'Legacy TdxForm constructor inside a string was modified');
+    if not Compiler.Compile(NormalizedSource) then
     begin
       for i := 0 to Compiler.MsgCount - 1 do
         WriteLn(Compiler.Msg[i].MessageToString);
@@ -258,6 +281,26 @@ begin
       ClaimedActions := TStringList.Create;
       ClaimedFunctions := TStringList.Create;
       try
+        ClaimedActions.Add('CLAIMED-DESKTOP-ACTION');
+        PrunedSource := BuildAutomaticWebExtensionSource(
+          '{@action' + LineEnding +
+          'Id=CLAIMED-DESKTOP-ACTION' + LineEnding + '@}' + LineEnding +
+          'procedure ClaimedDesktopAction;' + LineEnding +
+          'var W: TUnregisteredDesktopWindow;' + LineEnding +
+          'begin W := nil; end;' + LineEnding +
+          '{@action' + LineEnding +
+          'Id=PORTABLE-WEB-ACTION' + LineEnding + '@}' + LineEnding +
+          'procedure PortableWebAction;' + LineEnding +
+          'begin Self.Refresh; end;' + LineEnding,
+          ClaimedActions, ClaimedFunctions, AddedActions, AddedFunctions);
+        Require(Pos('TUnregisteredDesktopWindow', PrunedSource) = 0,
+          'Source of an already claimed desktop mapping was retained');
+        Require(Pos('procedure PortableWebAction', PrunedSource) > 0,
+          'Unclaimed portable mapping was removed with the desktop mapping');
+        Require(AddedActions.IndexOf('PORTABLE-WEB-ACTION') >= 0,
+          'Pruned automatic source lost the portable action mapping');
+        ClaimedActions.Clear;
+
         AutoSource := BuildAutomaticWebExtensionSource(DesktopSource.Text,
           ClaimedActions, ClaimedFunctions, AddedActions, AddedFunctions);
         Require(AutoSource <> '', 'Portable desktop extension was not promoted');
