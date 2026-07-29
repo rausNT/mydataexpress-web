@@ -212,7 +212,8 @@ test('DX_PLUS compatibility module covers every mapping missing from upstream we
     'CloseWaitWindow',
     'DoubleClickInQuery',
   ]) {
-    assert.match(module, new RegExp(`OrigName=${name}`));
+    assert.match(module, new RegExp(`(?:function|procedure)\\s+${name}\\b`, 'i'));
   }
+  assert.doesNotMatch(module, /^\s*(?:OrigName|Name)\s*=/gim);
   assert.doesNotMatch(module, /ShellExecute|CreateOleObject|LoadLibrary|external\s+'/i);
 });

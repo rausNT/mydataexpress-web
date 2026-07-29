@@ -43,7 +43,7 @@ DX_PLUS_WEB_181_URL=https://forum.mydataexpress.ru/download/file.php?id=9551
 DX_PLUS_WEB_181_ARCHIVE_SHA256=61e6b8c9ba30f937e6dec0911759de4b9d881617c9737c01385b51af004b549f
 DX_PLUS_WEB_181_SOURCE_SHA256=70004f5705946548b736116874a3e0714b85508ff257e94a63edb4b91d412c23
 DX_PLUS_WEB_COMPAT_URL=https://raw.githubusercontent.com/rausNT/mydataexpress-web/main/deploy/shared-extensions/DX_PLUS_WEB-compat-1.8.1.wepas
-DX_PLUS_WEB_COMPAT_SHA256=5e893a2581e2f20ff7ac2dc58ddfa00208bd7aa0323c56b8a3b1de2465746b66
+DX_PLUS_WEB_COMPAT_SHA256=d1ab53e0bd37bfbaa2994bf6d84b00e3880c501bc4efb4155479d54bc6f80d8f
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run as root: curl ... | sudo bash" >&2
