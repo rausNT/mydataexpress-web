@@ -38,10 +38,13 @@ chmod 0640 "$WORKER_CONFIG"
 install -d -m 0750 -o dataexpress -g dataexpress "$WORKER_EXTENSIONS"
 if [ -d "$SHARED_EXTENSIONS" ]; then
   while IFS= read -r -d '' extension; do
+    relative="${extension#"$SHARED_EXTENSIONS"/}"
+    install -d -m 0750 -o dataexpress -g dataexpress \
+      "$(dirname "$WORKER_EXTENSIONS/$relative")"
     install -m 0640 -o dataexpress -g dataexpress "$extension" \
-      "$WORKER_EXTENSIONS/$(basename "$extension")"
+      "$WORKER_EXTENSIONS/$relative"
   done < <(
-    find "$SHARED_EXTENSIONS" -maxdepth 1 -type f -iname '*.wepas' -print0
+    find "$SHARED_EXTENSIONS" -mindepth 2 -type f -iname '*.wepas' -print0
   )
 fi
 chown root:root "$ROUTES"

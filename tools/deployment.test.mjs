@@ -160,10 +160,15 @@ test('Linux build selects and registers the headless LCL widgetset', () => {
   assert.match(program, /clocale,\s*Interfaces,/);
 });
 
-test('server selects pinned compatible shared .wepas modules without overriding database modules', () => {
-  assert.match(runtime, /AppPath \+ 'extensions'/);
+test('server pairs same-named desktop modules with compatible shared .wepas adapters', () => {
+  assert.match(
+    runtime,
+    /AppPath \+ 'extensions' \+\s+DirectorySeparator \+ FConnectName/,
+  );
+  assert.doesNotMatch(runtime, /ExtensionDir := IncludeTrailingPathDelimiter\(AppPath \+ 'extensions'\);/);
   assert.match(runtime, /FindFirst\(Utf8ToSys\(ExtensionDir \+ '\*\.wepas'\)/);
-  assert.match(runtime, /FindScriptByName\(ModuleName\) <> nil then Continue/);
+  assert.match(runtime, /\(Script <> nil\) and \(Script\.Kind = skWebExpr\) then Continue/);
+  assert.match(runtime, /'__shared_web_' \+ Candidate\.ModuleName \+ '_adapter'/);
   assert.match(runtime, /AllMappingsAvailable\(Candidate\.ActionIds, AvailableActions\)/);
   assert.match(runtime, /HasMappingOverlap\(Candidate\.FunctionNames, ClaimedFunctions\)/);
   assert.match(runtime, /Disabled incompatible database web extension/);
@@ -173,7 +178,7 @@ test('server selects pinned compatible shared .wepas modules without overriding 
   }
   assert.match(installer, /DX_PLUS_WEB_181_ARCHIVE_SHA256=[a-f0-9]{64}/);
   assert.match(installer, /DX_PLUS_WEB_181_SOURCE_SHA256=[a-f0-9]{64}/);
-  assert.match(installer, /\$STATE_ROOT\/extensions\/DX_PLUS_WEB-\$version\.wepas/);
+  assert.match(installer, /\$STATE_ROOT\/extension-catalog\/DX_PLUS_WEB-\$version\.wepas/);
 });
 
 test('README attributes upstream projects and documents the public installer', () => {

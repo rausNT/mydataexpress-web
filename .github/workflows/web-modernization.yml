@@ -35,6 +35,44 @@ jobs:
           name: extension-compatibility
           path: extension-compatibility.json
 
+  linux-pascal-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: dxbit/dataexpress-depend
+          path: dependencies/dataexpress-depend
+      - name: Install Free Pascal and headless Lazarus units
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fp-compiler fp-units-base fp-units-db fp-units-fcl \
+            fp-units-misc fp-units-net lazarus-src lcl-nogui lcl-units
+      - name: Build Linux amd64 server
+        run: |
+          lazarus_dir="$(find /usr/lib/lazarus -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          dependencies="$PWD/dependencies/dataexpress-depend"
+          mkdir -p _linux-bin lib/x86_64-linux
+          fpc -B -MObjFPC -Scghi -CX -O1 -g -gl -vewnhibq \
+            -dUseCThreads -dBGRABITMAP_DONT_USE_LCL \
+            -Fu. \
+            -Fu"$lazarus_dir/lcl/units/x86_64-linux/nogui" \
+            -Fu"$lazarus_dir/lcl/units/x86_64-linux" \
+            -Fu"$lazarus_dir/components/lazutils" \
+            -Fu"$lazarus_dir/components/freetype" \
+            -Fu"$dependencies/PascalScript/Source" \
+            -Fu"$dependencies/bgra/bgrabitmap" \
+            -Fi. -FE_linux-bin -FUlib/x86_64-linux dxwebsrv.pas
+          strip _linux-bin/dxwebsrv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dataexpress-linux-amd64
+          path: _linux-bin/dxwebsrv
+          retention-days: 14
+          if-no-files-found: error
+
   windows-pascal-build:
     runs-on: windows-latest
     timeout-minutes: 30
@@ -220,7 +258,7 @@ jobs:
             (Join-Path $PWD 'deploy/shared-extensions/DX_PLUS_WEB-compat-1.8.1.wepas')
           if ($LASTEXITCODE -ne 0) { throw "DX_PLUS compatibility module compilation failed: $LASTEXITCODE" }
           & (Join-Path $smokeRoot 'wepas-syntax-smoke.exe') `
-            (Join-Path $PWD 'deploy/shared-extensions/kok80-ExportToExcel4.0b1.wepas')
+            (Join-Path $PWD 'deploy/database-extensions/CAFETERIA/kok80-ExportToExcel4.0b1.wepas')
           if ($LASTEXITCODE -ne 0) { throw "kok80 Excel compatibility module compilation failed: $LASTEXITCODE" }
 
           $token = 'provider-smoke-secret'

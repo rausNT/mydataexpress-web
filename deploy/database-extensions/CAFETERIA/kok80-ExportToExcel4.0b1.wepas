@@ -1,8 +1,8 @@
 {@module
 Author=Codex for the DataExpress web modernization project
 Version=4.0b1-web1
-Description=Native web adapter for kok80-ExportToExcel4.0b1. The browser
-downloads an Excel-compatible SpreadsheetML workbook without Windows OLE.
+Description=CAFETERIA-specific web adapter for its kok80-ExportToExcel4.0b1.
+The browser downloads SpreadsheetML without Windows OLE.
 @}
 
 {@action
@@ -29,12 +29,7 @@ begin
 end;
 
 {@function
-OrigName=ExportToExel
 Name=ExportToExel
-Args=
-Result=b
-Group=kok80
-Description=Export the current form to an Excel-compatible workbook
 @}
 function ExportToExel: Boolean;
 begin

@@ -1125,7 +1125,7 @@ var
   AvailableActions, AvailableFunctions, ClaimedActions, ClaimedFunctions: TStringList;
   Candidate: TSharedWebExtension;
   Candidates: TList;
-  ExtensionDir, FileName, ModuleName, Source: String;
+  ExtensionDir, FileName, ModuleName, RuntimeModuleName, Source: String;
   i, OriginalScriptCount: Integer;
   SearchRec: TSearchRec;
   Script: TScriptData;
@@ -1197,14 +1197,26 @@ begin
     Candidate.Free;
   end;
 
-  ExtensionDir := IncludeTrailingPathDelimiter(AppPath + 'extensions');
-  if FindFirst(Utf8ToSys(ExtensionDir + '*.wepas'), faAnyFile, SearchRec) = 0 then
+  // Compatibility modules are scoped to one configured database connection.
+  // DataExpress extensions do not carry reliable version metadata, so a
+  // same-named module from another database must never be selected globally.
+  ExtensionDir := '';
+  if (FConnectName <> '') and
+    (ExtractFileName(FConnectName) = FConnectName) then
+    ExtensionDir := IncludeTrailingPathDelimiter(AppPath + 'extensions' +
+      DirectorySeparator + FConnectName);
+  if (ExtensionDir <> '') and
+    (FindFirst(Utf8ToSys(ExtensionDir + '*.wepas'), faAnyFile, SearchRec) = 0) then
   try
     repeat
       if (SearchRec.Attr and faDirectory) <> 0 then Continue;
       FileName := ExtensionDir + SysToUtf8(SearchRec.Name);
       ModuleName := ChangeFileExt(ExtractFileName(FileName), '');
-      if FScriptMan.FindScriptByName(ModuleName) <> nil then Continue;
+      Script := FScriptMan.FindScriptByName(ModuleName);
+      // Desktop (.epas) and web (.wepas) modules normally have the same
+      // official name.  Only an already loaded web implementation shadows a
+      // shared adapter; a desktop module is the contract the adapter fulfils.
+      if (Script <> nil) and (Script.Kind = skWebExpr) then Continue;
       Source := LoadString(FileName);
       Candidate := TSharedWebExtension.Create;
       Candidate.ModuleName := ModuleName;
@@ -1233,7 +1245,11 @@ begin
       LogString('Skipped overlapping shared web extension: ' + Candidate.ModuleName);
       Continue;
     end;
-    Script := FScriptMan.AddScript(0, Candidate.ModuleName, Candidate.Source);
+    RuntimeModuleName := Candidate.ModuleName;
+    if FScriptMan.FindScriptByName(RuntimeModuleName) <> nil then
+      RuntimeModuleName := FScriptMan.MakeUniqueScriptName(
+        '__shared_web_' + Candidate.ModuleName + '_adapter');
+    Script := FScriptMan.AddScript(0, RuntimeModuleName, Candidate.Source);
     Script.Kind := skWebExpr;
     AddMappings(Candidate.ActionIds, ClaimedActions);
     AddMappings(Candidate.FunctionNames, ClaimedFunctions);

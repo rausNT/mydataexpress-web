@@ -5,7 +5,9 @@ import test from 'node:test';
 const source = file => readFileSync(file, 'utf8');
 
 test('kok80 Excel adapter preserves all stable desktop mappings', () => {
-  const web = source('deploy/shared-extensions/kok80-ExportToExcel4.0b1.wepas');
+  const web = source(
+    'deploy/database-extensions/CAFETERIA/kok80-ExportToExcel4.0b1.wepas',
+  );
   assert.match(web, /07B72A92-28B5-4707-96DA-D3D5AEC0FFE7/);
   assert.match(web, /F477247A-3094-4D6B-8FD6-C8C91972A3B3/);
   assert.match(web, /Name=ExportToExel/);
@@ -30,5 +32,5 @@ test('kok80 export is a session-scoped native browser download', () => {
   assert.match(server, /LPm = 'exportxls'/);
   assert.match(browser, /function exportExcel\(kind, id\)/);
   assert.match(browser, /a\.download = ''/);
-  assert.match(installer, /kok80-ExportToExcel4\.0b1\.wepas/);
+  assert.doesNotMatch(installer, /kok80-ExportToExcel4\.0b1\.wepas/);
 });
