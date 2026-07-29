@@ -140,7 +140,8 @@ var
   Compiler: TPSPascalCompiler;
   AddedActions, AddedFunctions, ClaimedActions, ClaimedFunctions,
     CompileErrors, DesktopSource, WebSource: TStringList;
-  AutoSource, Output, FirstStatus, SecondStatus, ExpectedMode: String;
+  AutoSource, Output, FirstStatus, SecondStatus, ExpectedMode,
+    NormalizedSource: String;
   i: Integer;
   Manager: TScriptManager;
   MetaData: TMetaData;
@@ -168,13 +169,35 @@ begin
     WebSource.Add('  Self.GotoForm(''Compatibility'', 1, False);');
     WebSource.Add('  Self.GotoForm(''Compatibility'', 1, gtoDefault);');
     WebSource.Add('end;');
+    WebSource.Add('procedure LegacyTdxFormConstructorCompatibilitySmoke;');
+    WebSource.Add('var Fm: TdxForm;');
+    WebSource.Add('begin');
+    WebSource.Add('  Fm := TdxForm.Create(''Compatibility'');');
+    WebSource.Add('  Fm.Free;');
+    WebSource.Add('end;');
+    WebSource.Add('// TdxForm.Create(''comment must remain unchanged'')');
+    WebSource.Add('procedure LegacyTdxFormConstructorStringSmoke;');
+    WebSource.Add('var S: String;');
+    WebSource.Add('begin');
+    WebSource.Add('  S := ''TdxForm.Create(''''text must remain unchanged'''')'';');
+    WebSource.Add('end;');
     Compiler.BooleanShortCircuit := True;
     Compiler.AllowNoBegin := True;
     Compiler.AllowNoEnd := True;
     Compiler.AllowDuplicateRegister := False;
     Compiler.OnUses := @RegisterSystemDeclarations;
 
-    if not Compiler.Compile(NormalizeLegacyGotoFormCalls(WebSource.Text)) then
+    NormalizedSource := NormalizeLegacyTdxFormConstructors(
+      NormalizeLegacyGotoFormCalls(WebSource.Text));
+    Require(Pos('Session.CreateForm(''Compatibility'')', NormalizedSource) > 0,
+      'Legacy TdxForm constructor was not normalized');
+    Require(Pos('// TdxForm.Create(''comment must remain unchanged'')',
+      NormalizedSource) > 0,
+      'Legacy TdxForm constructor inside a comment was modified');
+    Require(Pos('TdxForm.Create(''''text must remain unchanged'''')',
+      NormalizedSource) > 0,
+      'Legacy TdxForm constructor inside a string was modified');
+    if not Compiler.Compile(NormalizedSource) then
     begin
       for i := 0 to Compiler.MsgCount - 1 do
         WriteLn(Compiler.Msg[i].MessageToString);

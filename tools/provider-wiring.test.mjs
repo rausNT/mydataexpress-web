@@ -143,10 +143,23 @@ test('legacy DX_PLUS web modules normalize every historical GotoForm signature',
   assert.match(scripts, /gtoDefault/);
   assert.match(scripts, /gtoNewTab/);
   assert.match(scripts,
-    /FCompiler\.Compile\(NormalizeLegacyGotoFormCalls\(SD\.Source\)\)/);
+    /FCompiler\.Compile\(NormalizeLegacyTdxFormConstructors\(\s*NormalizeLegacyGotoFormCalls\(SD\.Source\)\)\)/);
   assert.match(smoke, /Self\.GotoForm\(''Compatibility'', 1\)/);
   assert.match(smoke, /Self\.GotoForm\(''Compatibility'', 1, False\)/);
   assert.match(smoke, /NormalizeLegacyGotoFormCalls\(WebSource\.Text\)/);
+});
+
+test('legacy desktop form constructors use the existing web session factory', () => {
+  const scripts = source('scriptmanager.pas');
+  const smoke = source('tools/wepas-compile-smoke.pas');
+
+  assert.match(scripts, /function NormalizeLegacyTdxFormConstructors/);
+  assert.match(scripts, /LegacyCall = 'TdxForm\.Create'/);
+  assert.match(scripts, /WebCall = 'Session\.CreateForm'/);
+  assert.match(smoke, /Fm := TdxForm\.Create\(''Compatibility''\)/);
+  assert.match(smoke, /Session\.CreateForm\(''Compatibility''\)/);
+  assert.match(smoke, /comment must remain unchanged/);
+  assert.match(smoke, /text must remain unchanged/);
 });
 
 test('desktop dataset control aliases compile against the deferred web form runtime', () => {

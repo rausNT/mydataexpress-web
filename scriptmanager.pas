@@ -433,6 +433,7 @@ var
 function ScriptLastErrorToString: String;
 function EPSExceptionToString(E: EPSException): String;
 function NormalizeLegacyGotoFormCalls(const Source: String): String;
+function NormalizeLegacyTdxFormConstructors(const Source: String): String;
 
 implementation
 
@@ -622,6 +623,111 @@ begin
       end;
     end;
     i := ClosePos + 1;
+  end;
+  Result := Result + Copy(Source, Cursor, MaxInt);
+end;
+
+function NormalizeLegacyTdxFormConstructors(const Source: String): String;
+const
+  LegacyCall = 'TdxForm.Create';
+  WebCall = 'Session.CreateForm';
+var
+  C: Char;
+  Cursor, i, L, TokenLength: Integer;
+
+  function IsIdentifierChar(AChar: Char): Boolean;
+  begin
+    Result := AChar in ['a'..'z', 'A'..'Z', '0'..'9', '_'];
+  end;
+
+  function MatchesLegacyCall(APos: Integer): Boolean;
+  var
+    AfterPos: Integer;
+  begin
+    AfterPos := APos + TokenLength;
+    Result := SameText(Copy(Source, APos, TokenLength), LegacyCall) and
+      ((APos = 1) or not IsIdentifierChar(Source[APos - 1])) and
+      ((AfterPos > L) or not IsIdentifierChar(Source[AfterPos]));
+  end;
+
+  procedure SkipString;
+  begin
+    Inc(i);
+    while i <= L do
+    begin
+      if Source[i] = '''' then
+      begin
+        if (i < L) and (Source[i + 1] = '''') then
+          Inc(i, 2)
+        else
+        begin
+          Inc(i);
+          Break;
+        end;
+      end
+      else
+        Inc(i);
+    end;
+  end;
+
+  procedure SkipBraceComment;
+  begin
+    Inc(i);
+    while (i <= L) and (Source[i] <> '}') do Inc(i);
+    if i <= L then Inc(i);
+  end;
+
+  procedure SkipParenComment;
+  begin
+    Inc(i, 2);
+    while (i < L) and
+      not ((Source[i] = '*') and (Source[i + 1] = ')')) do Inc(i);
+    if i < L then Inc(i, 2);
+  end;
+
+  procedure SkipLineComment;
+  begin
+    Inc(i, 2);
+    while (i <= L) and not (Source[i] in [#10, #13]) do Inc(i);
+  end;
+
+begin
+  Result := '';
+  L := Length(Source);
+  TokenLength := Length(LegacyCall);
+  Cursor := 1;
+  i := 1;
+  while i <= L do
+  begin
+    C := Source[i];
+    if C = '''' then
+    begin
+      SkipString;
+      Continue;
+    end;
+    if C = '{' then
+    begin
+      SkipBraceComment;
+      Continue;
+    end;
+    if (C = '(') and (i < L) and (Source[i + 1] = '*') then
+    begin
+      SkipParenComment;
+      Continue;
+    end;
+    if (C = '/') and (i < L) and (Source[i + 1] = '/') then
+    begin
+      SkipLineComment;
+      Continue;
+    end;
+    if MatchesLegacyCall(i) then
+    begin
+      Result := Result + Copy(Source, Cursor, i - Cursor) + WebCall;
+      Inc(i, TokenLength);
+      Cursor := i;
+      Continue;
+    end;
+    Inc(i);
   end;
   Result := Result + Copy(Source, Cursor, MaxInt);
 end;
@@ -2856,7 +2962,8 @@ begin
 
   try
 
-  if FCompiler.Compile(NormalizeLegacyGotoFormCalls(SD.Source)) then
+  if FCompiler.Compile(NormalizeLegacyTdxFormConstructors(
+    NormalizeLegacyGotoFormCalls(SD.Source))) then
   begin
     if FCompiler.GetOutput(SD.Bin) = False then
     begin
