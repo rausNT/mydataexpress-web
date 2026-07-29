@@ -176,3 +176,16 @@ test('desktop dataset control aliases compile against the deferred web form runt
   assert.match(smoke, /Self\.DisableControls/);
   assert.match(smoke, /Self\.EnableControls/);
 });
+
+test('automatic fallback removes source for mappings already handled by web modules', () => {
+  const runtimeTypes = source('dxtypes.pas');
+  const smoke = source('tools/wepas-compile-smoke.pas');
+
+  assert.match(runtimeTypes, /KeepPreviousCode := True/);
+  assert.match(runtimeTypes,
+    /if KeepPreviousCode then\s+Result := Result \+ Copy\(Source, Cursor, P - Cursor\)/);
+  assert.match(runtimeTypes, /KeepPreviousCode := KeepCurrentMapping/);
+  assert.match(runtimeTypes, /AutomaticWebBlockReason\(Result\)/);
+  assert.match(smoke, /TUnregisteredDesktopWindow/);
+  assert.match(smoke, /PORTABLE-WEB-ACTION/);
+});

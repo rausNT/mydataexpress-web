@@ -140,7 +140,7 @@ var
   Compiler: TPSPascalCompiler;
   AddedActions, AddedFunctions, ClaimedActions, ClaimedFunctions,
     CompileErrors, DesktopSource, WebSource: TStringList;
-  AutoSource, Output, FirstStatus, SecondStatus, ExpectedMode,
+  AutoSource, PrunedSource, Output, FirstStatus, SecondStatus, ExpectedMode,
     NormalizedSource: String;
   i: Integer;
   Manager: TScriptManager;
@@ -281,6 +281,26 @@ begin
       ClaimedActions := TStringList.Create;
       ClaimedFunctions := TStringList.Create;
       try
+        ClaimedActions.Add('CLAIMED-DESKTOP-ACTION');
+        PrunedSource := BuildAutomaticWebExtensionSource(
+          '{@action' + LineEnding +
+          'Id=CLAIMED-DESKTOP-ACTION' + LineEnding + '@}' + LineEnding +
+          'procedure ClaimedDesktopAction;' + LineEnding +
+          'var W: TUnregisteredDesktopWindow;' + LineEnding +
+          'begin W := nil; end;' + LineEnding +
+          '{@action' + LineEnding +
+          'Id=PORTABLE-WEB-ACTION' + LineEnding + '@}' + LineEnding +
+          'procedure PortableWebAction;' + LineEnding +
+          'begin Self.Refresh; end;' + LineEnding,
+          ClaimedActions, ClaimedFunctions, AddedActions, AddedFunctions);
+        Require(Pos('TUnregisteredDesktopWindow', PrunedSource) = 0,
+          'Source of an already claimed desktop mapping was retained');
+        Require(Pos('procedure PortableWebAction', PrunedSource) > 0,
+          'Unclaimed portable mapping was removed with the desktop mapping');
+        Require(AddedActions.IndexOf('PORTABLE-WEB-ACTION') >= 0,
+          'Pruned automatic source lost the portable action mapping');
+        ClaimedActions.Clear;
+
         AutoSource := BuildAutomaticWebExtensionSource(DesktopSource.Text,
           ClaimedActions, ClaimedFunctions, AddedActions, AddedFunctions);
         Require(AutoSource <> '', 'Portable desktop extension was not promoted');
