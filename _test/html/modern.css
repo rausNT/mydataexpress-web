@@ -442,7 +442,7 @@ html[data-theme="dark"] .login-page #msg.err {
     overflow: hidden;
     border: 1px solid var(--dx-border);
     border-radius: 18px;
-    background: var(--dx-panel);
+    background: var(--dx-surface);
     color: var(--dx-text);
     box-shadow: 0 28px 80px rgba(15, 23, 42, .28);
 }
@@ -493,7 +493,7 @@ html[data-theme="dark"] .login-page #msg.err {
     margin-top: 9px;
     border: 1px solid var(--dx-border);
     border-radius: 11px;
-    background: var(--dx-panel-muted);
+    background: var(--dx-surface-soft);
 }
 .extension-compat-module > summary {
     display: flex;
