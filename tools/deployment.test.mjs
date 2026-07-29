@@ -161,7 +161,11 @@ test('Linux build selects and registers the headless LCL widgetset', () => {
 });
 
 test('server pairs same-named desktop modules with compatible shared .wepas adapters', () => {
-  assert.match(runtime, /AppPath \+ 'extensions'/);
+  assert.match(
+    runtime,
+    /AppPath \+ 'extensions' \+\s+DirectorySeparator \+ FConnectName/,
+  );
+  assert.doesNotMatch(runtime, /ExtensionDir := IncludeTrailingPathDelimiter\(AppPath \+ 'extensions'\);/);
   assert.match(runtime, /FindFirst\(Utf8ToSys\(ExtensionDir \+ '\*\.wepas'\)/);
   assert.match(runtime, /\(Script <> nil\) and \(Script\.Kind = skWebExpr\) then Continue/);
   assert.match(runtime, /'__shared_web_' \+ Candidate\.ModuleName \+ '_adapter'/);

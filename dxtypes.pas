@@ -1197,8 +1197,16 @@ begin
     Candidate.Free;
   end;
 
-  ExtensionDir := IncludeTrailingPathDelimiter(AppPath + 'extensions');
-  if FindFirst(Utf8ToSys(ExtensionDir + '*.wepas'), faAnyFile, SearchRec) = 0 then
+  // Compatibility modules are scoped to one configured database connection.
+  // DataExpress extensions do not carry reliable version metadata, so a
+  // same-named module from another database must never be selected globally.
+  ExtensionDir := '';
+  if (FConnectName <> '') and
+    (ExtractFileName(FConnectName) = FConnectName) then
+    ExtensionDir := IncludeTrailingPathDelimiter(AppPath + 'extensions' +
+      DirectorySeparator + FConnectName);
+  if (ExtensionDir <> '') and
+    (FindFirst(Utf8ToSys(ExtensionDir + '*.wepas'), faAnyFile, SearchRec) = 0) then
   try
     repeat
       if (SearchRec.Attr and faDirectory) <> 0 then Continue;
