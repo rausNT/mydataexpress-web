@@ -142,7 +142,7 @@ install_dx_plus_web() {
   local archive="$BUILD_ROOT/runtime-downloads/dx-plus-web-$version.zip"
   local source="$BUILD_ROOT/DX_PLUS_WEB-$version.wepas"
   local destination="$STAGED_EXTENSIONS/DX_PLUS_WEB-$version.wepas"
-  local existing="$STATE_ROOT/extensions/DX_PLUS_WEB-$version.wepas"
+  local existing="$STATE_ROOT/extension-catalog/DX_PLUS_WEB-$version.wepas"
   if download_checked "$url" "$archive_checksum" "$archive" &&
      unzip -p "$archive" DX_PLUS_WEB.wepas >"$source" &&
      echo "$source_checksum  $source" | sha256sum --check -; then
@@ -164,9 +164,6 @@ install_dx_plus_web 1.8.1 "$DX_PLUS_WEB_181_URL" \
   "$DX_PLUS_WEB_181_ARCHIVE_SHA256" "$DX_PLUS_WEB_181_SOURCE_SHA256"
 download_checked "$DX_PLUS_WEB_COMPAT_URL" "$DX_PLUS_WEB_COMPAT_SHA256" \
   "$STAGED_EXTENSIONS/DX_PLUS_WEB-compat-1.8.1.wepas"
-install -m 0644 \
-  "$SOURCE/deploy/shared-extensions/kok80-ExportToExcel4.0b1.wepas" \
-  "$STAGED_EXTENSIONS/kok80-ExportToExcel4.0b1.wepas"
 
 systemctl stop dataexpress-config-reload.path dataexpress-admin.service dataexpress-web.service \
   >/dev/null 2>&1 || true
@@ -197,15 +194,13 @@ install -d -m 0755 -o root -g root "$STATE_ROOT"
 install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT/databases"
 install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT/logs"
 install -d -m 0755 -o root -g dataexpress "$STATE_ROOT/extensions"
+install -d -m 0755 -o root -g dataexpress "$STATE_ROOT/extension-catalog"
 install -m 0660 -o dataexpress -g dataexpress /dev/null "$STATE_ROOT/config.lock"
-find "$STATE_ROOT/extensions" -maxdepth 1 -type f -name 'DX_PLUS_WEB-*.wepas' -delete
-rm -f "$STATE_ROOT/extensions/kok80-ExportToExcel4.0b1.wepas"
+find "$STATE_ROOT/extension-catalog" -maxdepth 1 -type f -name 'DX_PLUS_WEB-*.wepas' -delete
 if compgen -G "$STAGED_EXTENSIONS/DX_PLUS_WEB-*.wepas" >/dev/null; then
   install -m 0644 -o root -g dataexpress \
-    "$STAGED_EXTENSIONS"/DX_PLUS_WEB-*.wepas "$STATE_ROOT/extensions/"
+    "$STAGED_EXTENSIONS"/DX_PLUS_WEB-*.wepas "$STATE_ROOT/extension-catalog/"
 fi
-install -m 0644 -o root -g dataexpress \
-  "$STAGED_EXTENSIONS/kok80-ExportToExcel4.0b1.wepas" "$STATE_ROOT/extensions/"
 ln -sfn "$STATE_ROOT/extensions" "$RELEASE_DIR/extensions"
 chown -h dataexpress:dataexpress "$RELEASE_DIR/extensions"
 ln -sfn "$STATE_ROOT/logs" "$RELEASE_DIR/logs"

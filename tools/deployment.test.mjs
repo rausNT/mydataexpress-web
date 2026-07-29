@@ -178,7 +178,7 @@ test('server pairs same-named desktop modules with compatible shared .wepas adap
   }
   assert.match(installer, /DX_PLUS_WEB_181_ARCHIVE_SHA256=[a-f0-9]{64}/);
   assert.match(installer, /DX_PLUS_WEB_181_SOURCE_SHA256=[a-f0-9]{64}/);
-  assert.match(installer, /\$STATE_ROOT\/extensions\/DX_PLUS_WEB-\$version\.wepas/);
+  assert.match(installer, /\$STATE_ROOT\/extension-catalog\/DX_PLUS_WEB-\$version\.wepas/);
 });
 
 test('README attributes upstream projects and documents the public installer', () => {

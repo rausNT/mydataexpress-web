@@ -258,7 +258,7 @@ jobs:
             (Join-Path $PWD 'deploy/shared-extensions/DX_PLUS_WEB-compat-1.8.1.wepas')
           if ($LASTEXITCODE -ne 0) { throw "DX_PLUS compatibility module compilation failed: $LASTEXITCODE" }
           & (Join-Path $smokeRoot 'wepas-syntax-smoke.exe') `
-            (Join-Path $PWD 'deploy/shared-extensions/kok80-ExportToExcel4.0b1.wepas')
+            (Join-Path $PWD 'deploy/database-extensions/CAFETERIA/kok80-ExportToExcel4.0b1.wepas')
           if ($LASTEXITCODE -ne 0) { throw "kok80 Excel compatibility module compilation failed: $LASTEXITCODE" }
 
           $token = 'provider-smoke-secret'
