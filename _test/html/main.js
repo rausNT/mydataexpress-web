@@ -92,6 +92,28 @@ function reloadPage() {
 	location.reload();
 }
 
+function exportExcel(kind, id) {
+	let args = 'kind=' + encodeURIComponent(kind) + '&id=' +
+		encodeURIComponent(id || 0);
+	SendRequest('POST', getCurrentUrl() + '&exportxls', args, (Request) => {
+		if (Request.status != rcAjaxOk) {
+			showAjaxError(Request);
+			return;
+		}
+		let jsonObj = JSON.parse(Request.responseText);
+		if (!jsonObj.file) {
+			alert(jsonObj.error || 'The spreadsheet was not created.');
+			return;
+		}
+		let a = document.createElement('a');
+		a.href = jsonObj.file;
+		a.download = '';
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+	});
+}
+
 function parseDate(date) {
 	if (date == '') return false;
 	let fmt = formatSettings.shortDateFormat;

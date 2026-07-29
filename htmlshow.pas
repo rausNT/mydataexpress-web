@@ -201,6 +201,7 @@ type
     function ApplyFilter(JsonStr: TStrings): String;
     function ApplyFilterPreset: String;
     function ClearAllFilters: String;
+    function ExportSpreadsheet(AParams: TStrings): String;
     function PrintForm(AParams: TStrings): String;
     function PrintReport: String;
     function ApplyReportFilter(JsonStr: TStrings): String;
@@ -247,7 +248,8 @@ implementation
 uses
   sqlgen, LazUtf8, apputils, Math, LazFileUtils, dxusers,
   expressions, Variants, xmlreport, dateutils, StrUtils, QSort, appsettings,
-  filterparsers, dxactions, mainserver, scriptmanager, uPSRuntime, exprfuncs;
+  filterparsers, dxactions, mainserver, scriptmanager, uPSRuntime, exprfuncs,
+  spreadsheetexport;
 
 type
   TMarkData = record
@@ -957,6 +959,60 @@ begin
 
   Result := '<html><head><meta http-equiv=refresh content="1;url=' +
     BuildHRef(1) + '"></head><body></body></html>';
+end;
+
+function THtmlShow.ExportSpreadsheet(AParams: TStrings): String;
+var
+  Fm: TdxForm;
+  RS: TSsRecordSet;
+  QueryId: Integer;
+  PublicUrl, ErrorText, ExportKind: String;
+  JsonObj: TJSONObject;
+  Options: TKok80ExportOptions;
+begin
+  Result := '';
+  FResultCode := rcAjaxError;
+  Options := GetKok80ExportOptions(FSS);
+  if not Options.Enabled then
+    Exit(MakeJsonErrString(rcAnyError,
+      'kok80-ExportToExcel4.0b1 web adapter is not enabled.'));
+
+  ExportKind := LowerCase(Trim(AParams.Values['kind']));
+  QueryId := 0;
+  if (ExportKind = 'query') and
+    not TryStrToInt(AParams.Values['id'], QueryId) then
+    Exit(MakeJsonErrString(rcAnyError, 'Invalid query id.'));
+
+  if FSS.RecId = 0 then
+  begin
+    Fm := FSS.FormMan.FindForm(FSS.FormId);
+    if not FSS.UserMan.CheckFmVisible(FSS.RoleId, FSS.FormId) then
+      Exit(MakeJsonErrString(rcAnyError, rsAccessDenied));
+    if (ExportKind = 'query') or
+      not ExportFormListToExcel(FSS, Fm, PublicUrl, ErrorText) then
+      if ExportKind = 'query' then
+        ErrorText := 'A query can only be exported from an open record.';
+  end
+  else
+  begin
+    RS := FSS.FindRecordSet(FSS.FormId, FSS.RecId, FSS.TableId);
+    if RS = nil then
+      Exit(MakeJsonErrString(rcRecordSetNotFound, rsNoLinkForm));
+    if not FSS.UserMan.CheckFmVisible(FSS.RoleId, RS.Form.Id) then
+      Exit(MakeJsonErrString(rcAnyError, rsAccessDenied));
+    if not ExportRecordSetToExcel(FSS, RS, QueryId, PublicUrl, ErrorText) then
+      PublicUrl := '';
+  end;
+
+  if PublicUrl = '' then
+    Exit(MakeJsonErrString(rcAnyError, ErrorText));
+  JsonObj := TJSONObject.Create(['file', PublicUrl]);
+  try
+    Result := JsonObj.AsJSON;
+  finally
+    JsonObj.Free;
+  end;
+  FResultCode := rcAjaxOk;
 end;
 
 function THtmlShow.PrintForm(AParams: TStrings): String;
@@ -5337,6 +5393,8 @@ var
   RS: TSsRecordSet;
   Col: TRpGridColumn;
   OffsetNo: LongInt;
+  CmdButtons: String;
+  ExportOptions: TKok80ExportOptions;
 begin
   S := '';
   RS := FRS.Queries.FindRpById(C.Id);
@@ -5352,15 +5410,27 @@ begin
 
   if not GridOnly then
   begin
+    CmdButtons := '';
     if C.ShowButtons and (gbnAppend in C.VisibleButtons) and IsEditable and
       (FRS.Editing = asOk) and FSS.UserMan.CheckFmAdding(FSS.RoleId, FmId) then
-    begin
+      CmdButtons := '<button type=button onclick="queryAdd(' + IntToStr(C.Id) +
+        ')" style="height: ' + IntToStr(C.ButtonSize - 2) + 'px"' +
+        GetEnabled(C) + '>' + rsAppend + '</button>';
+    ExportOptions := GetKok80ExportOptions(FSS);
+    if ExportOptions.Enabled and (ExportOptions.AddToQueryToolbar or
+      ExportOptions.AddToQueryMenu or ExportOptions.AddToQuerySelectedMenu) then
+      CmdButtons := CmdButtons +
+        '<button type=button class=exportxlsbn title="' +
+        StrToHtml(ExportOptions.Caption) + '" onclick="exportExcel(''query'',' +
+        IntToStr(C.Id) + ')" style="height: ' +
+        IntToStr(C.ButtonSize - 2) +
+        'px"><img src="/img/download.svg"></button>';
+    if CmdButtons <> '' then
       S := S + '<div class="gridcmd ' + GetGridButtonsStyle(C) +
-        '" style="' + GetBoundsGridButtonsCSS(C) + GetVisible(C) + '"><div style="float: ' +
-        IIF(C.AlignmentButtons = taLeftJustify, 'left', 'right') +
-        '"><button type=button onclick="queryAdd(' + IntToStr(C.Id) + ')" style="height: ' +
-        IntToStr(C.ButtonSize - 2) + 'px"' + GetEnabled(C) + '>' + rsAppend + '</button></div></div>';
-    end;
+        '" style="' + GetBoundsGridButtonsCSS(C) + GetVisible(C) +
+        '"><div style="float: ' +
+        IIF(C.AlignmentButtons = taLeftJustify, 'left', 'right') + '">' +
+        CmdButtons + '</div></div>';
   end;
 
   try
@@ -5855,6 +5925,7 @@ var
   Col: TdxColumn;
   RS: TSsRecordSet;
   Deleting: Boolean;
+  ExportOptions: TKok80ExportOptions;
 begin
   Result := '';
   if FSS.FormId = 0 then Exit(ShowNullForm);
@@ -5880,6 +5951,12 @@ begin
     Btns := '<button id=addbn type=button onclick="formAdd(' + IntToStr(Fm.Id) +
       ')"><img src=/img/add.svg></button>'
   else Btns := '';
+  ExportOptions := GetKok80ExportOptions(FSS);
+  if ExportOptions.Enabled and (ExportOptions.AddToMainToolbar or
+    ExportOptions.AddToFormMenu or ExportOptions.AddToFormSelectedMenu) then
+    Btns := Btns + '<button id=exportxlsbn type=button title="' +
+      StrToHtml(ExportOptions.Caption) +
+      '" onclick="exportExcel(''form'',0)"><img src="/img/download.svg"></button>';
   Btns := Btns + '<button id=fltbn type=button onclick="filterClick(this)"><img src="/img/filter.svg"></button>' +
     '<button id=menubn type=button onclick="menuClick(this)"><img src="/img/menu.svg"></button>';
   Btns := Btns + '<span>' + StrToHtml(Fm.GetRecordsCaption) + '</span>';

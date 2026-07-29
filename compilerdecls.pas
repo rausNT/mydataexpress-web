@@ -1407,6 +1407,7 @@ begin
     RegisterMethod('function GetCurrentUser: String');
     RegisterMethod('function GetCurrentRole: String');
     RegisterMethod('function GetCurrentDatabase: String');
+    RegisterMethod('function ExportToExcel(Fm: TdxForm; const QueryName: String): String');
     RegisterMethod('function GetTemplatesDir: String');
     RegisterMethod('function GetExprVar(const AName: String): Variant');
     RegisterMethod('function SetExprVar(const AName: String; AValue: Variant): Variant');

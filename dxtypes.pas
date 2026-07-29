@@ -390,6 +390,7 @@ type
     function GetCurrentUser: String;
     function GetCurrentRole: String;
     function GetCurrentDatabase: String;
+    function ExportToExcel(Fm: TdxForm; const QueryName: String): String;
     function GetTemplatesPath: String;
     function SetExprVar(const AName: String; AValue: Variant): Variant;
     function GetExprVar(const AName: String): Variant;
@@ -521,7 +522,7 @@ implementation
 
 uses
   LazUtf8, FileUtil, sqlgen, apputils, expressions, lfmparser, dxactions,
-  BGRABitmapTypes, exprfuncs, StrUtils;
+  BGRABitmapTypes, exprfuncs, StrUtils, spreadsheetexport;
 
 type
   TSharedWebExtension = class
@@ -4051,6 +4052,30 @@ end;
 function TSession.GetCacheDir: String;
 begin
   Result := AppUtils.GetCachePath(Self);
+end;
+
+function TSession.ExportToExcel(Fm: TdxForm; const QueryName: String): String;
+var
+  RS: TSsRecordSet;
+  QG: TdxQueryGrid;
+  QueryId: Integer;
+  ErrorText: String;
+begin
+  Result := '';
+  if Fm = nil then Exit;
+  RS := TSsRecordSet(Fm.RecordSet);
+  if RS = nil then Exit;
+  QueryId := 0;
+  if Trim(QueryName) <> '' then
+  begin
+    QG := Fm.Queries[QueryName];
+    if QG = nil then Exit;
+    QueryId := QG.Id;
+  end;
+  if ExportRecordSetToExcel(Self, RS, QueryId, Result, ErrorText) then
+    RS.DocUrl := Result
+  else if ErrorText <> '' then
+    Fm.Errs.Add(ErrorText);
 end;
 
 procedure TSession.Debug(Value: Variant);

@@ -372,6 +372,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="FormLayouts"/>
       </Unit45>
+      <Unit46>
+        <Filename Value="spreadsheetexport.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SpreadsheetExport"/>
+      </Unit46>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
