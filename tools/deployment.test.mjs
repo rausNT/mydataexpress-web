@@ -4,6 +4,10 @@ import { test } from 'node:test';
 
 const installer = readFileSync('deploy/install.sh', 'utf8');
 const workerInstaller = readFileSync('deploy/install-windows-worker.sh', 'utf8');
+const workerReconfigure = readFileSync('deploy/windows-worker/reconfigure.sh', 'utf8');
+const workerUnit = readFileSync(
+  'deploy/windows-worker/dataexpress-wine-worker@.service', 'utf8',
+);
 const readme = readFileSync('README.md', 'utf8');
 const runtime = readFileSync('dxtypes.pas', 'utf8');
 const htmlRuntime = readFileSync('htmlshow.pas', 'utf8');
@@ -87,39 +91,43 @@ test('Windows compatibility worker stays loopback-only and uses a pinned artifac
   assert.match(workerInstaller, /compat-worker-v0\.1\.6/);
   assert.match(workerInstaller,
     /ff66233bf9a29a695220bc5278ad443021ea0b24009e0658bc41935260c34777/);
-  assert.match(workerInstaller, /WINEARCH=win64/);
+  assert.match(workerInstaller, /dataexpress-wine-worker@\.service/);
+  assert.match(workerInstaller, /worker-tools\/stage_bundle\.py/);
   assert.match(workerInstaller, /CREATE OR ALTER USER SYSDBA PASSWORD 'masterkey'/);
   assert.match(workerInstaller, /select 1 from rdb\$database/);
   assert.match(workerInstaller,
     /WORKER_HANDOFF_STARTED[\s\S]+dataexpress-worker-routes\.backup/);
   assert.match(workerInstaller,
     /INSTALL_SUCCEEDED[\s\S]+systemctl restart dataexpress-web\.service/);
-  assert.match(workerInstaller, /rm -f "\$DOS_DEVICES\/z:"/);
-  assert.match(workerInstaller,
+  assert.match(workerReconfigure, /WINEARCH=win64/);
+  assert.match(workerReconfigure, /rm -f "\$DOS_DEVICES\/z:"/);
+  assert.match(workerReconfigure,
     /ln -sfn \/var\/lib\/dataexpress "\$DOS_DEVICES\/d:"/);
   assert.match(
-    readFileSync('deploy/windows-worker/dataexpress-wine-worker.service', 'utf8'),
+    workerUnit,
     /IPAddressDeny=any[\s\S]+IPAddressAllow=localhost/,
   );
   assert.match(
-    readFileSync('deploy/windows-worker/dataexpress-wine-worker.service', 'utf8'),
+    workerUnit,
     /ExecStop=\/usr\/bin\/wineserver -k/,
   );
+  assert.match(workerUnit,
+    /WINEPREFIX=\/var\/lib\/dataexpress-wine\/instances\/%i\/prefix/);
   assert.match(
     readFileSync('deploy/windows-worker/dataexpress-firebird.service', 'utf8'),
     /IPAddressDeny=any[\s\S]+IPAddressAllow=localhost/,
   );
   assert.match(
-    readFileSync('deploy/windows-worker/reconfigure.sh', 'utf8'),
+    workerReconfigure,
     /RemoteBindAddress = 127\.0\.0\.1/,
   );
   assert.match(
-    readFileSync('deploy/windows-worker/reconfigure.sh', 'utf8'),
-    /SHARED_EXTENSIONS=\/var\/lib\/dataexpress\/extensions[\s\S]+-iname '\*\.wepas'/,
+    workerReconfigure,
+    /SHARED_EXTENSIONS=\/var\/lib\/dataexpress\/extensions[\s\S]+stage_bundle\.py/,
   );
   assert.match(
-    readFileSync('deploy/windows-worker/reconfigure.sh', 'utf8'),
-    /reload nginx\.service[\s\S]+restart dataexpress-web\.service[\s\S]+restart dataexpress-firebird\.service/,
+    workerReconfigure,
+    /stop dataexpress-web\.service[\s\S]+restart dataexpress-firebird\.service[\s\S]+restart "dataexpress-wine-worker@\$instance\.service"[\s\S]+start dataexpress-web\.service[\s\S]+reload nginx\.service/,
   );
 });
 

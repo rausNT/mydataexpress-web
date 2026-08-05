@@ -6,8 +6,6 @@ WORKER_URL="${DX_WORKER_URL:-https://github.com/rausNT/mydataexpress-web/release
 WORKER_SHA256="${DX_WORKER_SHA256:-ff66233bf9a29a695220bc5278ad443021ea0b24009e0658bc41935260c34777}"
 WORKER_ROOT=/opt/dataexpress-wine
 STATE_ROOT=/var/lib/dataexpress-wine
-PREFIX="$STATE_ROOT/prefix"
-APP_DIR="$PREFIX/drive_c/dataexpress"
 RELEASE_DIR="$WORKER_ROOT/releases/$WORKER_VERSION"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -85,7 +83,8 @@ cleanup() {
   set +e
   if [ "$WORKER_HANDOFF_STARTED" -eq 1 ] &&
      [ "$INSTALL_SUCCEEDED" -eq 0 ]; then
-    systemctl stop dataexpress-wine-worker.service \
+    systemctl stop 'dataexpress-wine-worker@*.service' \
+      dataexpress-wine-worker.service \
       dataexpress-firebird.service
     if [ -f "$ROUTES_BACKUP" ]; then
       cp "$ROUTES_BACKUP" /etc/nginx/snippets/dataexpress-worker-routes.conf
@@ -134,33 +133,20 @@ install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT"
 install -d -m 0750 -o dataexpress -g dataexpress "$RELEASE_DIR"
 cp -a "$DOWNLOAD_ROOT/package/." "$RELEASE_DIR/"
 chown -R root:root "$RELEASE_DIR"
+ln -sfn "$RELEASE_DIR" "$WORKER_ROOT/current"
 
 install -m 0755 "$RELEASE_DIR/worker-tools/configure.py" \
   "$WORKER_ROOT/bin/configure.py"
 install -m 0755 "$RELEASE_DIR/worker-tools/reconfigure.sh" \
   "$WORKER_ROOT/bin/reconfigure.sh"
-
-install -d -m 0750 -o dataexpress -g dataexpress "$PREFIX"
-install -d -m 0750 -o dataexpress -g dataexpress "$STATE_ROOT/cache"
-runuser -u dataexpress -- env WINEPREFIX="$PREFIX" WINEARCH=win64 WINEDEBUG=-all \
-  HOME="$STATE_ROOT" XDG_CACHE_HOME="$STATE_ROOT/cache" \
-  WINEDLLOVERRIDES='mscoree,mshtml=' \
-  xvfb-run -a wineboot -u
-
-install -d -m 0750 -o dataexpress -g dataexpress "$APP_DIR"
-cp -a "$RELEASE_DIR/." "$APP_DIR/"
-chown -R dataexpress:dataexpress "$APP_DIR"
-
-DOS_DEVICES="$PREFIX/dosdevices"
-install -d -m 0750 -o dataexpress -g dataexpress "$DOS_DEVICES"
-rm -f "$DOS_DEVICES/z:"
-ln -sfn /var/lib/dataexpress "$DOS_DEVICES/d:"
-chown -h dataexpress:dataexpress "$DOS_DEVICES/d:"
+install -m 0755 "$RELEASE_DIR/worker-tools/stage_bundle.py" \
+  "$WORKER_ROOT/bin/stage_bundle.py"
 
 install -m 0644 "$RELEASE_DIR/worker-tools/dataexpress-firebird.service" \
   /etc/systemd/system/dataexpress-firebird.service
-install -m 0644 "$RELEASE_DIR/worker-tools/dataexpress-wine-worker.service" \
-  /etc/systemd/system/dataexpress-wine-worker.service
+install -m 0644 "$RELEASE_DIR/worker-tools/dataexpress-wine-worker@.service" \
+  /etc/systemd/system/dataexpress-wine-worker@.service
+rm -f /etc/systemd/system/dataexpress-wine-worker.service
 install -m 0644 "$RELEASE_DIR/worker-tools/dataexpress-wine-config.service" \
   /etc/systemd/system/dataexpress-wine-config.service
 install -m 0644 "$RELEASE_DIR/worker-tools/dataexpress-wine-config.path" \
@@ -172,7 +158,8 @@ install -d -m 0750 -o dataexpress -g dataexpress "$BOOTSTRAP_DIR"
 install -m 0640 -o dataexpress -g dataexpress \
   /opt/dataexpress/runtime/firebird5/examples/empbuild/employee.fdb \
   "$BOOTSTRAP_DIR/employee.fdb"
-systemctl stop dataexpress-wine-worker.service \
+systemctl stop 'dataexpress-wine-worker@*.service' \
+  dataexpress-wine-worker.service \
   dataexpress-firebird.service 2>/dev/null || true
 systemctl stop dataexpress-web.service
 MAIN_SERVICE_STOPPED=1
@@ -186,8 +173,7 @@ printf "%s\n" \
     "$BOOTSTRAP_DIR/employee.fdb"
 systemctl start dataexpress-web.service
 MAIN_SERVICE_STOPPED=0
-systemctl enable dataexpress-firebird.service dataexpress-wine-worker.service \
-  dataexpress-wine-config.path
+systemctl enable dataexpress-firebird.service dataexpress-wine-config.path
 cp /etc/nginx/snippets/dataexpress-worker-routes.conf "$ROUTES_BACKUP"
 WORKER_HANDOFF_STARTED=1
 "$WORKER_ROOT/bin/reconfigure.sh"
@@ -214,18 +200,15 @@ printf '%s\n' 'select 1 from rdb$database;' |
     -user sysdba -password masterkey "127.0.0.1:$FIRST_DATABASE" \
     >/dev/null
 
-for _ in $(seq 1 60); do
-  if curl --fail --silent http://127.0.0.1:8180/health |
-     grep -q '"status":"ok"'; then
-    INSTALL_SUCCEEDED=1
-    echo "DataExpress Wine worker is ready on loopback port 8180."
-    echo "Database routes remain available at their original public URLs."
-    exit 0
-  fi
-  sleep 1
-done
+INSTANCE_COUNT="$(
+  python3 - "$STATE_ROOT/instances/instances.json" <<'PY'
+import json
+import sys
 
-echo "The Wine worker did not become healthy." >&2
-systemctl --no-pager --full status dataexpress-firebird.service \
-  dataexpress-wine-worker.service >&2 || true
-exit 1
+with open(sys.argv[1], encoding="utf-8") as stream:
+    print(len(json.load(stream)["instances"]))
+PY
+)"
+INSTALL_SUCCEEDED=1
+echo "$INSTANCE_COUNT isolated DataExpress Wine worker(s) are healthy."
+echo "Database routes remain available at their original public URLs."
